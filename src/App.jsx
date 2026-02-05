@@ -422,6 +422,32 @@ const TRAP_ICONS = {
   "arrow-gallery": "AG",
 };
 
+const TRAP_GLYPHS = {
+  "flame-jet": { unarmed: "△", armed: "▲" },
+  "poison-vent": { unarmed: "◇", armed: "◆" },
+  "frost-rune": { unarmed: "✶", armed: "❄" },
+  "shock-coil": { unarmed: "≈", armed: "⚡" },
+  "spike-pit": { unarmed: "▽", armed: "▼" },
+  "snare-net": { unarmed: "⋱", armed: "✴" },
+  "cursed-brand": { unarmed: "⊘", armed: "⊗" },
+  "blink-trap": { unarmed: "◌", armed: "◎" },
+  "shatter-floor": { unarmed: "▢", armed: "▣" },
+  "arrow-gallery": { unarmed: "➳", armed: "➤" },
+};
+
+const UTILITY_GLYPHS = {
+  "soul-altar": "⛧",
+  "siphon-pylon": "Ψ",
+  "reinforced-keystone": "⌂",
+  "blood-sigil": "✚",
+  "war-drum": "♫",
+  "haste-glyph": "➟",
+  "fear-idol": "☠",
+  "ward-lantern": "☼",
+  "seal-silence": "⛔",
+  "scout-mirror": "◈",
+};
+
 const UTILITY_MAP = Object.fromEntries(UTILITY_ROOMS.map((r) => [r.key, r]));
 const MONSTER_ROOM_MAP = Object.fromEntries(MONSTER_ROOMS.map((r) => [r.key, r]));
 const TRAP_MAP = Object.fromEntries(TRAP_TYPES.map((r) => [r.key, r]));
@@ -3053,6 +3079,27 @@ export default function App() {
     return "";
   }
 
+  function getTileGlyph(tile, heroesOnTileCount, monstersOnTileCount) {
+    if (heroesOnTileCount > 0) {
+      return { text: "H", subtext: heroesOnTileCount > 1 ? `H×${heroesOnTileCount}` : "" };
+    }
+    if (tile.entrance) return { text: "E" };
+    if (tile.core) return { text: "C" };
+    if (tile.room === "trap") {
+      const glyph = TRAP_GLYPHS[tile.trapType] || { unarmed: "◌", armed: "●" };
+      return { text: tile.trap ? glyph.armed : glyph.unarmed };
+    }
+    if (tile.room === "monster") {
+      const icon = MONSTER_ROOM_ICONS[tile.roomType] || "MR";
+      const sub = monstersOnTileCount > 0 ? `m×${monstersOnTileCount}` : "";
+      return { text: icon, subtext: sub };
+    }
+    if (tile.room === "utility") {
+      return { text: UTILITY_GLYPHS[tile.roomType] || "◇" };
+    }
+    return { text: "" };
+  }
+
   function tileClass(t, x, y) {
     const sel = state.selected.x === x && state.selected.y === y ? " selected" : "";
     if (t.entrance) return "tile entrance" + sel;
@@ -3450,7 +3497,18 @@ export default function App() {
                     title={`(${x + 1},${y + 1})`}
                     disabled={locked}
                   >
-                    {tileLabel(x, y, t)}
+                    {(() => {
+                      const heroesHere = heroesByTile.get(keyOf(x, y)) || [];
+                      const monstersHere = t.room === "monster" ? t.monsters.length : 0;
+                      const glyph = getTileGlyph(t, heroesHere.length, monstersHere);
+                      if (!glyph.text) return null;
+                      return (
+                        <>
+                          <span className="tileGlyph">{glyph.text}</span>
+                          {glyph.subtext ? <span className="tileGlyphSub">{glyph.subtext}</span> : null}
+                        </>
+                      );
+                    })()}
                   </button>
                 ))
               )}

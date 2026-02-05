@@ -201,6 +201,7 @@ body {
   min-width: 0;
   min-height: 0;
   display: flex;
+  position: relative;
   align-items: center;
   justify-content: center;
   cursor: pointer;
@@ -228,6 +229,30 @@ body {
 .tile.trap     { border-color: var(--trap); box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.45); }
 .tile.monster  { border-color: var(--monster); box-shadow: 0 0 0 1px rgba(225, 29, 72, 0.45); }
 .tile.utility  { border-color: #34d399; box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.45); }
+
+.tileGlyph {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Consolas", "Menlo", "Courier New", monospace;
+  font-size: clamp(12px, 2.2vw, 18px);
+  letter-spacing: 0.04em;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.65);
+  pointer-events: none;
+}
+
+.tileGlyphSub {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  font-family: "Consolas", "Menlo", "Courier New", monospace;
+  font-size: clamp(9px, 1.7vw, 12px);
+  color: var(--ink-2);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
 
 .hint {
   padding: 10px 12px;
