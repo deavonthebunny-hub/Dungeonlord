@@ -42,6 +42,8 @@ body {
 
 #root {
   width: 100%;
+  min-height: 100vh;
+  background-color: var(--bg-0);
 }
 
 .app {
@@ -50,6 +52,14 @@ body {
   flex-direction: column;
   min-height: 0;
   position: relative;
+  width: 100%;
+  min-height: 100vh;
+  background-color: var(--bg-0);
+  background-image:
+    radial-gradient(1200px 700px at 15% -10%, rgba(230, 162, 60, 0.16), transparent 60%),
+    radial-gradient(900px 600px at 100% 0%, rgba(45, 212, 191, 0.16), transparent 60%),
+    linear-gradient(180deg, var(--bg-2), var(--bg-0));
+  background-attachment: fixed;
 }
 
 .app::before {
