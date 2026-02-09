@@ -730,20 +730,17 @@ body {
   }
 
   /* Mobile: keep dungeon visible while showing the selected panel */
-  .layout[data-tab="toolbox"] .panel--dungeon,
-  .layout[data-tab="inventory"] .panel--dungeon,
-  .layout[data-tab="evolution"] .panel--dungeon,
-  .layout[data-tab="glossary"] .panel--dungeon,
-  .layout[data-tab="log"] .panel--dungeon {
-    display: block;
+  .panel--dungeon {
+    display: block !important;
   }
 
   .layout[data-tab="toolbox"] .panel--toolbox,
   .layout[data-tab="inventory"] .panel--inventory,
   .layout[data-tab="evolution"] .panel--evolution,
   .layout[data-tab="glossary"] .panel--glossary,
-  .layout[data-tab="log"] .panel--log {
-    display: block;
+  .layout[data-tab="log"] .panel--log,
+  .layout[data-tab="council"] .panel--council {
+    display: block !important;
   }
 }
 
