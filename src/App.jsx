@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import "./App.css";
 
 const W = 8;
@@ -423,29 +423,29 @@ const TRAP_ICONS = {
 };
 
 const TRAP_GLYPHS = {
-  "flame-jet": { unarmed: "△", armed: "▲" },
-  "poison-vent": { unarmed: "◇", armed: "◆" },
-  "frost-rune": { unarmed: "✶", armed: "❄" },
-  "shock-coil": { unarmed: "≈", armed: "⚡" },
-  "spike-pit": { unarmed: "▽", armed: "▼" },
-  "snare-net": { unarmed: "⋱", armed: "✴" },
-  "cursed-brand": { unarmed: "⊘", armed: "⊗" },
-  "blink-trap": { unarmed: "◌", armed: "◎" },
-  "shatter-floor": { unarmed: "▢", armed: "▣" },
-  "arrow-gallery": { unarmed: "➳", armed: "➤" },
+  "flame-jet": { unarmed: "\u2668", armed: "\u2668" },
+  "poison-vent": { unarmed: "\u2623", armed: "\u2623" },
+  "frost-rune": { unarmed: "\u2744", armed: "\u2744" },
+  "shock-coil": { unarmed: "\u26A1", armed: "\u26A1" },
+  "spike-pit": { unarmed: "\u25BC", armed: "\u25BC" },
+  "snare-net": { unarmed: "\u25A6", armed: "\u25A6" },
+  "cursed-brand": { unarmed: "\u2297", armed: "\u2297" },
+  "blink-trap": { unarmed: "\u25C9", armed: "\u25C9" },
+  "shatter-floor": { unarmed: "\u25A7", armed: "\u25A7" },
+  "arrow-gallery": { unarmed: "\u27A4", armed: "\u27A4" },
 };
 
 const UTILITY_GLYPHS = {
-  "soul-altar": "⛧",
-  "siphon-pylon": "Ψ",
-  "reinforced-keystone": "⌂",
-  "blood-sigil": "✚",
-  "war-drum": "♫",
-  "haste-glyph": "➟",
-  "fear-idol": "☠",
-  "ward-lantern": "☼",
-  "seal-silence": "⛔",
-  "scout-mirror": "◈",
+  "soul-altar": "\u2727",
+  "siphon-pylon": "\u03A8",
+  "reinforced-keystone": "\u2302",
+  "blood-sigil": "\u271A",
+  "war-drum": "\u266B",
+  "haste-glyph": "\u00BB",
+  "fear-idol": "\u2620",
+  "ward-lantern": "\u263C",
+  "seal-silence": "\u26D4",
+  "scout-mirror": "\u25C8",
 };
 
 const UTILITY_MAP = Object.fromEntries(UTILITY_ROOMS.map((r) => [r.key, r]));
@@ -3081,21 +3081,21 @@ export default function App() {
 
   function getTileGlyph(tile, heroesOnTileCount, monstersOnTileCount) {
     if (heroesOnTileCount > 0) {
-      return { text: "H", subtext: heroesOnTileCount > 1 ? `H×${heroesOnTileCount}` : "" };
+      return { text: "H", subtext: heroesOnTileCount > 1 ? `Hx${heroesOnTileCount}` : "", tone: "hero" };
     }
-    if (tile.entrance) return { text: "E" };
-    if (tile.core) return { text: "C" };
+    if (tile.entrance) return { text: "E", tone: "entrance" };
+    if (tile.core) return { text: "C", tone: "core" };
     if (tile.room === "trap") {
-      const glyph = TRAP_GLYPHS[tile.trapType] || { unarmed: "◌", armed: "●" };
-      return { text: tile.trap ? glyph.armed : glyph.unarmed };
+      const glyph = TRAP_GLYPHS[tile.trapType] || { unarmed: "?", armed: "!" };
+      return { text: tile.trap ? glyph.armed : glyph.unarmed, tone: tile.trap ? "trap-armed" : "trap-unarmed" };
     }
     if (tile.room === "monster") {
       const icon = MONSTER_ROOM_ICONS[tile.roomType] || "MR";
-      const sub = monstersOnTileCount > 0 ? `m×${monstersOnTileCount}` : "";
-      return { text: icon, subtext: sub };
+      const sub = monstersOnTileCount > 0 ? `mx${monstersOnTileCount}` : "";
+      return { text: icon, subtext: sub, tone: "monster" };
     }
     if (tile.room === "utility") {
-      return { text: UTILITY_GLYPHS[tile.roomType] || "◇" };
+      return { text: UTILITY_GLYPHS[tile.roomType] || "+", tone: "utility" };
     }
     return { text: "" };
   }
@@ -3504,7 +3504,7 @@ export default function App() {
                       if (!glyph.text) return null;
                       return (
                         <>
-                          <span className="tileGlyph">{glyph.text}</span>
+                          <span className={`tileGlyph ${glyph.tone || ""}`}>{glyph.text}</span>
                           {glyph.subtext ? <span className="tileGlyphSub">{glyph.subtext}</span> : null}
                         </>
                       );
@@ -4497,3 +4497,6 @@ export default function App() {
     </div>
   );
 }
+
+
+
