@@ -635,50 +635,123 @@ body::before {
   }
 }
 
-/* ===== Mobile: stack panels + fixed action bar ===== */
-@media (max-width: 980px) {
-  html, body {
-    background-color: var(--bg-0);
-    background-size: cover;
-    min-width: 100vw;
-  }
+.mobileNav {
+  display: none;
+}
 
-  .layout {
-    grid-template-columns: 1fr;
-    width: 100vw;
-    max-width: 100vw;
-  }
+.mobileMenuBtn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: linear-gradient(160deg, rgba(17, 24, 39, 0.96), rgba(12, 18, 32, 0.98));
+  color: var(--ink-0);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+}
 
-  .layout {
-    padding-bottom: 78px;
-  }
+.mobileMenuBtn.active {
+  border-color: rgba(230, 162, 60, 0.8);
+  box-shadow:
+    0 0 0 1px rgba(230, 162, 60, 0.22),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
 
-  .grid {
-    max-width: 520px;
-  }
+.mobileMenuIcon {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 0 0 auto;
+}
 
-  .app {
-    height: auto;
-    min-height: 100vh;
-    background-attachment: scroll;
-    background-size: cover;
-    width: 100vw;
-    max-width: 100vw;
-  }
+.mobileMenuIcon span {
+  display: block;
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  transition: transform 0.16s ease, opacity 0.16s ease;
+}
 
-  #root {
-    width: 100vw;
-    max-width: 100vw;
-  }
+.mobileMenuBtn.active .mobileMenuIcon span:nth-child(1) {
+  transform: translateY(6px) rotate(45deg);
+}
 
-  .topbar,
-  .tabBar,
-  .panel,
-  .gridWrap,
-  .mobileBar {
-    width: 100%;
-    max-width: 100vw;
-  }
+.mobileMenuBtn.active .mobileMenuIcon span:nth-child(2) {
+  opacity: 0;
+}
+
+.mobileMenuBtn.active .mobileMenuIcon span:nth-child(3) {
+  transform: translateY(-6px) rotate(-45deg);
+}
+
+.mobileMenuText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  flex: 1;
+}
+
+.mobileMenuLabel {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.mobileMenuCurrent {
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-0);
+}
+
+.mobileDrawer {
+  margin-top: 10px;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: linear-gradient(160deg, rgba(15, 23, 42, 0.98), rgba(11, 18, 32, 0.99));
+  box-shadow: var(--shadow);
+}
+
+.mobileNavBtn {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(18, 27, 51, 0.96);
+  color: var(--ink-0);
+  cursor: pointer;
+  text-align: left;
+}
+
+.mobileNavBtn.active {
+  background: linear-gradient(160deg, #f6b351, #e68a2e);
+  border-color: #e68a2e;
+  color: #1d1407;
+}
+
+.mobileNavBtn.active .mobileNavMeta {
+  color: rgba(29, 20, 7, 0.75);
+}
+
+.mobileNavMeta {
+  font-size: 11px;
+  color: var(--ink-2);
 }
 
 /* Bottom action bar (hidden on desktop) */
@@ -686,7 +759,140 @@ body::before {
   display: none;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 980px), (pointer: coarse) {
+  html,
+  body,
+  #root,
+  .app {
+    width: 100%;
+    max-width: 100%;
+    min-width: 100%;
+    overflow-x: hidden;
+  }
+
+  html,
+  body {
+    min-height: 100%;
+    background-size: cover;
+  }
+
+  .app {
+    height: auto;
+    min-height: 100vh;
+    background-attachment: scroll;
+  }
+
+  .topbar {
+    padding: 12px;
+    gap: 12px;
+    align-items: stretch;
+    justify-content: flex-start;
+  }
+
+  .mobileNav {
+    display: block;
+    width: 100%;
+    order: -2;
+  }
+
+  .title {
+    font-size: clamp(20px, 5.6vw, 28px);
+    line-height: 1.12;
+  }
+
+  .status {
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 8px;
+    padding-bottom: 4px;
+  }
+
+  .status::-webkit-scrollbar {
+    display: none;
+  }
+
+  .pill {
+    white-space: nowrap;
+    flex: 0 0 auto;
+  }
+
+  .panelToggle {
+    display: none;
+  }
+
+  .layout {
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: 1fr;
+    width: 100%;
+    max-width: 100%;
+    min-height: 0;
+    overflow: visible;
+    gap: 12px;
+    padding: 12px 12px 96px;
+  }
+
+  .panel {
+    width: 100%;
+    max-width: 100%;
+    min-height: 0;
+  }
+
+  .panelTitle {
+    flex-wrap: wrap;
+  }
+
+  .capMeta {
+    width: 100%;
+    text-align: left;
+  }
+
+  .gridWrap {
+    padding: 10px;
+  }
+
+  .grid {
+    width: min(100%, 380px);
+    max-width: 380px;
+    gap: 8px;
+  }
+
+  .hint {
+    display: none;
+  }
+
+  .panel--dungeon {
+    display: flex !important;
+    order: 0;
+  }
+
+  .panel--toolbox,
+  .panel--inventory,
+  .panel--log,
+  .panel--evolution,
+  .panel--glossary,
+  .panel--council {
+    display: none;
+  }
+
+  .layout[data-tab="toolbox"] .panel--toolbox,
+  .layout[data-tab="inventory"] .panel--inventory,
+  .layout[data-tab="log"] .panel--log,
+  .layout[data-tab="evolution"] .panel--evolution,
+  .layout[data-tab="glossary"] .panel--glossary,
+  .layout[data-tab="council"] .panel--council {
+    display: flex !important;
+  }
+
+  .toolboxScroll {
+    max-height: 58vh;
+  }
+
+  .logScroll {
+    max-height: 52vh;
+  }
+
   .mobileBar {
     display: flex;
     position: fixed;
@@ -695,8 +901,8 @@ body::before {
     bottom: 0;
     z-index: 60;
     gap: 10px;
-    padding: 10px 12px;
-    background: rgba(11, 18, 32, 0.95);
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+    background: rgba(11, 18, 32, 0.96);
     border-top: 1px solid var(--border);
     backdrop-filter: blur(8px);
     align-items: center;
@@ -708,154 +914,35 @@ body::before {
     margin-left: auto;
     white-space: nowrap;
   }
-}
 
-/* ===== Mobile playability fix ===== */
-@media (max-width: 980px) {
-  .app { height: auto; min-height: 100vh; }
-  .layout {
-    flex: none;
-    height: auto;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    overflow: visible;
-    padding-bottom: 90px;
+  .councilScreen {
+    padding: 84px 12px 18px;
   }
 
-  .panel { min-height: 320px; }
-  .hint { display: none; }
-  .toolboxScroll { max-height: 55vh; }
-  .logScroll { max-height: 45vh; }
+  .councilScreenBody {
+    flex-direction: column;
+  }
+
+  .councilRing {
+    min-height: 420px;
+  }
+
+  .councilDetails {
+    width: 100%;
+  }
 }
 
 @media (max-width: 980px) and (orientation: landscape) {
-  .panel { min-height: 260px; }
-  .toolboxScroll { max-height: 45vh; }
-  .logScroll { max-height: 40vh; }
-}
-
-/* ===== Tabs (mobile) ===== */
-.tabBar {
-  display: none;
-  gap: 8px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
-  background: rgba(11, 18, 32, 0.95);
-}
-
-.tabBtn {
-  flex: 1;
-  background: rgba(17, 24, 39, 0.9);
-  border: 1px solid var(--border);
-  color: var(--ink-0);
-  padding: 10px 10px;
-  border-radius: 12px;
-  font-weight: 900;
-  cursor: pointer;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-}
-
-.tabBtn.active {
-  background: linear-gradient(160deg, #f6b351, #e68a2e);
-  border-color: #e68a2e;
-  color: #1d1407;
-}
-
-/* Mobile: show ONE panel at a time, no more "everything collapses" */
-@media (max-width: 980px), (pointer: coarse) {
-  .tabBar { display: flex; }
-
-  .layout {
-    display: flex !important;
-    flex-direction: column !important;
-    width: 100%;
-    max-width: 100%;
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
-    padding-bottom: 78px;
+  .grid {
+    max-width: 520px;
   }
 
-  .panel {
-    width: 100% !important;
-    max-width: 100% !important;
-    flex: 1 1 auto;
-    min-height: 0;
+  .toolboxScroll {
+    max-height: 48vh;
   }
 
-  .panelToggle {
-    width: 100%;
-    justify-content: flex-start;
-  }
-
-  .layout[data-tab="dungeon"] .panel--toolbox,
-  .layout[data-tab="dungeon"] .panel--inventory,
-  .layout[data-tab="dungeon"] .panel--log,
-  .layout[data-tab="dungeon"] .panel--evolution,
-  .layout[data-tab="dungeon"] .panel--glossary,
-  .layout[data-tab="dungeon"] .panel--council {
-    display: none;
-  }
-
-  .layout[data-tab="toolbox"] .panel--dungeon,
-  .layout[data-tab="toolbox"] .panel--inventory,
-  .layout[data-tab="toolbox"] .panel--log,
-  .layout[data-tab="toolbox"] .panel--evolution,
-  .layout[data-tab="toolbox"] .panel--glossary,
-  .layout[data-tab="toolbox"] .panel--council {
-    display: none;
-  }
-
-  .layout[data-tab="inventory"] .panel--dungeon,
-  .layout[data-tab="inventory"] .panel--toolbox,
-  .layout[data-tab="inventory"] .panel--log,
-  .layout[data-tab="inventory"] .panel--evolution,
-  .layout[data-tab="inventory"] .panel--glossary,
-  .layout[data-tab="inventory"] .panel--council {
-    display: none;
-  }
-
-  .layout[data-tab="evolution"] .panel--dungeon,
-  .layout[data-tab="evolution"] .panel--toolbox,
-  .layout[data-tab="evolution"] .panel--inventory,
-  .layout[data-tab="evolution"] .panel--log,
-  .layout[data-tab="evolution"] .panel--glossary,
-  .layout[data-tab="evolution"] .panel--council {
-    display: none;
-  }
-
-  .layout[data-tab="glossary"] .panel--dungeon,
-  .layout[data-tab="glossary"] .panel--toolbox,
-  .layout[data-tab="glossary"] .panel--inventory,
-  .layout[data-tab="glossary"] .panel--log,
-  .layout[data-tab="glossary"] .panel--evolution,
-  .layout[data-tab="glossary"] .panel--council {
-    display: none;
-  }
-
-  .layout[data-tab="log"] .panel--dungeon,
-  .layout[data-tab="log"] .panel--toolbox,
-  .layout[data-tab="log"] .panel--inventory,
-  .layout[data-tab="log"] .panel--evolution,
-  .layout[data-tab="log"] .panel--glossary,
-  .layout[data-tab="log"] .panel--council {
-    display: none;
-  }
-
-  /* Mobile: keep dungeon visible while showing the selected panel */
-  .panel--dungeon {
-    display: block !important;
-  }
-
-  .layout[data-tab="toolbox"] .panel--toolbox,
-  .layout[data-tab="inventory"] .panel--inventory,
-  .layout[data-tab="evolution"] .panel--evolution,
-  .layout[data-tab="glossary"] .panel--glossary,
-  .layout[data-tab="log"] .panel--log,
-  .layout[data-tab="council"] .panel--council {
-    display: block !important;
+  .logScroll {
+    max-height: 42vh;
   }
 }
 

@@ -937,6 +937,7 @@ function resetLayoutKeepStructure(grid) {
 export default function App() {
   const [activeTab, setActiveTab] = useState("dungeon"); // "dungeon" | "toolbox" | "log"
   const [sidePanel, setSidePanel] = useState("log"); // "log" | "inventory" | "evolution" | "glossary" | "council"
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [councilScreenOpen, setCouncilScreenOpen] = useState(false);
   const [focusedCouncilKey, setFocusedCouncilKey] = useState(null);
   const [fuseA, setFuseA] = useState("");
@@ -3228,49 +3229,62 @@ export default function App() {
 
   const canStartRaid = !locked && isBattlePhase && !state.raidActive && validation.ok;
   const canEndTurn = !locked && isBattlePhase && (state.raidActive || state.heroes.length > 0);
+  const mobileTabs = [
+    { key: "dungeon", label: "Dungeon", desc: "Grid only" },
+    { key: "toolbox", label: "Toolbox", desc: "Build and raid actions" },
+    { key: "inventory", label: "Inventory", desc: "View monsters and items" },
+    { key: "evolution", label: "Evolution", desc: "Spend evolution points" },
+    { key: "glossary", label: "Glossary", desc: "Read passives and terms" },
+    { key: "log", label: "Log", desc: "Recent events" },
+  ];
+  if (state.councilSession && state.councilSession.day === state.day) {
+    mobileTabs.push({ key: "council", label: "Council", desc: "Council session details" });
+  }
+  const activeMobileTab = mobileTabs.find((tab) => tab.key === activeTab) || mobileTabs[0];
+
+  function selectMobileTab(tab) {
+    setActiveTab(tab);
+    if (["log", "inventory", "evolution", "glossary", "council"].includes(tab)) {
+      setSidePanel(tab);
+    }
+    setMobileMenuOpen(false);
+  }
 
   return (
     <div className="app">
       <header className="topbar">
-{/* Mobile Tabs */}
-<div className="tabBar">
-  <button
-    className={`tabBtn ${activeTab === "dungeon" ? "active" : ""}`}
-    onClick={() => setActiveTab("dungeon")}
-  >
-    Dungeon
-  </button>
-  <button
-    className={`tabBtn ${activeTab === "toolbox" ? "active" : ""}`}
-    onClick={() => setActiveTab("toolbox")}
-  >
-    Toolbox
-  </button>
+        <div className="mobileNav">
           <button
-            className={`tabBtn ${activeTab === "inventory" ? "active" : ""}`}
-            onClick={() => setActiveTab("inventory")}
+            className={`mobileMenuBtn ${mobileMenuOpen ? "active" : ""}`}
+            onClick={() => setMobileMenuOpen((open) => !open)}
+            aria-expanded={mobileMenuOpen}
+            aria-controls="mobile-nav-drawer"
           >
-            Inventory
+            <span className="mobileMenuIcon" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </span>
+            <span className="mobileMenuText">
+              <span className="mobileMenuLabel">Mobile Menu</span>
+              <span className="mobileMenuCurrent">{activeMobileTab.label}</span>
+            </span>
           </button>
-  <button
-    className={`tabBtn ${activeTab === "evolution" ? "active" : ""}`}
-    onClick={() => setActiveTab("evolution")}
-  >
-    Evolution
-  </button>
-  <button
-    className={`tabBtn ${activeTab === "glossary" ? "active" : ""}`}
-    onClick={() => setActiveTab("glossary")}
-  >
-    Glossary
-  </button>
-  <button
-            className={`tabBtn ${activeTab === "log" ? "active" : ""}`}
-            onClick={() => setActiveTab("log")}
-          >
-            Log
-  </button>
-</div>
+          {mobileMenuOpen && (
+            <div className="mobileDrawer" id="mobile-nav-drawer">
+              {mobileTabs.map((tab) => (
+                <button
+                  key={tab.key}
+                  className={`mobileNavBtn ${activeTab === tab.key ? "active" : ""}`}
+                  onClick={() => selectMobileTab(tab.key)}
+                >
+                  <span>{tab.label}</span>
+                  <span className="mobileNavMeta">{tab.desc}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <div className="title">Dungeonlord (Barebones Prototype)</div>
         <div className="status">
           <span className="pill">Essence: {state.currency.essence}</span>
@@ -3296,32 +3310,47 @@ export default function App() {
           <span className="panelLabel">Side Panel</span>
           <button
             className={`btn toggle ${sidePanel === "log" ? "active" : ""}`}
-            onClick={() => setSidePanel("log")}
+            onClick={() => {
+              setSidePanel("log");
+              setActiveTab("log");
+            }}
           >
             Log
           </button>
           <button
             className={`btn toggle ${sidePanel === "inventory" ? "active" : ""}`}
-            onClick={() => setSidePanel("inventory")}
+            onClick={() => {
+              setSidePanel("inventory");
+              setActiveTab("inventory");
+            }}
           >
             Inventory
           </button>
           <button
             className={`btn toggle ${sidePanel === "evolution" ? "active" : ""}`}
-            onClick={() => setSidePanel("evolution")}
+            onClick={() => {
+              setSidePanel("evolution");
+              setActiveTab("evolution");
+            }}
           >
             Evolution
           </button>
           <button
             className={`btn toggle ${sidePanel === "glossary" ? "active" : ""}`}
-            onClick={() => setSidePanel("glossary")}
+            onClick={() => {
+              setSidePanel("glossary");
+              setActiveTab("glossary");
+            }}
           >
             Glossary
           </button>
           {state.councilSession && state.councilSession.day === state.day && (
             <button
               className={`btn toggle ${sidePanel === "council" ? "active" : ""}`}
-              onClick={() => setSidePanel("council")}
+              onClick={() => {
+                setSidePanel("council");
+                setActiveTab("council");
+              }}
             >
               Council
             </button>
