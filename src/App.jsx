@@ -432,7 +432,7 @@ const TRAP_GLYPHS = {
   "cursed-brand": { unarmed: "\u2297", armed: "\u2297" },
   "blink-trap": { unarmed: "\u25C9", armed: "\u25C9" },
   "shatter-floor": { unarmed: "\u25A7", armed: "\u25A7" },
-  "arrow-gallery": { unarmed: "\u27A4", armed: "\u27A4" },
+  "arrow-gallery": { unarmed: "\u27B5", armed: "\u27B5" },
 };
 
 const UTILITY_GLYPHS = {
