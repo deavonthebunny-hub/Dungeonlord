@@ -26,6 +26,19 @@ const BASE_MONSTER_ROOM_CAP = 3;
 const COUNCIL_INTERVAL = 10;
 const FLESH_MARKET_COST = 100;
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+const STAR_MULTIPLIERS = {
+  1: 1.0,
+  2: 1.35,
+  3: 1.75,
+  4: 2.25,
+  5: 3.0,
+};
+const MAX_MONSTER_STAR = 5;
+const MAX_EVOLUTION_STAGE = 2;
+const EVOLUTION_COSTS = {
+  0: 20,
+  1: 50,
+};
 
 const MONSTERS = {
   goblin: { key: "goblin", name: "Goblin", icon: "G", hp: 8, atk: 3, cost: 15 },
@@ -123,6 +136,16 @@ const MONSTER_PASSIVE_MAP = Object.fromEntries(MONSTER_PASSIVE_RULES.map((p) => 
 const MONSTER_PASSIVES = MONSTER_PASSIVE_RULES.map((p) => p.key);
 const MONSTER_TITLES = ["Grim", "Ragged", "Iron", "Soot", "Feral", "Rot"];
 const MONSTER_EVOLUTION_BRANCHES = ["Knight", "Reaper", "Warlock", "Stalker", "Alpha", "Seer", "Warden", "Marauder"];
+const BRANCH_PASSIVE_BY_CLASS = {
+  Knight: "bulwark",
+  Reaper: "cruelty",
+  Warlock: "hex",
+  Stalker: "swift",
+  Alpha: "packleader",
+  Seer: "mender",
+  Warden: "warding",
+  Marauder: "savage",
+};
 
 const COUNCIL_MEMBERS = [
   {
@@ -373,16 +396,16 @@ const MONSTER_ROOMS = [
 ];
 
 const TRAP_TYPES = [
-  { key: "spike-pit", name: "Spike Pit", desc: "On entry: 10 damage.", baseDmg: 10 },
-  { key: "poison-vent", name: "Poison Vent", desc: "On entry: 4 damage + Poison (2 dmg, 3 turns).", baseDmg: 4 },
-  { key: "frost-rune", name: "Frost Rune", desc: "On entry: 5 damage + Slow (2 turns).", baseDmg: 5 },
-  { key: "shock-coil", name: "Shock Coil", desc: "On entry: 6 damage + Stun (skip next move).", baseDmg: 6 },
-  { key: "snare-net", name: "Snare Net", desc: "On entry: Rooted (skip next move).", baseDmg: 0 },
-  { key: "flame-jet", name: "Flame Jet", desc: "On entry: 8 damage (+4 if already damaged).", baseDmg: 8 },
-  { key: "cursed-brand", name: "Cursed Brand", desc: "On entry: Mark hero; on death +10 Essence.", baseDmg: 0 },
-  { key: "blink-trap", name: "Blink Trap", desc: "On entry: Teleport hero back 1 tile.", baseDmg: 0 },
-  { key: "shatter-floor", name: "Shatter Floor", desc: "First entry: 12 damage, then breaks.", baseDmg: 12 },
-  { key: "arrow-gallery", name: "Arrow Gallery", desc: "On entry: 3 damage + 3 damage next turn.", baseDmg: 3 },
+  { key: "spike-pit", name: "Spike Pit", desc: "On entry: 10 damage.", baseDmg: 10, baseCooldown: 1 },
+  { key: "poison-vent", name: "Poison Vent", desc: "On entry: 4 damage + Poison (2 dmg, 3 turns).", baseDmg: 4, baseCooldown: 1 },
+  { key: "frost-rune", name: "Frost Rune", desc: "On entry: 5 damage + Slow (2 turns).", baseDmg: 5, baseCooldown: 1 },
+  { key: "shock-coil", name: "Shock Coil", desc: "On entry: 6 damage + Stun (skip next move).", baseDmg: 6, baseCooldown: 2 },
+  { key: "snare-net", name: "Snare Net", desc: "On entry: Rooted (skip next move).", baseDmg: 0, baseCooldown: 1 },
+  { key: "flame-jet", name: "Flame Jet", desc: "On entry: 8 damage (+4 if already damaged).", baseDmg: 8, baseCooldown: 1 },
+  { key: "cursed-brand", name: "Cursed Brand", desc: "On entry: Mark hero; on death +10 Essence.", baseDmg: 0, baseCooldown: 1 },
+  { key: "blink-trap", name: "Blink Trap", desc: "On entry: Teleport hero back 1 tile.", baseDmg: 0, baseCooldown: 2 },
+  { key: "shatter-floor", name: "Shatter Floor", desc: "First entry: 12 damage, then breaks.", baseDmg: 12, baseCooldown: 0 },
+  { key: "arrow-gallery", name: "Arrow Gallery", desc: "On entry: 3 damage + 3 damage next turn.", baseDmg: 3, baseCooldown: 1 },
 ];
 
 const UTILITY_ICONS = {
@@ -583,6 +606,205 @@ function scaleByDay(value, day, perDay = 0.03, cap = 2.0) {
   return Math.max(1, Math.round(value * mult));
 }
 
+function monsterStarCapForDay(day = 1) {
+  const safeDay = Math.max(0, day || 0);
+  if (safeDay <= 10) return 2;
+  if (safeDay <= 25) return 3;
+  if (safeDay <= 36) return 4;
+  return 5;
+}
+
+function clampMonsterStar(stars) {
+  return clamp(Math.round(stars || 1), 1, MAX_MONSTER_STAR);
+}
+
+function monsterStarMultiplier(stars) {
+  return STAR_MULTIPLIERS[clampMonsterStar(stars)] || STAR_MULTIPLIERS[1];
+}
+
+function rollAuthoritativeStar(day = 1, explicitCap) {
+  const maxStar = Math.min(MAX_MONSTER_STAR, explicitCap || MAX_MONSTER_STAR, monsterStarCapForDay(day));
+  const r = Math.random();
+  if (maxStar <= 2) {
+    return r < 0.62 ? 1 : 2;
+  }
+  if (maxStar === 3) {
+    if (r < 0.42) return 1;
+    if (r < 0.84) return 2;
+    return 3;
+  }
+  if (maxStar === 4) {
+    if (r < 0.28) return 1;
+    if (r < 0.62) return 2;
+    if (r < 0.9) return 3;
+    return 4;
+  }
+  if (r < 0.2) return 1;
+  if (r < 0.5) return 2;
+  if (r < 0.77) return 3;
+  if (r < 0.96) return 4;
+  return 5;
+}
+
+function rollPassiveCount(stars) {
+  switch (clampMonsterStar(stars)) {
+    case 1:
+      return Math.random() < 0.55 ? 0 : 1;
+    case 2:
+      return 1;
+    case 3:
+      return Math.random() < 0.5 ? 1 : 2;
+    case 4:
+      return 2;
+    default:
+      return Math.random() < 0.55 ? 2 : 3;
+  }
+}
+
+function createPassiveRanks(passiveKeys = [], existingRanks = {}) {
+  const ranks = {};
+  for (const key of passiveKeys) {
+    ranks[key] = Math.max(1, existingRanks[key] || 1);
+  }
+  return ranks;
+}
+
+function passiveRankLabel(rank) {
+  const numerals = ["I", "II", "III", "IV", "V"];
+  return numerals[Math.max(0, Math.min(rank, numerals.length) - 1)] || `${rank}`;
+}
+
+function formatMonsterPassiveList(passiveKeys = [], passiveRanks = {}) {
+  if (!Array.isArray(passiveKeys) || passiveKeys.length === 0) return "None";
+  return passiveKeys
+    .map((key) => {
+      const name = MONSTER_PASSIVE_MAP[key]?.name || key;
+      const rank = passiveRanks[key] || 1;
+      return rank > 1 ? `${name} ${passiveRankLabel(rank)}` : name;
+    })
+    .join(", ");
+}
+
+function normalizePassiveKeysForMonster(monster) {
+  if (!monster) return [];
+  if (Array.isArray(monster.passiveKeys) && monster.passiveKeys.length > 0) {
+    return Array.from(new Set(monster.passiveKeys.filter(Boolean)));
+  }
+  if (monster.passiveKey) return [monster.passiveKey];
+  const keys = String(monster.passive || "")
+    .split(",")
+    .map((part) => part.trim())
+    .map((part) => MONSTER_PASSIVE_RULES.find((rule) => part.startsWith(rule.name))?.key)
+    .filter(Boolean);
+  return Array.from(new Set(keys));
+}
+
+function monsterEvolutionStageValue(monster) {
+  const raw = Number.isFinite(monster?.evolutionStage) ? monster.evolutionStage : monster?.evolution || 0;
+  return clamp(raw, 0, MAX_EVOLUTION_STAGE);
+}
+
+function monsterEvolutionCost(monster) {
+  if (!monster || !MONSTERS[monster.key]) return null;
+  const stage = monsterEvolutionStageValue(monster);
+  if (stage >= MAX_EVOLUTION_STAGE) return null;
+  return EVOLUTION_COSTS[stage] || null;
+}
+
+function monsterCanEvolve(monster, globalEvolution = 0) {
+  const cost = monsterEvolutionCost(monster);
+  if (cost === null) return false;
+  const personal = Math.max(0, monster?.evoPoints || 0);
+  return personal + Math.max(0, globalEvolution || 0) >= cost;
+}
+
+function defaultBranchClass(monster) {
+  if (monster?.branchClass && BRANCH_PASSIVE_BY_CLASS[monster.branchClass]) return monster.branchClass;
+  if (monster?.class && BRANCH_PASSIVE_BY_CLASS[monster.class]) return monster.class;
+  const passiveKeys = normalizePassiveKeysForMonster(monster);
+  const reverse = Object.entries(BRANCH_PASSIVE_BY_CLASS).find(([, passiveKey]) => passiveKeys.includes(passiveKey));
+  return reverse?.[0] || MONSTER_EVOLUTION_BRANCHES[0];
+}
+
+function monsterBaseDef(base) {
+  if (!base) return 0;
+  if (Number.isFinite(base.def)) return Math.max(0, base.def);
+  return Math.max(0, Math.round(base.hp / 12 + base.atk / 6 - 1));
+}
+
+function buildMonsterStats(kind, stars, evolutionStage = 0) {
+  const base = MONSTERS[kind];
+  if (!base) {
+    return { maxHp: 1, atk: 1, def: 0 };
+  }
+  const mult = monsterStarMultiplier(stars);
+  const stage = clamp(evolutionStage || 0, 0, MAX_EVOLUTION_STAGE);
+  const stats = {
+    maxHp: Math.max(1, Math.round(base.hp * mult)),
+    atk: Math.max(1, Math.round(base.atk * mult)),
+    def: Math.max(0, Math.round(monsterBaseDef(base) * mult)),
+  };
+  if (stage > 0) {
+    stats.maxHp += stage * 4;
+    stats.atk += stage * 2;
+    stats.def += Math.floor((stage + 1) / 2);
+  }
+  return stats;
+}
+
+function rebuildMonsterEntity(monster, overrides = {}, options = {}) {
+  const merged = { ...monster, ...overrides };
+  const stars = clampMonsterStar(merged.stars);
+  const evolutionStage = monsterEvolutionStageValue(merged);
+  const passiveKeys = normalizePassiveKeysForMonster(merged);
+  const passiveRanks = createPassiveRanks(passiveKeys, merged.passiveRanks || {});
+  const stats = buildMonsterStats(merged.key, stars, evolutionStage);
+  const priorMaxHp = Math.max(1, merged.stats?.maxHp || merged.hp || stats.maxHp);
+  const healed = !!options.healToFull;
+  const hp = healed ? stats.maxHp : Math.max(1, Math.min(stats.maxHp, merged.hp || stats.maxHp));
+  return {
+    ...merged,
+    stars,
+    stats,
+    hp: hp > 0 ? hp : Math.max(1, Math.round((merged.hp || priorMaxHp) / priorMaxHp * stats.maxHp)),
+    atk: stats.atk,
+    def: stats.def,
+    passiveKey: passiveKeys[0] || null,
+    passiveKeys,
+    passiveRanks,
+    passive: formatMonsterPassiveList(passiveKeys, passiveRanks),
+    evolutionStage,
+    evolution: evolutionStage,
+    branchClass: evolutionStage > 0 ? defaultBranchClass(merged) : merged.branchClass || null,
+  };
+}
+
+function spendEvolutionPoints(personalPoints, globalPoints, cost) {
+  const personalSpend = Math.min(Math.max(0, personalPoints || 0), cost);
+  const remaining = cost - personalSpend;
+  const globalSpend = Math.min(Math.max(0, globalPoints || 0), remaining);
+  if (personalSpend + globalSpend < cost) return null;
+  let source = "personal";
+  if (personalSpend > 0 && globalSpend > 0) source = "mixed";
+  else if (globalSpend > 0) source = "global";
+  return {
+    personalLeft: Math.max(0, (personalPoints || 0) - personalSpend),
+    globalLeft: Math.max(0, (globalPoints || 0) - globalSpend),
+    personalSpend,
+    globalSpend,
+    source,
+  };
+}
+
+function trapChargesForStar(star) {
+  return 1 + Math.floor((clampMonsterStar(star) - 1) / 2);
+}
+
+function trapCooldownAfterTrigger(trapType, star) {
+  const baseCooldown = TRAP_MAP[trapType]?.baseCooldown ?? 1;
+  return Math.max(0, baseCooldown - Math.floor((clampMonsterStar(star) - 1) / 2));
+}
+
 function scaleStat(base, stars) {
   const bonus = stars === 6 ? 0.35 : 0;
   const mult = 1 + (stars - 1) * 0.3 + bonus;
@@ -632,7 +854,7 @@ function generateHero(id, entrancePos, turnsSurvived, raidType) {
       stunnedOnce: false,
       siphonGained: 0,
       tookDamageThisRaid: false,
-      cursedMark: false,
+      cursedMark: 0,
       wardedUsed: false,
       resoluteUsed: false,
       stoicUsed: false,
@@ -642,10 +864,9 @@ function generateHero(id, entrancePos, turnsSurvived, raidType) {
 
 function generateMonster(kind, turnsSurvived, starCap, day = 1) {
   const base = MONSTERS[kind];
-  let stars = rollStars(turnsSurvived, 8);
-  if (starCap) stars = Math.min(stars, starCap);
-  const passiveKey = pick(MONSTER_PASSIVES);
-  const passive = MONSTER_PASSIVE_MAP[passiveKey]?.name || "Savage";
+  const stars = rollAuthoritativeStar(day, starCap);
+  const passiveKeys = pickUnique(MONSTER_PASSIVES, rollPassiveCount(stars));
+  const passiveRanks = createPassiveRanks(passiveKeys);
   let archetype = pick(MONSTER_ARCHETYPES);
   let affinity = null;
   if (MONSTER_AFFINITY_RULES[kind]) {
@@ -654,21 +875,7 @@ function generateMonster(kind, turnsSurvived, starCap, day = 1) {
   } else if (MONSTER_CLASS_RULES[kind]) {
     archetype = pick(MONSTER_CLASS_RULES[kind]);
   }
-  const stats = {
-    maxHp: scaleStat(base.hp, stars),
-    atk: scaleStat(base.atk, stars),
-    def: Math.max(0, Math.floor(stars / 2)),
-  };
-  const modSource = affinity ? AFFINITY_STAT_MODS[affinity] : CLASS_STAT_MODS[archetype];
-  if (modSource) {
-    stats.maxHp = Math.max(1, stats.maxHp + (modSource.hp || 0));
-    stats.atk = Math.max(1, stats.atk + (modSource.atk || 0));
-    stats.def = Math.max(0, stats.def + (modSource.def || 0));
-  }
-  const dayMult = dayMultiplier(day, 0.04, 2.5);
-  stats.maxHp = Math.max(1, Math.round(stats.maxHp * dayMult));
-  stats.atk = Math.max(1, Math.round(stats.atk * dayMult));
-  stats.def = Math.max(0, Math.round(stats.def * dayMult));
+  const stats = buildMonsterStats(kind, stars, 0);
   const name = `${pick(MONSTER_TITLES)} ${base.name}`;
 
   return {
@@ -681,12 +888,16 @@ function generateMonster(kind, turnsSurvived, starCap, day = 1) {
     race: base.name,
     class: archetype,
     stars,
-    passive,
-    passiveKey,
-    passiveKeys: [passiveKey],
+    passive: formatMonsterPassiveList(passiveKeys, passiveRanks),
+    passiveKey: passiveKeys[0] || null,
+    passiveKeys,
+    passiveRanks,
     stats,
     affinity,
     evoPoints: 0,
+    evolutionStage: 0,
+    evolution: 0,
+    branchClass: null,
     foughtThisRaid: false,
     shieldedThisTurn: false,
   };
@@ -720,6 +931,55 @@ function generateArtifactStock() {
 
 function monsterRoomCap(tier) {
   return BASE_MONSTER_ROOM_CAP + Math.max(0, (tier || 1) - 1);
+}
+
+function applyMonsterRoomPlacementStatic(monster, roomType, roomTier = 1) {
+  const m = {
+    ...monster,
+    stats: {
+      ...(monster.stats || {
+        maxHp: monster.hp || 1,
+        atk: monster.atk || 1,
+        def: monster.def || 0,
+      }),
+    },
+  };
+  if (!roomType) return m;
+  const tierBonus = Math.max(0, roomTier - 1);
+  if (roomType === "training-den") {
+    m.atk += 1 + tierBonus;
+    m.stats.atk = m.atk;
+  } else if (roomType === "thick-hide") {
+    const delta = 3 + tierBonus * 2;
+    m.stats.maxHp = (m.stats.maxHp || m.hp || 1) + delta;
+    m.hp = Math.min(m.stats.maxHp, (m.hp || m.stats.maxHp) + delta);
+  }
+  return m;
+}
+
+function normalizeMonsterEntity(monster, roomType, roomTier = 1) {
+  if (!monster || !MONSTERS[monster.key]) return monster;
+  const stage = monsterEvolutionStageValue(monster);
+  const branchClass = stage > 0 ? defaultBranchClass(monster) : monster.branchClass || null;
+  let normalized = rebuildMonsterEntity(
+    {
+      ...monster,
+      stars: clampMonsterStar(monster.stars),
+      evolutionStage: stage,
+      evolution: stage,
+      branchClass,
+    },
+    {},
+    { healToFull: false }
+  );
+  if (roomType) {
+    normalized = applyMonsterRoomPlacementStatic(normalized, roomType, roomTier);
+  }
+  normalized.hp = Math.max(1, Math.min(normalized.stats.maxHp, monster.hp || normalized.stats.maxHp));
+  normalized.foughtThisRaid = !!monster.foughtThisRaid;
+  normalized.shieldedThisTurn = !!monster.shieldedThisTurn;
+  normalized.evoPoints = Math.max(0, monster.evoPoints || 0);
+  return normalized;
 }
 
 function calcArtifactMods(artifacts, day = 1) {
@@ -765,7 +1025,11 @@ function makeTile() {
     roomTier: 1,
     trap: false,
     trapType: null,
+    trapStar: 1,
     trapStars: 1,
+    trapRank: 1,
+    trapChargesRemaining: 0,
+    trapCooldownRemaining: 0,
     trapBroken: false,
     ambushUsed: false,
     monsters: [], // {key,name,icon,hp,atk}
@@ -786,7 +1050,11 @@ function cloneGrid(grid) {
       roomTier: t.roomTier ?? 1,
       trap: t.trap,
       trapType: t.trapType,
+      trapStar: t.trapStar ?? t.trapStars ?? 1,
       trapStars: t.trapStars,
+      trapRank: t.trapRank ?? t.roomTier ?? 1,
+      trapChargesRemaining: t.trapChargesRemaining ?? (t.trap ? trapChargesForStar(t.trapStar ?? t.trapStars ?? 1) : 0),
+      trapCooldownRemaining: t.trapCooldownRemaining ?? 0,
       trapBroken: t.trapBroken,
       ambushUsed: t.ambushUsed,
       monsters: t.monsters.map((m) => ({ ...m })),
@@ -914,17 +1182,29 @@ function resetLayoutKeepStructure(grid) {
       t.roomTier = t.roomTier || 1;
       if (t.room === "trap") {
         t.trap = true;
-        t.trapStars = t.trapStars || 1;
+        t.trapStar = t.trapStar || t.trapStars || 1;
+        t.trapStars = t.trapStar;
+        t.trapRank = t.trapRank || t.roomTier || 1;
+        t.trapChargesRemaining = trapChargesForStar(t.trapStar);
+        t.trapCooldownRemaining = 0;
         t.trapBroken = false;
         t.monsters = [];
       } else if (t.room === "monster") {
         t.trap = false;
-        t.trapStars = t.trapStars || 1;
+        t.trapStar = 1;
+        t.trapStars = 1;
+        t.trapRank = 1;
+        t.trapChargesRemaining = 0;
+        t.trapCooldownRemaining = 0;
         t.ambushUsed = false;
         t.monsters = [];
       } else {
         t.trap = false;
-        t.trapStars = t.trapStars || 1;
+        t.trapStar = 1;
+        t.trapStars = 1;
+        t.trapRank = 1;
+        t.trapChargesRemaining = 0;
+        t.trapCooldownRemaining = 0;
         t.trapBroken = false;
         t.ambushUsed = false;
         t.monsters = [];
@@ -949,7 +1229,7 @@ export default function App() {
     const traderStock = generateTraderStock(0, 1);
     const shadyStock = generateArtifactStock();
     const grid = initStartingGrid();
-    let invMonsters = initMonsterInventory(0, 2, 3, 1);
+    let invMonsters = initMonsterInventory(0, 2, 2, 1);
     const starterRoom = grid[0]?.[1];
     if (starterRoom && starterRoom.room === "monster") {
       starterRoom.monsters = invMonsters.map((m) => ({ ...m }));
@@ -1031,10 +1311,33 @@ export default function App() {
           if (!Array.isArray(rawGrid[y]) || rawGrid[y].length !== W) return row;
           return row.map((cell, x) => {
             const rawCell = rawGrid[y][x] || {};
+            const trapStar = clampMonsterStar(rawCell.trapStar ?? rawCell.trapStars ?? cell.trapStar);
+            const trapRank = Math.max(1, rawCell.trapRank ?? rawCell.roomTier ?? cell.trapRank);
+            const roomType = rawCell.roomType || cell.roomType;
+            const roomTier = rawCell.roomTier ?? cell.roomTier ?? 1;
+            const monsters = Array.isArray(rawCell.monsters)
+              ? rawCell.monsters
+                  .filter((monster) => monster && MONSTERS[monster.key])
+                  .map((monster) =>
+                    normalizeMonsterEntity(monster, rawCell.room === "monster" ? roomType : null, roomTier)
+                  )
+              : [];
             return {
               ...cell,
               ...rawCell,
-              monsters: Array.isArray(rawCell.monsters) ? rawCell.monsters : [],
+              roomTier,
+              trapStar,
+              trapStars: trapStar,
+              trapRank,
+              trapChargesRemaining: Number.isFinite(rawCell.trapChargesRemaining)
+                ? Math.max(0, rawCell.trapChargesRemaining)
+                : rawCell.trap && !rawCell.trapBroken
+                ? trapChargesForStar(trapStar)
+                : 0,
+              trapCooldownRemaining: Number.isFinite(rawCell.trapCooldownRemaining)
+                ? Math.max(0, rawCell.trapCooldownRemaining)
+                : 0,
+              monsters,
             };
           });
         });
@@ -1093,7 +1396,11 @@ export default function App() {
         nextRaidType,
         pendingPunitiveRaid,
         currentPartyRaidType,
-        invMonsters: Array.isArray(parsed.invMonsters) ? parsed.invMonsters : base.invMonsters,
+        invMonsters: Array.isArray(parsed.invMonsters)
+          ? parsed.invMonsters
+              .filter((monster) => monster && MONSTERS[monster.key])
+              .map((monster) => normalizeMonsterEntity(monster))
+          : base.invMonsters,
       };
     } catch {
       return null;
@@ -1175,7 +1482,11 @@ export default function App() {
           t.roomTier = payload.roomTier || 1;
           t.trap = payload.trap;
           t.trapType = payload.trapType;
-          t.trapStars = payload.trapStars;
+          t.trapStar = payload.trapStar ?? payload.trapStars ?? 1;
+          t.trapStars = payload.trapStar ?? payload.trapStars ?? 1;
+          t.trapRank = payload.trapRank ?? payload.roomTier ?? 1;
+          t.trapChargesRemaining = payload.trapChargesRemaining ?? (payload.trap ? trapChargesForStar(payload.trapStar ?? payload.trapStars ?? 1) : 0);
+          t.trapCooldownRemaining = payload.trapCooldownRemaining ?? 0;
           t.trapBroken = payload.trapBroken;
           t.ambushUsed = payload.ambushUsed;
           t.monsters = payload.monsters.map((m) => ({ ...m }));
@@ -1212,7 +1523,11 @@ export default function App() {
       t.roomTier = 1;
       t.trap = false;
       t.trapType = null;
+      t.trapStar = 1;
       t.trapStars = 1;
+      t.trapRank = 1;
+      t.trapChargesRemaining = 0;
+      t.trapCooldownRemaining = 0;
       t.trapBroken = false;
       t.ambushUsed = false;
       t.monsters = [];
@@ -1244,7 +1559,11 @@ export default function App() {
       t.roomType = null;
       t.trap = false;
       t.trapType = null;
+      t.trapStar = 1;
       t.trapStars = 1;
+      t.trapRank = 1;
+      t.trapChargesRemaining = 0;
+      t.trapCooldownRemaining = 0;
       t.trapBroken = false;
       t.ambushUsed = false;
 
@@ -1276,7 +1595,11 @@ export default function App() {
       t.roomType = null;
       t.trap = false;
       t.trapType = null;
+      t.trapStar = 1;
       t.trapStars = 1;
+      t.trapRank = 1;
+      t.trapChargesRemaining = 0;
+      t.trapCooldownRemaining = 0;
       t.trapBroken = false;
       t.ambushUsed = false;
 
@@ -1303,24 +1626,28 @@ export default function App() {
 
       if (t.entrance || t.core) return addLog(s, "Cannot build on Entrance/Core.");
       if (t.room) return addLog(s, "That tile already has a room.");
-      if (anyUtilityRoom(grid, s.selectedUtilityRoomType)) {
-        const name = UTILITY_MAP[s.selectedUtilityRoomType]?.name || "Utility Room";
-        return addLog(s, `${name} is unique. You can only build one.`);
-      }
       const level = Number.isFinite(s.dungeonLevel) ? s.dungeonLevel : 1;
       const cap = MAX_ROOMS_BASE + (level - 1) * ROOMS_PER_LEVEL;
       if (countRooms(grid) >= cap) return addLog(s, `Room limit reached (${cap}).`);
 
+      const trapStar = rollAuthoritativeStar(s.day);
       t.room = "trap";
       t.roomTier = 1;
       t.trap = true;
       t.trapType = s.selectedTrapType;
-      t.trapStars = rollStars(s.turnsSurvived, 8);
+      t.trapStar = trapStar;
+      t.trapStars = trapStar;
+      t.trapRank = 1;
+      t.trapChargesRemaining = trapChargesForStar(trapStar);
+      t.trapCooldownRemaining = 0;
       t.trapBroken = false;
       t.monsters = [];
 
       const trapName = TRAP_MAP[t.trapType]?.name || "Trap Room";
-      return addLog({ ...s, grid }, `Built ${trapName} at (${s.selected.x + 1},${s.selected.y + 1}).`);
+      return addLog(
+        { ...s, grid },
+        `Built ${trapName} at (${s.selected.x + 1},${s.selected.y + 1}) as ${formatStars(trapStar)} with ${t.trapChargesRemaining} charge(s).`
+      );
     });
   }
 
@@ -1349,7 +1676,11 @@ export default function App() {
       t.trap = false;
       t.roomType = s.selectedMonsterRoomType;
       t.ambushUsed = false;
+      t.trapStar = 1;
       t.trapStars = 1;
+      t.trapRank = 1;
+      t.trapChargesRemaining = 0;
+      t.trapCooldownRemaining = 0;
       t.monsters = [];
 
       const roomName = MONSTER_ROOM_MAP[t.roomType]?.name || "Monster Room";
@@ -1382,7 +1713,11 @@ export default function App() {
       t.roomType = s.selectedUtilityRoomType;
       t.trap = false;
       t.trapType = null;
+      t.trapStar = 1;
       t.trapStars = 1;
+      t.trapRank = 1;
+      t.trapChargesRemaining = 0;
+      t.trapCooldownRemaining = 0;
       t.trapBroken = false;
       t.monsters = [];
 
@@ -1405,10 +1740,19 @@ export default function App() {
       const grid = cloneGrid(s.grid);
       const t = grid[s.selected.y][s.selected.x];
       if (t.room !== "trap") return addLog(s, "Select a trap room first.");
-      if (t.trapBroken) return addLog(s, "This trap is broken.");
 
       t.trap = !t.trap;
-      return addLog({ ...s, grid }, t.trap ? "Trap armed." : "Trap removed.");
+      if (t.trap) {
+        if (t.trapBroken) {
+          t.trapBroken = false;
+        }
+        t.trapChargesRemaining = trapChargesForStar(t.trapStar || t.trapStars || 1);
+        t.trapCooldownRemaining = 0;
+        return addLog({ ...s, grid }, `Trap armed. ${t.trapChargesRemaining} charge(s) ready.`);
+      }
+      t.trapChargesRemaining = 0;
+      t.trapCooldownRemaining = 0;
+      return addLog({ ...s, grid }, "Trap disarmed.");
     });
   }
 
@@ -1424,30 +1768,43 @@ export default function App() {
     }
     setState((s) => {
       const kind = pick(MONSTER_KEYS);
-      const base = MONSTERS[kind];
-      const scaledCost = scaleByDay(base.cost, s.day, 0.05, 3.0);
+      const previewMonster = generateMonster(kind, s.turnsSurvived, undefined, s.day);
+      const scaledCost = traderPrice(previewMonster, s.day);
       if (s.currency.essence < scaledCost) return addLog(s, "Not enough Essence.");
 
-      const monster = generateMonster(kind, s.turnsSurvived, undefined, s.day);
-      const invMonsters = [...s.invMonsters, monster];
+      const invMonsters = [...s.invMonsters, previewMonster];
       return addLog(
         { ...s, currency: { ...s.currency, essence: s.currency.essence - scaledCost }, invMonsters },
-        `Recruited ${monster.name} for ${scaledCost} Essence.`
+        `Recruited ${previewMonster.name} for ${scaledCost} Essence.`
       );
     });
   }
 
   function buildEvolutionOptions(monster) {
+    const stage = monsterEvolutionStageValue(monster);
     const baseRace = monster.race || MONSTERS[monster.key]?.name || "Monster";
-    return pickUnique(MONSTER_EVOLUTION_BRANCHES, 3).map((branch) => {
-      const key = pick(MONSTER_PASSIVES);
-      return {
-        name: `${baseRace} ${branch}`,
-        class: branch,
-        passive: MONSTER_PASSIVE_MAP[key]?.name || "Savage",
-        passiveKey: key,
-      };
-    });
+    if (stage >= MAX_EVOLUTION_STAGE) return [];
+    if (stage === 0) {
+      return pickUnique(MONSTER_EVOLUTION_BRANCHES, 3).map((branch) => {
+        const passiveKey = BRANCH_PASSIVE_BY_CLASS[branch];
+        return {
+          name: `${baseRace} ${branch}`,
+          class: branch,
+          passive: MONSTER_PASSIVE_MAP[passiveKey]?.name || "None",
+          passiveKey,
+        };
+      });
+    }
+    const branchClass = defaultBranchClass(monster);
+    const passiveKey = BRANCH_PASSIVE_BY_CLASS[branchClass];
+    return [
+      {
+        name: `Ascended ${monster.name}`,
+        class: branchClass,
+        passive: MONSTER_PASSIVE_MAP[passiveKey]?.name || "None",
+        passiveKey,
+      },
+    ];
   }
 
   function evoSourceKey(source) {
@@ -1476,12 +1833,15 @@ export default function App() {
     setState((s) => {
       const target = getMonsterFromSource(s, source);
       if (!target) return s;
-      const personalPoints = target.evoPoints || 0;
-      if (personalPoints < 1 && s.currency.evolution < 1) {
-        return addLog(s, "Not enough Evolution.");
+      const cost = monsterEvolutionCost(target);
+      if (cost === null) {
+        return addLog(s, `${target.name} has already reached the final evolution stage.`);
+      }
+      if (!monsterCanEvolve(target, s.currency.evolution)) {
+        return addLog(s, `Not enough Evolution. Need ${cost} EP.`);
       }
       const options = buildEvolutionOptions(target);
-      return { ...s, evolutionOffer: { source, options } };
+      return { ...s, evolutionOffer: { source, options, cost, stage: monsterEvolutionStageValue(target) } };
     });
   }
 
@@ -1491,60 +1851,69 @@ export default function App() {
       if (!s.evolutionOffer || evoSourceKey(s.evolutionOffer.source) !== evoSourceKey(source)) return s;
       const target = getMonsterFromSource(s, source);
       if (!target) return s;
-      const personalPoints = target.evoPoints || 0;
-      if (personalPoints < 1 && s.currency.evolution < 1) {
-        return addLog(s, "Not enough Evolution.");
+      const cost = monsterEvolutionCost(target);
+      if (cost === null) return addLog(s, `${target.name} has already reached the final evolution stage.`);
+      const spend = spendEvolutionPoints(target.evoPoints || 0, s.currency.evolution, cost);
+      if (!spend) {
+        return addLog(s, `Not enough Evolution. Need ${cost} EP.`);
       }
-      const base = MONSTERS[target.key];
-      const stars = Math.min(6, safeEntityStars(target) + 1);
-      const stats = {
-        maxHp: scaleStat(base.hp, stars),
-        atk: scaleStat(base.atk, stars),
-        def: Math.max(0, Math.floor(stars / 2)),
-      };
-      const evoLevel = (target.evolution || 0) + 1;
-      stats.maxHp += evoLevel * 2;
-      stats.atk += evoLevel;
-      stats.def += Math.floor(evoLevel / 2);
-      const evolved = {
-        ...target,
-        name: option.name,
-        class: option.class,
-        passive: option.passive || target.passive,
-        passiveKey: option.passiveKey || target.passiveKey,
-        passiveKeys: option.passiveKey ? [option.passiveKey] : target.passiveKeys || [target.passiveKey],
-        stars,
-        stats,
-        hp: stats.maxHp,
-        atk: stats.atk,
-        def: stats.def,
-        evolution: (target.evolution || 0) + 1,
-        evoPoints: Math.max(0, personalPoints - 1),
-      };
-      let currency = s.currency;
-      let spendNote = "personal";
-      if (personalPoints < 1) {
-        currency = { ...s.currency, evolution: s.currency.evolution - 1 };
-        spendNote = "global";
+      const currentStage = monsterEvolutionStageValue(target);
+      const nextStage = currentStage + 1;
+      const branchClass = currentStage === 0 ? option.class : defaultBranchClass(target);
+      const branchPassiveKey = option.passiveKey || BRANCH_PASSIVE_BY_CLASS[branchClass];
+      const passiveKeys = normalizePassiveKeysForMonster(target);
+      const passiveRanks = createPassiveRanks(passiveKeys, target.passiveRanks || {});
+      let passiveNote = "";
+      if (branchPassiveKey) {
+        if (passiveRanks[branchPassiveKey]) {
+          passiveRanks[branchPassiveKey] += 1;
+          passiveNote = `${MONSTER_PASSIVE_MAP[branchPassiveKey]?.name || branchPassiveKey} is strengthened.`;
+        } else {
+          passiveKeys.push(branchPassiveKey);
+          passiveRanks[branchPassiveKey] = 1;
+          passiveNote = `${MONSTER_PASSIVE_MAP[branchPassiveKey]?.name || branchPassiveKey} added.`;
+        }
       }
+      const evolvedBase = rebuildMonsterEntity(
+        {
+          ...target,
+          name: currentStage === 0 ? option.name : `Ascended ${target.name.replace(/^Ascended\s+/, "")}`,
+          class: branchClass,
+          branchClass,
+          passiveKeys,
+          passiveRanks,
+          evolutionStage: nextStage,
+          evolution: nextStage,
+          evoPoints: spend.personalLeft,
+        },
+        {},
+        { healToFull: true }
+      );
+      const currency = { ...s.currency, evolution: spend.globalLeft };
       let invMonsters = s.invMonsters;
       let grid = s.grid;
       if (source.type === "inv") {
-        invMonsters = s.invMonsters.map((m, i) => (i === source.index ? evolved : m));
+        invMonsters = s.invMonsters.map((m, i) => (i === source.index ? evolvedBase : m));
       } else if (source.type === "room") {
         grid = cloneGrid(s.grid);
         const tile = grid[source.y][source.x];
         if (tile && tile.room === "monster") {
-          const buffed = applyMonsterRoomPlacement(evolved, tile.roomType, tile.roomTier);
-          buffed.evoPoints = evolved.evoPoints;
-          buffed.evolution = evolved.evolution;
-          buffed.foughtThisRaid = evolved.foughtThisRaid;
+          const buffed = applyMonsterRoomPlacement(evolvedBase, tile.roomType, tile.roomTier);
+          buffed.evoPoints = evolvedBase.evoPoints;
+          buffed.evolutionStage = evolvedBase.evolutionStage;
+          buffed.evolution = evolvedBase.evolution;
+          buffed.branchClass = evolvedBase.branchClass;
+          buffed.passive = evolvedBase.passive;
+          buffed.passiveKey = evolvedBase.passiveKey;
+          buffed.passiveKeys = evolvedBase.passiveKeys;
+          buffed.passiveRanks = evolvedBase.passiveRanks;
+          buffed.foughtThisRaid = evolvedBase.foughtThisRaid;
           tile.monsters = tile.monsters.map((m, i) => (i === source.index ? buffed : m));
         }
       }
       return addLog(
         { ...s, grid, invMonsters, currency, evolutionOffer: null },
-        `${target.name} evolves into ${evolved.name} (${spendNote} evolution).`
+        `${target.name} reaches Stage ${nextStage}/${MAX_EVOLUTION_STAGE} as ${currentStage === 0 ? branchClass : evolvedBase.class}. ${passiveNote} (${cost} ${spend.source} EP).`
       );
     });
   }
@@ -1554,18 +1923,7 @@ export default function App() {
   }
 
   function applyMonsterRoomPlacement(monster, roomType, roomTier = 1) {
-    const m = { ...monster, stats: { ...monster.stats } };
-    if (!roomType) return m;
-    const tierBonus = Math.max(0, roomTier - 1);
-    if (roomType === "training-den") {
-      m.atk += 1 + tierBonus;
-      m.stats.atk = m.atk;
-    } else if (roomType === "thick-hide") {
-      const delta = 3 + tierBonus * 2;
-      m.stats.maxHp = (m.stats.maxHp || m.hp) + delta;
-      m.hp += delta;
-    }
-    return m;
+    return applyMonsterRoomPlacementStatic(monster, roomType, roomTier);
   }
 
   function addMonsterToRoom() {
@@ -1587,7 +1945,7 @@ export default function App() {
       if (s.invMonsters.length <= 0) return addLog(s, "No monsters in inventory.");
 
       const monster = applyMonsterRoomPlacement(s.invMonsters[0], t.roomType, t.roomTier);
-        t.monsters.push(monster);
+      t.monsters.push(monster);
 
       const invMonsters = s.invMonsters.slice(1);
       return addLog({ ...s, grid, invMonsters }, `Placed ${monster.name} in room.`);
@@ -1619,7 +1977,11 @@ export default function App() {
           roomTier: t.roomTier || 1,
           trap: t.trap,
           trapType: t.trapType,
+          trapStar: t.trapStar ?? t.trapStars ?? 1,
           trapStars: t.trapStars,
+          trapRank: t.trapRank ?? t.roomTier ?? 1,
+          trapChargesRemaining: t.trapChargesRemaining ?? 0,
+          trapCooldownRemaining: t.trapCooldownRemaining ?? 0,
           trapBroken: t.trapBroken,
           ambushUsed: t.ambushUsed,
           monsters: t.monsters.map((m) => ({ ...m })),
@@ -1630,7 +1992,11 @@ export default function App() {
         t.roomTier = 1;
         t.trap = false;
         t.trapType = null;
+        t.trapStar = 1;
         t.trapStars = 1;
+        t.trapRank = 1;
+        t.trapChargesRemaining = 0;
+        t.trapCooldownRemaining = 0;
         t.trapBroken = false;
         t.ambushUsed = false;
         t.monsters = [];
@@ -1658,7 +2024,11 @@ export default function App() {
         t.roomTier = s.movePayload.roomTier || 1;
         t.trap = s.movePayload.trap;
         t.trapType = s.movePayload.trapType;
-        t.trapStars = s.movePayload.trapStars;
+        t.trapStar = s.movePayload.trapStar ?? s.movePayload.trapStars ?? 1;
+        t.trapStars = s.movePayload.trapStar ?? s.movePayload.trapStars ?? 1;
+        t.trapRank = s.movePayload.trapRank ?? s.movePayload.roomTier ?? 1;
+        t.trapChargesRemaining = s.movePayload.trapChargesRemaining ?? 0;
+        t.trapCooldownRemaining = s.movePayload.trapCooldownRemaining ?? 0;
         t.trapBroken = s.movePayload.trapBroken;
         t.ambushUsed = s.movePayload.ambushUsed;
         t.monsters = s.movePayload.monsters.map((m) => ({ ...m }));
@@ -1712,7 +2082,11 @@ export default function App() {
       const nextTier = tier + 1;
       t.roomTier = nextTier;
       if (t.room === "trap") {
-        t.trapStars = Math.min(5, (t.trapStars || 1) + 1);
+        t.trapRank = nextTier;
+        if (t.trap) {
+          t.trapChargesRemaining = trapChargesForStar(t.trapStar || t.trapStars || 1);
+          t.trapCooldownRemaining = 0;
+        }
       }
       if (t.room === "monster") {
         for (const m of t.monsters) {
@@ -1727,6 +2101,12 @@ export default function App() {
       }
 
       const currency = { ...s.currency, essence: s.currency.essence - cost };
+      if (t.room === "trap") {
+        return addLog(
+          { ...s, grid, currency },
+          `Upgraded trap room to Tier ${nextTier}. Rank ${t.trapRank} increases trigger damage and recovery.`
+        );
+      }
       return addLog({ ...s, grid, currency }, `Upgraded room to Tier ${nextTier}.`);
     });
   }
@@ -1878,6 +2258,18 @@ export default function App() {
           const t = grid[y][x];
           if (t.room === "monster") {
             for (const m of t.monsters) m.foughtThisRaid = false;
+          } else if (t.room === "trap") {
+            const trapStar = t.trapStar ?? t.trapStars ?? 1;
+            t.trapStar = trapStar;
+            t.trapStars = trapStar;
+            t.trapRank = Math.max(1, t.trapRank ?? t.roomTier ?? 1);
+            if (t.trap && !t.trapBroken) {
+              t.trapChargesRemaining = trapChargesForStar(trapStar);
+              t.trapCooldownRemaining = 0;
+            } else {
+              t.trapChargesRemaining = 0;
+              t.trapCooldownRemaining = 0;
+            }
           }
         }
       }
@@ -2069,8 +2461,9 @@ export default function App() {
         soulshards += shardGain + extraShards;
         kills += 1;
         if (h.counters?.cursedMark) {
-          essence += Math.round(10 * (eventMods.essenceMult || 1));
-          push(`Cursed Brand triggers on Hero#${h.id}. +10 Essence`);
+          const curseGain = Math.round(h.counters.cursedMark * (eventMods.essenceMult || 1));
+          essence += curseGain;
+          push(`Cursed Brand triggers on Hero#${h.id}. +${curseGain} Essence`);
         }
         const altarTier = utilityTier(grid, h.x, h.y, "soul-altar");
         if (altarTier > 0) {
@@ -2109,7 +2502,7 @@ export default function App() {
       function applySiphon(h, x, y) {
         const tier = utilityTier(grid, x, y, "siphon-pylon");
         if (tier <= 0) return;
-        h.counters = h.counters || { stunnedOnce: false, siphonGained: 0, tookDamageThisRaid: false, cursedMark: false };
+        h.counters = h.counters || { stunnedOnce: false, siphonGained: 0, tookDamageThisRaid: false, cursedMark: 0 };
         const cap = 10 + (tier - 1) * 5;
         if ((h.counters.siphonGained || 0) >= cap) return;
         essence += Math.round(1 * (eventMods.essenceMult || 1));
@@ -2132,7 +2525,7 @@ export default function App() {
         }
         if (final > 0) {
           h.hp -= final;
-          h.counters = h.counters || { stunnedOnce: false, siphonGained: 0, tookDamageThisRaid: false, cursedMark: false };
+          h.counters = h.counters || { stunnedOnce: false, siphonGained: 0, tookDamageThisRaid: false, cursedMark: 0 };
           h.counters.tookDamageThisRaid = true;
           applySiphon(h, x, y);
         }
@@ -2147,8 +2540,8 @@ export default function App() {
         bonus += roomTierBonus;
         if (room.roomType === "rally-banner" && room.monsters.length >= 2) bonus += 1;
         if (room.roomType === "pack-tactics") bonus += Math.min(2, room.monsters.length - 1);
-        if (roomHasPassive(room, "warbanner")) bonus += 1;
-        if (roomHasPassive(room, "packleader") && room.monsters.length >= 2) bonus += 1;
+        if (roomHasPassive(room, "warbanner")) bonus += roomPassiveRank(room, "warbanner");
+        if (roomHasPassive(room, "packleader") && room.monsters.length >= 2) bonus += roomPassiveRank(room, "packleader");
         bonus += eventMods.monsterAtk || 0;
         bonus += artifactMods.monsterAtk || 0;
         bonus += dominionEffects.monsterAtk || 0;
@@ -2165,19 +2558,21 @@ export default function App() {
         let bonus = base + (eventMods.monsterDef || 0);
         const room = grid[y][x];
         if (room && room.room === "monster" && roomHasPassive(room, "warding")) {
-          bonus += 1;
+          bonus += roomPassiveRank(room, "warding");
         }
         return bonus;
       }
 
-      function trapDamage(base, stars, x, y, roomTier = 1) {
-        if (!base) return 0;
-        let dmg = scaleStat(base, stars + Math.max(0, roomTier - 1));
+      function trapDamage(tile, base, x, y, extraFlat = 0) {
+        if (!base && !extraFlat) return 0;
+        const trapStar = clampMonsterStar(tile.trapStar ?? tile.trapStars ?? 1);
+        const trapRank = Math.max(1, tile.trapRank ?? tile.roomTier ?? 1);
+        let dmg = base * (1 + 0.25 * (trapStar - 1)) + (trapRank - 1) * 2 + extraFlat;
         let mult = 1;
         const wardTier = utilityTier(grid, x, y, "ward-lantern");
         if (wardTier > 0) mult += 0.25 + 0.05 * (wardTier - 1);
         if (artifactMods.trapMult) mult += artifactMods.trapMult;
-        return Math.round(dmg * mult);
+        return Math.max(0, Math.round(dmg * mult));
       }
 
       if (dominionEffects.pulsePending && heroesIn.length > 0) {
@@ -2185,7 +2580,7 @@ export default function App() {
         for (const h0 of heroesIn) {
           let h = { ...h0 };
           h.statuses = h.statuses || {};
-          h.counters = h.counters || { stunnedOnce: false, siphonGained: 0, tookDamageThisRaid: false, cursedMark: false };
+          h.counters = h.counters || { stunnedOnce: false, siphonGained: 0, tookDamageThisRaid: false, cursedMark: 0 };
           const dmg = applyHeroDamage(h, 5, h.x, h.y, false);
           push(`Dominion Pulse hits Hero#${h.id} for ${dmg}. Hero HP ${Math.max(0, h.hp)}`);
           if (h.hp <= 0) {
@@ -2204,7 +2599,7 @@ export default function App() {
           stunnedOnce: false,
           siphonGained: 0,
           tookDamageThisRaid: false,
-          cursedMark: false,
+          cursedMark: 0,
           wardedUsed: false,
           resoluteUsed: false,
           stoicUsed: false,
@@ -2259,11 +2654,11 @@ export default function App() {
           if (monsterHasPassive(m, "ironhide")) {
             const maxHp = monsterMaxHp(m);
             if (m.hp / Math.max(1, maxHp) > 0.5) {
-              tempDefBonus = 1;
+              tempDefBonus = monsterPassiveRank(m, "ironhide");
             }
           }
           if (monsterHasPassive(m, "cruelty") && h.hp < safeEntityMaxHp(h) * 0.5) {
-            monsterAtk += 1;
+            monsterAtk += monsterPassiveRank(m, "cruelty");
           }
 
           const heroStrike = () => {
@@ -2274,10 +2669,10 @@ export default function App() {
               m.shieldedThisTurn = true;
             }
             if (monsterHasPassive(m, "thorns")) {
-              applyHeroDamage(h, 1, h.x, h.y, false);
+              applyHeroDamage(h, monsterPassiveRank(m, "thorns"), h.x, h.y, false);
             }
             if (monsterHasPassive(m, "bulwark") && !m.shieldedThisTurn) {
-              dmg = Math.max(0, dmg - 1);
+              dmg = Math.max(0, dmg - monsterPassiveRank(m, "bulwark"));
               m.shieldedThisTurn = true;
             }
             m.hp -= dmg;
@@ -2286,7 +2681,7 @@ export default function App() {
 
           const monsterStrike = () => {
             let bonus = 0;
-            if (monsterHasPassive(m, "savage")) bonus += 2;
+            if (monsterHasPassive(m, "savage")) bonus += 2 * monsterPassiveRank(m, "savage");
             const dmg = applyHeroDamage(h, monsterAtk + bonus, h.x, h.y, true);
             if (dmg > 0 && t.roomType === "savage-kennels") {
               m.hp = Math.min(monsterMaxHp(m), m.hp + 2);
@@ -2295,10 +2690,10 @@ export default function App() {
               tryApplyDebuff(h, "weaken", 2, 1);
             }
             if (dmg > 0 && monsterHasPassive(m, "hex")) {
-              tryApplyDebuff(h, "weaken", 2, 1);
+              tryApplyDebuff(h, "weaken", 2, monsterPassiveRank(m, "hex"));
             }
             if (dmg > 0 && monsterHasPassive(m, "leech")) {
-              m.hp = Math.min(monsterMaxHp(m), m.hp + 2);
+              m.hp = Math.min(monsterMaxHp(m), m.hp + 2 * monsterPassiveRank(m, "leech"));
             }
             return dmg;
           };
@@ -2434,17 +2829,17 @@ export default function App() {
         const t2 = grid[h.y][h.x];
         if (moved && t2.room === "monster" && t2.monsters.length > 0) {
           if (roomHasPassive(t2, "venom-aura")) {
-            if (tryApplyDebuff(h, "poison", 2, 2)) {
+            if (tryApplyDebuff(h, "poison", 2 + Math.max(0, roomPassiveRank(t2, "venom-aura") - 1), 2 + roomPassiveRank(t2, "venom-aura"))) {
               push(`Hero#${h.id} is poisoned by Venom Aura.`);
             }
           }
           if (roomHasPassive(t2, "dread-howl")) {
-            if (tryApplyDebuff(h, "fear", 2, 1)) {
+            if (tryApplyDebuff(h, "fear", 2 + Math.max(0, roomPassiveRank(t2, "dread-howl") - 1), 1)) {
               push(`Hero#${h.id} is terrified by Dread Howl.`);
             }
           }
           if (roomHasPassive(t2, "rot-cloud")) {
-            const rotDmg = applyHeroDamage(h, 1, h.x, h.y, false);
+            const rotDmg = applyHeroDamage(h, roomPassiveRank(t2, "rot-cloud"), h.x, h.y, false);
             if (rotDmg > 0) {
               push(`Hero#${h.id} is seared by Rot Cloud for ${rotDmg}.`);
             }
@@ -2458,67 +2853,79 @@ export default function App() {
           if ((t2.trapType || "spike-pit") === "shatter-floor" && t2.trapBroken) {
             push("Shatter Floor is broken.");
           } else {
-      const trapStars = t2.trapStars || 1;
-      const trapKey = t2.trapType || "spike-pit";
-      const trapBase = TRAP_MAP[trapKey]?.baseDmg || 0;
-      const dayBoost = Math.min(3, Math.floor((s.day || 1) / 6));
-      let trapDmg = trapDamage(trapBase, trapStars + dayBoost, h.x, h.y, t2.roomTier || 1);
+            const trapKey = t2.trapType || "spike-pit";
+            const trapStar = clampMonsterStar(t2.trapStar ?? t2.trapStars ?? 1);
+            const trapRank = Math.max(1, t2.trapRank ?? t2.roomTier ?? 1);
+            const charges = Math.max(0, t2.trapChargesRemaining ?? 0);
+            const cooldown = Math.max(0, t2.trapCooldownRemaining ?? 0);
+            if (charges > 0 && cooldown === 0) {
+              const trapBase = TRAP_MAP[trapKey]?.baseDmg || 0;
+              const extraFlat = trapKey === "flame-jet" && h.counters.tookDamageThisRaid ? 4 : 0;
+              let trapDmg = trapDamage(t2, trapBase, h.x, h.y, extraFlat);
 
-      if (trapKey === "flame-jet" && h.counters.tookDamageThisRaid) {
-        trapDmg = trapDamage(trapBase + 4, trapStars + dayBoost, h.x, h.y, t2.roomTier || 1);
-      }
-
-            if (heroHasPassive(h, "Keen")) {
-              trapDmg = Math.max(0, trapDmg - 1);
-            }
-
-            if (trapDmg > 0) {
-              const dealt = applyHeroDamage(h, trapDmg, h.x, h.y, false);
-              push(`Hero#${h.id} triggers ${TRAP_MAP[trapKey]?.name || "trap"} for ${dealt}. Hero HP ${Math.max(0, h.hp)}`);
-            }
-
-            if (trapKey === "poison-vent") {
-              if (tryApplyDebuff(h, "poison", 3, 2)) {
-                push(`Hero#${h.id} is poisoned.`);
+              if (heroHasPassive(h, "Keen")) {
+                trapDmg = Math.max(0, trapDmg - 1);
               }
-            } else if (trapKey === "frost-rune") {
-              if (tryApplyDebuff(h, "slow", 2, 1)) {
-                push(`Hero#${h.id} is slowed.`);
+
+              let dealt = 0;
+              if (trapDmg > 0) {
+                dealt = applyHeroDamage(h, trapDmg, h.x, h.y, false);
               }
-            } else if (trapKey === "shock-coil") {
-              if (!h.counters.stunnedOnce) {
-                if (tryApplyDebuff(h, "stun", 1, 1)) {
-                  h.counters.stunnedOnce = true;
-                  push(`Hero#${h.id} is stunned.`);
+
+              if (trapKey === "poison-vent") {
+                const poisonTurns = 3 + Math.floor((trapStar - 1) / 2);
+                const poisonValue = 2 + Math.floor((trapStar - 1) / 2);
+                if (tryApplyDebuff(h, "poison", poisonTurns, poisonValue)) {
+                  push(`Hero#${h.id} is poisoned.`);
                 }
+              } else if (trapKey === "frost-rune") {
+                const slowTurns = 2 + Math.floor((trapStar - 1) / 2);
+                if (tryApplyDebuff(h, "slow", slowTurns, 1)) {
+                  push(`Hero#${h.id} is slowed.`);
+                }
+              } else if (trapKey === "shock-coil") {
+                if (!h.counters.stunnedOnce) {
+                  if (tryApplyDebuff(h, "stun", 1, 1)) {
+                    h.counters.stunnedOnce = true;
+                    push(`Hero#${h.id} is stunned.`);
+                  }
+                }
+              } else if (trapKey === "snare-net") {
+                const rootTurns = 1 + Math.floor((trapStar - 1) / 2);
+                if (tryApplyDebuff(h, "root", rootTurns, 1)) {
+                  push(`Hero#${h.id} is rooted.`);
+                }
+              } else if (trapKey === "cursed-brand") {
+                h.counters.cursedMark = 10 + (trapRank - 1) * 2 + (trapStar - 1) * 2;
+                push(`Hero#${h.id} is cursed.`);
+              } else if (trapKey === "blink-trap") {
+                const back = h.prev ? { ...h.prev } : ent;
+                if (back) {
+                  const from = { x: h.x, y: h.y };
+                  h.x = back.x;
+                  h.y = back.y;
+                  h.prev = from;
+                  push(`Hero#${h.id} blinks back to (${h.x + 1},${h.y + 1}).`);
+                  applyFearAura();
+                }
+              } else if (trapKey === "arrow-gallery") {
+                const arrowDamage = trapDamage(t2, trapBase, h.x, h.y, 0);
+                setStatus(h, "arrow", 1, arrowDamage);
+                push(`Hero#${h.id} is targeted by arrows.`);
               }
-            } else if (trapKey === "snare-net") {
-              if (tryApplyDebuff(h, "root", 1, 1)) {
-                push(`Hero#${h.id} is rooted.`);
-              }
-            } else if (trapKey === "cursed-brand") {
-              h.counters.cursedMark = true;
-              push(`Hero#${h.id} is cursed.`);
-            } else if (trapKey === "blink-trap") {
-              const back = h.prev ? { ...h.prev } : ent;
-              if (back) {
-                const from = { x: h.x, y: h.y };
-                h.x = back.x;
-                h.y = back.y;
-                h.prev = from;
-                push(`Hero#${h.id} blinks back to (${h.x + 1},${h.y + 1}).`);
-                applyFearAura();
-              }
-            } else if (trapKey === "arrow-gallery") {
-              setStatus(h, "arrow", 1, 3);
-              push(`Hero#${h.id} is targeted by arrows.`);
-            }
 
-            if (trapKey === "shatter-floor") {
-              t2.trapBroken = true;
-            }
+              t2.trapChargesRemaining = Math.max(0, charges - 1);
+              t2.trapCooldownRemaining = trapCooldownAfterTrigger(trapKey, trapStar);
+              push(
+                `${TRAP_MAP[trapKey]?.name || "Trap"} (${formatStars(trapStar)}) triggers for ${dealt} dmg, charges ${t2.trapChargesRemaining} left, cd ${t2.trapCooldownRemaining}.`
+              );
 
-            t2.trap = false;
+              if (trapKey === "shatter-floor") {
+                t2.trapBroken = true;
+                t2.trapChargesRemaining = 0;
+                t2.trapCooldownRemaining = 0;
+              }
+            }
           }
 
           if (h.hp <= 0) {
@@ -2539,7 +2946,7 @@ export default function App() {
         }
 
         if (getStatus(h, "arrow").turns > 0) {
-          const arrowDmg = applyHeroDamage(h, 3, h.x, h.y, false);
+          const arrowDmg = applyHeroDamage(h, getStatus(h, "arrow").value || 3, h.x, h.y, false);
           consumeStatus(h, "arrow");
           push(`Hero#${h.id} is hit by arrows for ${arrowDmg}. Hero HP ${Math.max(0, h.hp)}`);
           if (h.hp <= 0) {
@@ -2562,6 +2969,9 @@ export default function App() {
       for (let y = 0; y < H; y++) {
         for (let x = 0; x < W; x++) {
           const t = grid[y][x];
+          if (t.room === "trap" && t.trapCooldownRemaining > 0) {
+            t.trapCooldownRemaining = Math.max(0, t.trapCooldownRemaining - 1);
+          }
           const sigilTier = utilityTier(grid, x, y, "blood-sigil");
           if (t.room === "monster" && t.monsters.length > 0) {
             if (sigilTier > 0) {
@@ -2572,7 +2982,7 @@ export default function App() {
             }
             if (roomHasPassive(t, "bloodcall")) {
               for (const m of t.monsters) {
-                m.hp = Math.min(monsterMaxHp(m), m.hp + 1);
+                m.hp = Math.min(monsterMaxHp(m), m.hp + roomPassiveRank(t, "bloodcall"));
               }
             }
             if (roomHasPassive(t, "mender")) {
@@ -2581,7 +2991,7 @@ export default function App() {
                 if (!lowest || m.hp < lowest.hp) lowest = m;
               }
               if (lowest) {
-                lowest.hp = Math.min(monsterMaxHp(lowest), lowest.hp + 1);
+                lowest.hp = Math.min(monsterMaxHp(lowest), lowest.hp + roomPassiveRank(t, "mender"));
               }
             }
           }
@@ -2795,7 +3205,7 @@ export default function App() {
         coreShield: 0,
         heroes: [],
         nextHeroId: 1,
-        invMonsters: initMonsterInventory(0, 2, 3, 1),
+        invMonsters: initMonsterInventory(0, 2, 2, 1),
         raidActive: false,
         raidRemaining: 0,
         turnsSurvived: 0,
@@ -2998,9 +3408,9 @@ export default function App() {
       const maxHp = Math.round((statsA.maxHp + statsB.maxHp) * 0.6);
       const atk = Math.round((statsA.atk + statsB.atk) * 0.6);
       const def = Math.round((statsA.def + statsB.def) * 0.6);
-      const stars = Math.min(6, Math.max(safeEntityStars(first), safeEntityStars(second)) + 1);
+      const stars = Math.min(MAX_MONSTER_STAR, Math.max(safeEntityStars(first), safeEntityStars(second)) + 1);
       const passiveKeys = Array.from(new Set([first.passiveKey, second.passiveKey])).filter(Boolean);
-      const passiveNames = passiveKeys.map((k) => MONSTER_PASSIVE_MAP[k]?.name || "Savage");
+      const passiveRanks = createPassiveRanks(passiveKeys);
       const hybrid = {
         key: "abomination",
         name: `Abomination of ${first.race}/${second.race}`,
@@ -3013,10 +3423,14 @@ export default function App() {
         stars,
         passiveKey: passiveKeys[0],
         passiveKeys,
-        passive: passiveNames.join(" + "),
+        passiveRanks,
+        passive: formatMonsterPassiveList(passiveKeys, passiveRanks),
         stats: { maxHp, atk, def },
         affinity: null,
         evoPoints: 0,
+        evolutionStage: 0,
+        evolution: 0,
+        branchClass: null,
         foughtThisRaid: false,
         shieldedThisTurn: false,
       };
@@ -3040,11 +3454,11 @@ export default function App() {
       return addLog({ ...s, invMonsters: inv, currency }, `Sacrificed ${target.name}. +${gain} Dark Crystals.`);
     });
   }
-  function traderPrice(monster) {
+  function traderPrice(monster, dayOverride = state.day) {
     const stars = safeEntityStars(monster);
     const baseCost = MONSTERS[monster.key]?.cost || 20;
-    const dayCost = scaleByDay(baseCost, state.day, 0.05, 3.0);
-    return Math.round(dayCost * (1 + (stars - 1) * 0.25));
+    const dayCost = scaleByDay(baseCost, dayOverride, 0.05, 3.0);
+    return Math.round(dayCost * monsterStarMultiplier(stars));
   }
 
   function buyFromTrader(index) {
@@ -3057,7 +3471,7 @@ export default function App() {
       const stock = s.traderStock ? [...s.traderStock] : [];
       const target = stock[index];
       if (!target) return addLog(s, "That stock item is no longer available.");
-      const price = traderPrice(target);
+      const price = traderPrice(target, s.day);
       if (s.currency.soulshards < price) return addLog(s, "Not enough Soulshards.");
       stock.splice(index, 1);
       const invMonsters = [...s.invMonsters, target];
@@ -3126,9 +3540,12 @@ export default function App() {
       const trap = TRAP_MAP[tile.trapType];
       if (!trap) return "";
       const base = trap.baseDmg || 0;
-      const stars = Math.max(1, tile.trapStars || 1);
-      const scaled = scaleStat(base, stars + Math.max(0, tier - 1));
-      return `${trap.desc} Tier ${tier} (stars ${stars}). Current dmg ${scaled} (base ${base}).`;
+      const star = clampMonsterStar(tile.trapStar ?? tile.trapStars ?? 1);
+      const rank = Math.max(1, tile.trapRank ?? tier);
+      const scaled = Math.max(0, Math.round(base * (1 + 0.25 * (star - 1)) + (rank - 1) * 2));
+      const charges = trapChargesForStar(star);
+      const cooldown = trapCooldownAfterTrigger(tile.trapType, star);
+      return `${trap.desc} Tier ${tier}. ${formatStars(star)} / Rank ${rank}. Trigger ${scaled} dmg, ${charges} charge(s), cooldown ${cooldown}.`;
     }
     if (tile.room === "monster") {
       const tier = tile.roomTier || 1;
@@ -3188,19 +3605,28 @@ export default function App() {
   }
 
   function monsterPassiveKeys(monster) {
-    if (!monster) return [];
-    if (Array.isArray(monster.passiveKeys) && monster.passiveKeys.length > 0) return monster.passiveKeys;
-    if (monster.passiveKey) return [monster.passiveKey];
-    const byName = MONSTER_PASSIVE_RULES.find((p) => p.name === monster.passive);
-    return byName ? [byName.key] : [];
+    return normalizePassiveKeysForMonster(monster);
+  }
+
+  function monsterPassiveRank(monster, key) {
+    if (!monsterHasPassive(monster, key)) return 0;
+    return Math.max(1, monster?.passiveRanks?.[key] || 1);
   }
 
   function monsterHasPassive(monster, key) {
     return monsterPassiveKeys(monster).includes(key);
   }
 
+  function roomPassiveRank(room, key) {
+    let rank = 0;
+    for (const monster of room.monsters || []) {
+      rank = Math.max(rank, monsterPassiveRank(monster, key));
+    }
+    return rank;
+  }
+
   function roomHasPassive(room, key) {
-    return room.monsters.some((m) => monsterHasPassive(m, key));
+    return roomPassiveRank(room, key) > 0;
   }
 
   function formatStars(stars) {
@@ -3229,6 +3655,17 @@ export default function App() {
 
   const canStartRaid = !locked && isBattlePhase && !state.raidActive && validation.ok;
   const canEndTurn = !locked && isBattlePhase && (state.raidActive || state.heroes.length > 0);
+
+  function evolutionButtonLabel(monster) {
+    const cost = monsterEvolutionCost(monster);
+    if (cost === null) return "Max Stage";
+    return `${monsterEvolutionStageValue(monster) === 0 ? "Evolve" : "Ascend"} (${cost} EP)`;
+  }
+
+  function evolutionStageLabel(monster) {
+    return `Stage ${monsterEvolutionStageValue(monster)}/${MAX_EVOLUTION_STAGE}`;
+  }
+
   const mobileTabs = [
     { key: "dungeon", label: "Dungeon", desc: "Grid only" },
     { key: "toolbox", label: "Toolbox", desc: "Build and raid actions" },
@@ -3730,8 +4167,14 @@ export default function App() {
                 <div>{roomTypeDesc(selectedTile) || "n/a"}</div>
                 <div>Trap Armed</div>
                 <div>{selectedTile.room === "trap" ? (selectedTile.trap ? "YES" : "no") : "n/a"}</div>
-                <div>Trap Grade</div>
-                <div>{selectedTile.room === "trap" ? formatStars(selectedTile.trapStars || 1) : "n/a"}</div>
+                <div>Trap Star</div>
+                <div>{selectedTile.room === "trap" ? formatStars(selectedTile.trapStar ?? selectedTile.trapStars ?? 1) : "n/a"}</div>
+                <div>Trap Rank</div>
+                <div>{selectedTile.room === "trap" ? Math.max(1, selectedTile.trapRank ?? selectedTile.roomTier ?? 1) : "n/a"}</div>
+                <div>Trap Charges</div>
+                <div>{selectedTile.room === "trap" ? Math.max(0, selectedTile.trapChargesRemaining ?? 0) : "n/a"}</div>
+                <div>Trap Cooldown</div>
+                <div>{selectedTile.room === "trap" ? Math.max(0, selectedTile.trapCooldownRemaining ?? 0) : "n/a"}</div>
                 <div>Trap Broken</div>
                 <div>{selectedTile.room === "trap" ? (selectedTile.trapBroken ? "YES" : "no") : "n/a"}</div>
                 <div>Heroes Here</div>
@@ -3770,6 +4213,9 @@ export default function App() {
                           </div>
                         <div className="entityStats">
                           HP {m.hp}/{safeEntityMaxHp(m)} | ATK {m.atk} | Evo {m.evoPoints || 0}
+                        </div>
+                        <div className="muted">
+                          {evolutionStageLabel(m)}{m.branchClass ? ` | Branch ${m.branchClass}` : ""}
                         </div>
                       </div>
                       ))}
@@ -3906,11 +4352,11 @@ export default function App() {
                 <button
                   className="btn"
                   onClick={armTrap}
-                  disabled={locked || state.movePayload || !isBuildPhase || selectedTile.room !== "trap" || selectedTile.trapBroken}
+                  disabled={locked || state.movePayload || !isBuildPhase || selectedTile.room !== "trap"}
                 >
                   {selectedTile.room === "trap" && selectedTile.trap ? "Disarm Trap" : "Arm Trap"}
                 </button>
-                <div className="muted">Trap triggers once on hero entry.</div>
+                <div className="muted">Trap stars add charges. Rank adds damage. Cooldown refreshes every turn.</div>
               </div>
               <div className="row">
                 <button
@@ -4242,15 +4688,18 @@ export default function App() {
                       <div className="entityStats">
                         HP {m.hp}/{safeEntityMaxHp(m)} | ATK {m.atk} | Evo {m.evoPoints || 0}
                       </div>
+                      <div className="muted">
+                        {evolutionStageLabel(m)}{m.branchClass ? ` | Branch ${m.branchClass}` : ""}
+                      </div>
                       <div className="row">
                         <button
                           className="btn"
                           onClick={() => startEvolution({ type: "inv", index: idx })}
-                          disabled={!isBuildPhase || ((m.evoPoints || 0) < 1 && state.currency.evolution < 1)}
+                          disabled={!isBuildPhase || !monsterCanEvolve(m, state.currency.evolution)}
                         >
-                          Evolve (1 Evolution)
+                          {evolutionButtonLabel(m)}
                         </button>
-                        <div className="muted">Tier {m.evolution || 0}</div>
+                        <div className="muted">{evolutionStageLabel(m)}</div>
                       </div>
                       {state.evolutionOffer &&
                         state.evolutionOffer.source?.type === "inv" &&
@@ -4262,7 +4711,7 @@ export default function App() {
                               key={`${m.key}-evo-${optIdx}`}
                               onClick={() => chooseEvolution({ type: "inv", index: idx }, opt)}
                             >
-                              {opt.name} ({opt.passive})
+                              {opt.name} (+{opt.passive})
                             </button>
                           ))}
                           <button className="btn small danger" onClick={cancelEvolution}>
@@ -4291,9 +4740,8 @@ export default function App() {
               <div className="cardTitle">Evolvable Monsters</div>
               {(() => {
                 const items = [];
-                const allowGlobal = state.currency.evolution > 0;
                 state.invMonsters.forEach((m, idx) => {
-                  if ((m.evoPoints || 0) > 0 || allowGlobal) {
+                  if (monsterCanEvolve(m, state.currency.evolution)) {
                     items.push({ source: { type: "inv", index: idx }, monster: m, label: "Inventory" });
                   }
                 });
@@ -4301,7 +4749,7 @@ export default function App() {
                   row.forEach((t, x) => {
                     if (t.room === "monster" && t.monsters.length) {
                       t.monsters.forEach((m, idx) => {
-                        if ((m.evoPoints || 0) > 0 || allowGlobal) {
+                        if (monsterCanEvolve(m, state.currency.evolution)) {
                           const roomName = MONSTER_ROOM_MAP[t.roomType]?.name || "Monster Room";
                           items.push({
                             source: { type: "room", x, y, index: idx },
@@ -4314,7 +4762,7 @@ export default function App() {
                   });
                 });
                 if (!items.length) {
-                  return <div className="entityEmpty">No monsters with Evolution points yet.</div>;
+                  return <div className="entityEmpty">No monsters have enough Evolution to advance.</div>;
                 }
                 return (
                   <div className="entityList">
@@ -4331,15 +4779,18 @@ export default function App() {
                           HP {item.monster.hp}/{safeEntityMaxHp(item.monster)} | ATK {item.monster.atk}
                         </div>
                         <div className="muted">Location: {item.label}</div>
+                        <div className="muted">
+                          {evolutionStageLabel(item.monster)}{item.monster.branchClass ? ` | Branch ${item.monster.branchClass}` : ""}
+                        </div>
                         <div className="row">
                           <button
                             className="btn"
                             onClick={() => startEvolution(item.source)}
-                            disabled={!isBuildPhase || ((item.monster.evoPoints || 0) < 1 && state.currency.evolution < 1)}
+                            disabled={!isBuildPhase || !monsterCanEvolve(item.monster, state.currency.evolution)}
                           >
-                            Evolve (1 Evolution)
+                            {evolutionButtonLabel(item.monster)}
                           </button>
-                          <div className="muted">Tier {item.monster.evolution || 0}</div>
+                          <div className="muted">{evolutionStageLabel(item.monster)}</div>
                         </div>
                         {state.evolutionOffer &&
                           evoSourceKey(state.evolutionOffer.source) === evoSourceKey(item.source) && (
@@ -4350,7 +4801,7 @@ export default function App() {
                                   key={`evo-choice-${idx}-${optIdx}`}
                                   onClick={() => chooseEvolution(item.source, opt)}
                                 >
-                                  {opt.name} ({opt.passive})
+                                  {opt.name} (+{opt.passive})
                                 </button>
                               ))}
                               <button className="btn small danger" onClick={cancelEvolution}>
