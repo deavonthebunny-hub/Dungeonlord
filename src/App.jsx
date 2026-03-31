@@ -3591,13 +3591,14 @@ function defaultState() {
   }
 
   function getTileImageSrc(tile, heroesOnTileCount, monstersOnTileCount) {
-    if (heroesOnTileCount > 0) return "/assets/hero-warrior.svg";
-    if (tile.entrance) return "/assets/tile-entrance.svg";
-    if (tile.core) return "/assets/tile-core.svg";
-    if (tile.room === "trap") return "/assets/trap-spike-pit.svg";
-    if (tile.room === "monster") return "/assets/monster-goblin.svg";
-    if (tile.room === "utility") return "/assets/tile-utility.svg";
-    return "/assets/tile-empty.svg";
+    const assetUrl = (file) => `${import.meta.env.BASE_URL}assets/${file}`;
+    if (heroesOnTileCount > 0) return assetUrl("hero-warrior.svg");
+    if (tile.entrance) return assetUrl("tile-entrance.svg");
+    if (tile.core) return assetUrl("tile-core.svg");
+    if (tile.room === "trap") return assetUrl("trap-spike-pit.svg");
+    if (tile.room === "monster") return assetUrl("monster-goblin.svg");
+    if (tile.room === "utility") return assetUrl("tile-utility.svg");
+    return assetUrl("tile-empty.svg");
   }
 
   function tileClass(t, x, y) {
