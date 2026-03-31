@@ -623,26 +623,29 @@ function monsterStarMultiplier(stars) {
 }
 
 function rollAuthoritativeStar(day = 1, explicitCap) {
-  const maxStar = Math.min(MAX_MONSTER_STAR, explicitCap || MAX_MONSTER_STAR, monsterStarCapForDay(day));
+  const safeDay = Math.max(1, day || 1);
+  const requestedCap = Number.isFinite(explicitCap) ? explicitCap : MAX_MONSTER_STAR;
+  const maxStar = Math.min(MAX_MONSTER_STAR, requestedCap, monsterStarCapForDay(safeDay));
   const r = Math.random();
   if (maxStar <= 2) {
-    return r < 0.62 ? 1 : 2;
+    if (explicitCap == null && safeDay <= 10 && requestedCap >= 3 && r >= 0.99) return 3;
+    return r < 0.72 ? 1 : 2;
   }
   if (maxStar === 3) {
-    if (r < 0.42) return 1;
-    if (r < 0.84) return 2;
+    if (r < 0.48) return 1;
+    if (r < 0.88) return 2;
     return 3;
   }
   if (maxStar === 4) {
-    if (r < 0.28) return 1;
+    if (r < 0.3) return 1;
     if (r < 0.62) return 2;
     if (r < 0.9) return 3;
     return 4;
   }
-  if (r < 0.2) return 1;
-  if (r < 0.5) return 2;
-  if (r < 0.77) return 3;
-  if (r < 0.96) return 4;
+  if (r < 0.22) return 1;
+  if (r < 0.54) return 2;
+  if (r < 0.8) return 3;
+  if (r < 0.97) return 4;
   return 5;
 }
 
@@ -806,32 +809,70 @@ function trapCooldownAfterTrigger(trapType, star) {
 }
 
 function scaleStat(base, stars) {
-  const bonus = stars === 6 ? 0.35 : 0;
-  const mult = 1 + (stars - 1) * 0.3 + bonus;
-  return Math.max(1, Math.round(base * mult));
+  return Math.max(1, Math.round(base * monsterStarMultiplier(stars)));
 }
 
-function generateHero(id, entrancePos, turnsSurvived, raidType) {
-  let stars = rollStars(turnsSurvived, 6);
-  let eliteMult = 1;
-  if (raidType === "elite") {
-    stars = Math.min(6, stars + 1);
-    eliteMult = 1.2;
-  } else if (raidType === "council") {
-    stars = Math.min(6, stars + 2);
-    eliteMult = 1.35;
-  }
+function heroRaidStatMultiplier(raidType) {
+  if (raidType === "elite") return 1.2;
+  if (raidType === "council") return 1.35;
+  return 1;
+}
+
+function buildHeroStats(stars, raidType) {
+  const safeStars = clampMonsterStar(stars);
+  const raidMult = heroRaidStatMultiplier(raidType);
+  return {
+    maxHp: Math.max(1, Math.round(scaleStat(HERO_BASE.hp, safeStars) * raidMult)),
+    atk: Math.max(1, Math.round(scaleStat(HERO_BASE.atk, safeStars) * raidMult)),
+    def: Math.max(0, Math.floor(safeStars / 2)),
+    shd: Math.max(0, safeStars - 2),
+    spd: Math.max(1, 2 + safeStars),
+  };
+}
+
+function normalizeHeroEntity(hero, day = 1, raidType = null) {
+  const safeDay = Math.max(1, day || 1);
+  const stars = Math.min(clampMonsterStar(hero?.stars || 1), monsterStarCapForDay(safeDay));
+  const stats = buildHeroStats(stars, raidType);
+  const previousMaxHp = Math.max(1, hero?.stats?.maxHp ?? hero?.hp ?? stats.maxHp);
+  const hpRatio = clamp((hero?.hp ?? previousMaxHp) / previousMaxHp, 0, 1);
+  return {
+    ...hero,
+    id: Number.isFinite(hero?.id) ? hero.id : 1,
+    x: Number.isFinite(hero?.x) ? hero.x : 0,
+    y: Number.isFinite(hero?.y) ? hero.y : 0,
+    hp: Math.max(1, Math.round(stats.maxHp * hpRatio)),
+    atk: stats.atk,
+    def: stats.def,
+    shd: stats.shd,
+    spd: stats.spd,
+    race: hero?.race || HERO_RACES[0],
+    class: hero?.class || HERO_CLASSES[0],
+    stars,
+    passive: hero?.passive || HERO_PASSIVES[0],
+    stats,
+    name: hero?.name || `${HERO_NAMES[0]} the ${hero?.class || HERO_CLASSES[0]}`,
+    statuses: hero?.statuses || {},
+    counters: {
+      stunnedOnce: false,
+      siphonGained: 0,
+      tookDamageThisRaid: false,
+      cursedMark: 0,
+      wardedUsed: false,
+      resoluteUsed: false,
+      stoicUsed: false,
+      ...(hero?.counters || {}),
+    },
+  };
+}
+
+function generateHero(id, entrancePos, turnsSurvived, raidType, day = 1) {
+  const stars = rollAuthoritativeStar(day);
   const race = pick(HERO_RACES);
   const heroClass = pick(HERO_CLASSES);
   const passive = pick(HERO_PASSIVES);
   const name = `${pick(HERO_NAMES)} the ${heroClass}`;
-  const stats = {
-    maxHp: Math.round(scaleStat(HERO_BASE.hp, stars) * eliteMult),
-    atk: Math.round(scaleStat(HERO_BASE.atk, stars) * eliteMult),
-    def: Math.max(0, Math.floor(stars / 2)),
-    shd: Math.max(0, stars - 2),
-    spd: Math.max(1, 2 + stars),
-  };
+  const stats = buildHeroStats(stars, raidType);
 
   return {
     id,
@@ -907,13 +948,13 @@ function initMonsterInventory(turnsSurvived, count = 4, starCap, day = 1) {
   return Array.from({ length: count }, () => generateMonster(pick(MONSTER_KEYS), turnsSurvived, starCap, day));
 }
 
-function generateHeroParty(turnsSurvived, raidType) {
+function generateHeroParty(turnsSurvived, raidType, day = 1) {
   const size = DAY_START_PARTY_MIN + Math.floor(Math.random() * (DAY_START_PARTY_MAX - DAY_START_PARTY_MIN + 1));
   const basePos = { x: 0, y: 0 };
   const party = [];
   let nextId = 1;
   for (let i = 0; i < size; i++) {
-    const hero = generateHero(nextId, basePos, turnsSurvived, raidType);
+    const hero = generateHero(nextId, basePos, turnsSurvived, raidType, day);
     party.push(hero);
     nextId += 1;
   }
@@ -1223,8 +1264,8 @@ export default function App() {
   const [fuseA, setFuseA] = useState("");
   const [fuseB, setFuseB] = useState("");
   const [sacrificeIdx, setSacrificeIdx] = useState("");
-  function defaultState() {
-    const startingParty = generateHeroParty(0);
+function defaultState() {
+    const startingParty = generateHeroParty(0, null, 1);
     const dailyEvent = rollDailyEvent();
     const traderStock = generateTraderStock(0, 1);
     const shadyStock = generateArtifactStock();
@@ -1376,6 +1417,9 @@ export default function App() {
       const currentPartyRaidType = parsed.currentPartyRaidType || null;
       const councilSession = parsed.councilSession || base.councilSession;
       const councilQuest = parsed.councilQuest || base.councilQuest;
+      const savedDay = Math.max(1, parsed.day || base.day || 1);
+      const normalizeHeroList = (list, raidType = null) =>
+        Array.isArray(list) ? list.filter(Boolean).map((hero) => normalizeHeroEntity(hero, savedDay, raidType)) : [];
       return {
         ...base,
         ...parsed,
@@ -1396,6 +1440,10 @@ export default function App() {
         nextRaidType,
         pendingPunitiveRaid,
         currentPartyRaidType,
+        heroes: normalizeHeroList(parsed.heroes, parsed.raidType || currentPartyRaidType),
+        currentParty: normalizeHeroList(parsed.currentParty, currentPartyRaidType),
+        partyQueue: normalizeHeroList(parsed.partyQueue, currentPartyRaidType),
+        scoutQueue: normalizeHeroList(parsed.scoutQueue, currentPartyRaidType),
         invMonsters: Array.isArray(parsed.invMonsters)
           ? parsed.invMonsters
               .filter((monster) => monster && MONSTERS[monster.key])
@@ -2184,7 +2232,7 @@ export default function App() {
     }
     setState((s) => {
       const raidType = s.pendingPunitiveRaid ? "council" : s.nextRaidType;
-      const party = generateHeroParty(s.turnsSurvived, raidType);
+      const party = generateHeroParty(s.turnsSurvived, raidType, s.day);
       let scoutQueue = [];
       const mirrorTier = maxUtilityTier(s.grid, "scout-mirror");
       if (mirrorTier > 0) {
@@ -2211,7 +2259,7 @@ export default function App() {
     });
   }
 
-  function spawnOneHero(heroes, nextId, entrancePos, turnsSurvived, queueIn, grid, raidType) {
+  function spawnOneHero(heroes, nextId, entrancePos, turnsSurvived, queueIn, grid, raidType, day = 1) {
     let queue = queueIn ? [...queueIn] : [];
     let hero;
     if (queue.length > 0) {
@@ -2219,7 +2267,7 @@ export default function App() {
       hero.x = entrancePos.x;
       hero.y = entrancePos.y;
     } else {
-      hero = generateHero(nextId, entrancePos, turnsSurvived, raidType);
+      hero = generateHero(nextId, entrancePos, turnsSurvived, raidType, day);
     }
     if (grid && hasUtilityAura(grid, hero.x, hero.y, "fear-idol")) {
       hero.statuses = hero.statuses || {};
@@ -2281,7 +2329,7 @@ export default function App() {
         s.currentParty &&
         s.currentParty.length &&
         (s.currentPartyRaidType || null) === (raidType || null);
-      const party = reuseParty ? s.currentParty : generateHeroParty(s.turnsSurvived, raidType);
+      const party = reuseParty ? s.currentParty : generateHeroParty(s.turnsSurvived, raidType, s.day);
       let partyQueue = [...party];
       let raidRemaining = partyQueue.length;
       let raidKills = 0;
@@ -2294,7 +2342,7 @@ export default function App() {
       }
 
       if (heroes.length < HERO_CAP && partyQueue.length > 0) {
-        const spawnResult = spawnOneHero(heroes, nextId, ent, s.turnsSurvived, partyQueue, grid, raidType);
+        const spawnResult = spawnOneHero(heroes, nextId, ent, s.turnsSurvived, partyQueue, grid, raidType, s.day);
         nextId = spawnResult.nextHeroId;
         partyQueue = spawnResult.scoutQueue;
         raidRemaining = partyQueue.length;
@@ -3028,7 +3076,7 @@ export default function App() {
       let nextHeroId = s.nextHeroId;
       let partyQueue = s.partyQueue ? [...s.partyQueue] : [];
       if (raidActive && partyQueue.length > 0 && ent && heroesOut.length < HERO_CAP) {
-        const spawnResult = spawnOneHero(heroesOut, nextHeroId, ent, turnsSurvived, partyQueue, grid, s.raidType);
+        const spawnResult = spawnOneHero(heroesOut, nextHeroId, ent, turnsSurvived, partyQueue, grid, s.raidType, s.day);
         nextHeroId = spawnResult.nextHeroId;
         partyQueue = spawnResult.scoutQueue;
         raidRemaining = partyQueue.length;
@@ -3184,7 +3232,7 @@ export default function App() {
   function resetRun() {
     setState((s) => {
       const grid = resetLayoutKeepStructure(s.grid);
-      const startingParty = generateHeroParty(0);
+      const startingParty = generateHeroParty(0, null, 1);
       const dailyEvent = rollDailyEvent();
       const traderStock = generateTraderStock(0, 1);
       const shadyStock = generateArtifactStock();
@@ -3290,7 +3338,7 @@ export default function App() {
         ns = addLog(ns, `Council attendees: ${names}.`);
       }
       if (s.phase === "battle") {
-        const party = generateHeroParty(s.turnsSurvived, nextRaidType);
+        const party = generateHeroParty(s.turnsSurvived, nextRaidType, s.day);
         let scoutQueue = [];
         const mirrorTier = maxUtilityTier(s.grid, "scout-mirror");
         if (mirrorTier > 0) {
@@ -3325,7 +3373,7 @@ export default function App() {
         ns = addLog(ns, "The Council prepares a punitive raid.");
       }
       if (s.phase === "battle") {
-        const party = generateHeroParty(s.turnsSurvived, nextRaidType);
+        const party = generateHeroParty(s.turnsSurvived, nextRaidType, s.day);
         let scoutQueue = [];
         const mirrorTier = maxUtilityTier(s.grid, "scout-mirror");
         if (mirrorTier > 0) {
