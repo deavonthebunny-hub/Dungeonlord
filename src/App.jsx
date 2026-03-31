@@ -1187,6 +1187,56 @@ function validateDungeon(grid) {
   return { ok: false, reason: "No valid path from Entrance to Core." };
 }
 
+function aStarPath(grid, start, goal) {
+  const heuristic = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+  const openSet = [{ pos: start, f: heuristic(start, goal), g: 0, parent: null }];
+  const closedSet = new Set();
+  const openMap = new Map();
+  openMap.set(keyOf(start.x, start.y), openSet[0]);
+
+  while (openSet.length > 0) {
+    openSet.sort((a, b) => a.f - b.f);
+    const current = openSet.shift();
+    openMap.delete(keyOf(current.pos.x, current.pos.y));
+
+    if (current.pos.x === goal.x && current.pos.y === goal.y) {
+      const path = [];
+      let node = current;
+      while (node) {
+        path.unshift(node.pos);
+        node = node.parent;
+      }
+      return path;
+    }
+
+    closedSet.add(keyOf(current.pos.x, current.pos.y));
+
+    for (const neighbor of neighbors(current.pos.x, current.pos.y)) {
+      if (!tileWalkable(grid[neighbor.y][neighbor.x])) continue;
+      const key = keyOf(neighbor.x, neighbor.y);
+      if (closedSet.has(key)) continue;
+
+      const g = current.g + 1;
+      const h = heuristic(neighbor, goal);
+      const f = g + h;
+
+      const existing = openMap.get(key);
+      if (!existing || g < existing.g) {
+        const node = { pos: neighbor, f, g, parent: current };
+        if (existing) {
+          existing.g = g;
+          existing.f = f;
+          existing.parent = current;
+        } else {
+          openSet.push(node);
+          openMap.set(key, node);
+        }
+      }
+    }
+  }
+  return null;
+}
+
 function anyUtilityRoom(grid, key) {
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
@@ -2829,36 +2879,13 @@ function defaultState() {
         }
 
         if (!skipped) {
-          const walkableNeighbors = neighbors(h.x, h.y).filter((p) => tileWalkable(grid[p.y][p.x]));
-          let candidates = walkableNeighbors
-            .slice()
-            .sort((a, b) => dist(a.x, a.y, corePos.x, corePos.y) - dist(b.x, b.y, corePos.x, corePos.y));
-
-          if (h.prev) {
-            const filtered = candidates.filter((p) => !(p.x === h.prev.x && p.y === h.prev.y));
-            if (filtered.length > 0) candidates = filtered;
-          }
-
-          if (candidates.length > 0) {
-            const bestDist = dist(candidates[0].x, candidates[0].y, corePos.x, corePos.y);
-          const detourCandidates = candidates.filter((p) => {
-            const t = grid[p.y][p.x];
-            const d = dist(p.x, p.y, corePos.x, corePos.y);
-            if (d > bestDist + 3) return false;
-            if (t.room === "monster") return true;
-            if (t.room === "trap") return true;
-            return false;
-          });
-          let detourPickPool = detourCandidates;
-          if (heroHasPassive(h, "Cunning")) {
-            const trapOnly = detourCandidates.filter((p) => grid[p.y][p.x].room === "trap");
-            if (trapOnly.length > 0) detourPickPool = trapOnly;
-          }
-          const detourChance = Math.min(0.9, 0.65 + (heroHasPassive(h, "Cunning") ? 0.15 : 0));
-          const next =
-              detourPickPool.length > 0 && Math.random() < detourChance
-                ? pick(detourPickPool)
-                : candidates[0];
+          const path = aStarPath(grid, { x: h.x, y: h.y }, corePos);
+          if (path && path.length > 1) {
+            let next = path[1];
+            // Avoid going back if possible
+            if (h.prev && next.x === h.prev.x && next.y === h.prev.y && path.length > 2) {
+              next = path[2];
+            }
             h.prev = { x: h.x, y: h.y };
             h.x = next.x;
             h.y = next.y;
@@ -3563,13 +3590,24 @@ function defaultState() {
     return { text: "" };
   }
 
+  function getTileImageSrc(tile, heroesOnTileCount, monstersOnTileCount) {
+    if (heroesOnTileCount > 0) return "/assets/hero-warrior.svg";
+    if (tile.entrance) return "/assets/tile-entrance.svg";
+    if (tile.core) return "/assets/tile-core.svg";
+    if (tile.room === "trap") return "/assets/trap-spike-pit.svg";
+    if (tile.room === "monster") return "/assets/monster-goblin.svg";
+    if (tile.room === "utility") return "/assets/tile-utility.svg";
+    return "/assets/tile-empty.svg";
+  }
+
   function tileClass(t, x, y) {
     const sel = state.selected.x === x && state.selected.y === y ? " selected" : "";
+    const tier = t.room ? " tier-" + (t.roomTier || 1) : "";
     if (t.entrance) return "tile entrance" + sel;
     if (t.core) return "tile core" + sel;
-    if (t.room === "trap") return "tile trap" + sel;
-    if (t.room === "monster") return "tile monster" + sel;
-    if (t.room === "utility") return "tile utility" + sel;
+    if (t.room === "trap") return "tile trap" + tier + sel;
+    if (t.room === "monster") return "tile monster" + tier + sel;
+    if (t.room === "utility") return "tile utility" + tier + sel;
     return "tile" + sel;
   }
 
@@ -4015,10 +4053,10 @@ function defaultState() {
                       const heroesHere = heroesByTile.get(keyOf(x, y)) || [];
                       const monstersHere = t.room === "monster" ? t.monsters.length : 0;
                       const glyph = getTileGlyph(t, heroesHere.length, monstersHere);
-                      if (!glyph.text) return null;
+                      const imageSrc = getTileImageSrc(t, heroesHere.length, monstersHere);
                       return (
                         <>
-                          <span className={`tileGlyph ${glyph.tone || ""}`}>{glyph.text}</span>
+                          <img src={imageSrc} className="tileImage" alt={glyph.text} />
                           {glyph.subtext ? <span className="tileGlyphSub">{glyph.subtext}</span> : null}
                         </>
                       );
