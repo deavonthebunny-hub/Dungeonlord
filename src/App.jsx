@@ -3590,17 +3590,6 @@ function defaultState() {
     return { text: "" };
   }
 
-  function getTileImageSrc(tile, heroesOnTileCount, monstersOnTileCount) {
-    const assetUrl = (file) => `${import.meta.env.BASE_URL}assets/${file}`;
-    if (heroesOnTileCount > 0) return assetUrl("hero-warrior.svg");
-    if (tile.entrance) return assetUrl("tile-entrance.svg");
-    if (tile.core) return assetUrl("tile-core.svg");
-    if (tile.room === "trap") return assetUrl("trap-spike-pit.svg");
-    if (tile.room === "monster") return assetUrl("monster-goblin.svg");
-    if (tile.room === "utility") return assetUrl("tile-utility.svg");
-    return assetUrl("tile-empty.svg");
-  }
-
   function tileClass(t, x, y) {
     const sel = state.selected.x === x && state.selected.y === y ? " selected" : "";
     const tier = t.room ? " tier-" + (t.roomTier || 1) : "";
@@ -4054,10 +4043,10 @@ function defaultState() {
                       const heroesHere = heroesByTile.get(keyOf(x, y)) || [];
                       const monstersHere = t.room === "monster" ? t.monsters.length : 0;
                       const glyph = getTileGlyph(t, heroesHere.length, monstersHere);
-                      const imageSrc = getTileImageSrc(t, heroesHere.length, monstersHere);
+                      if (!glyph.text && !glyph.subtext) return null;
                       return (
                         <>
-                          <img src={imageSrc} className="tileImage" alt={glyph.text} />
+                          {glyph.text ? <span className={`tileGlyph ${glyph.tone || ""}`}>{glyph.text}</span> : null}
                           {glyph.subtext ? <span className="tileGlyphSub">{glyph.subtext}</span> : null}
                         </>
                       );
