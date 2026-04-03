@@ -189,6 +189,388 @@ export const COUNCIL_RAID_FACTIONS = {
   },
 };
 
+export const COUNCIL_SPONSOR_CONTENT = {
+  malachar: {
+    boon: {
+      key: "tyrants-levy",
+      title: "Tyrant's Levy",
+      desc: "Gain Essence to fortify your defenses.",
+      reward: { type: "essence", bands: [80, 130, 180] },
+      raidEffect: {
+        key: "tyrants-levy",
+        label: "Tyrant's Levy",
+        desc: "Next raid party size -1 and invader ATK -10%.",
+        partySizeDelta: -1,
+        atkMult: 0.9,
+      },
+    },
+    quests: {
+      standard: {
+        id: "no-breach-standard",
+        title: "No Breach",
+        desc: "Finish 1 raid with 0 Core damage before the next Council.",
+        metricKey: "zeroCoreDamageRaidCount",
+        goalBands: [1, 1, 1],
+        reward: { type: "essence", bands: [120, 180, 260] },
+      },
+      hard: {
+        id: "no-breach-hard",
+        title: "No Breach",
+        desc: "Finish 2 raids with 0 Core damage before the next Council.",
+        metricKey: "zeroCoreDamageRaidCount",
+        goalBands: [2, 2, 2],
+        reward: { type: "essence", bands: [180, 260, 350] },
+      },
+    },
+  },
+  "crimson-twins": {
+    boon: {
+      key: "scarlet-patronage",
+      title: "Scarlet Patronage",
+      desc: "A flanker slips into your service.",
+      reward: { type: "monster", count: 1, monsterPool: ["drow", "harpy", "imp", "deepSpider", "vampire"] },
+      raidEffect: {
+        key: "scarlet-patronage",
+        label: "Scarlet Patronage",
+        desc: "Next raid is easier to lure into side paths.",
+        lureBoost: 2,
+      },
+    },
+    quests: {
+      standard: {
+        id: "stage-the-slaughter-standard",
+        title: "Stage the Slaughter",
+        desc: "Kill heroes with traps before the next Council.",
+        metricKey: "trapKillCount",
+        goalBands: [2, 3, 4],
+        reward: { type: "soulshards", bands: [25, 40, 60] },
+      },
+      hard: {
+        id: "stage-the-slaughter-hard",
+        title: "Stage the Slaughter",
+        desc: "Kill more heroes with traps before the next Council.",
+        metricKey: "trapKillCount",
+        goalBands: [3, 5, 7],
+        reward: { type: "soulshards", bands: [35, 55, 80] },
+      },
+    },
+  },
+  zephyra: {
+    boon: {
+      key: "dominion-charter",
+      title: "Dominion Charter",
+      desc: "The Riftmind grants controlled Dominion power.",
+      reward: { type: "dominion", amount: 1 },
+      raidEffect: {
+        key: "dominion-charter",
+        label: "Dominion Charter",
+        desc: "Next raid reveals +1 invader and is easier to lure off the core route.",
+        scoutRevealBonus: 1,
+        lureBoost: 1,
+      },
+    },
+    quests: {
+      standard: {
+        id: "forbidden-growth-standard",
+        title: "Forbidden Growth",
+        desc: "Evolve 1 monster before the next Council.",
+        metricKey: "monsterEvolutionCount",
+        goalBands: [1, 1, 1],
+        reward: { type: "evolution", bands: [4, 6, 8] },
+      },
+      hard: {
+        id: "forbidden-growth-hard",
+        title: "Forbidden Growth",
+        desc: "Spend 30 Evolution before the next Council.",
+        metricKey: "evolutionSpentSinceCouncil",
+        goalBands: [30, 30, 30],
+        reward: { type: "evolution", bands: [7, 10, 14] },
+      },
+    },
+  },
+  grimjaw: {
+    boon: {
+      key: "iron-oath",
+      title: "Iron Oath",
+      desc: "Grimjaw fortifies the Core for the next assault.",
+      reward: null,
+      raidEffect: {
+        key: "iron-oath",
+        label: "Iron Oath",
+        desc: "Next raid starts with +15 Core Shield and Core retaliation +2.",
+        coreShieldBonus: 15,
+        coreRetaliationBonus: 2,
+      },
+    },
+    quests: {
+      standard: {
+        id: "hold-the-line-standard",
+        title: "Hold the Line",
+        desc: "Survive 2 raids before the next Council.",
+        metricKey: "survivedRaidCount",
+        goalBands: [2, 2, 2],
+        reward: { type: "darkcrystals", bands: [3, 5, 7] },
+      },
+      hard: {
+        id: "hold-the-line-hard",
+        title: "Hold the Line",
+        desc: "Survive 2 raids with Core HP at or above 80%.",
+        metricKey: "highCoreRaidCount",
+        goalBands: [2, 2, 2],
+        reward: { type: "darkcrystals", bands: [5, 8, 11] },
+      },
+    },
+  },
+  blackthorn: {
+    boon: {
+      key: "black-ledger",
+      title: "Black Ledger",
+      desc: "Blackthorn converts influence into hard currency.",
+      reward: { type: "soulshards", bands: [18, 30, 45] },
+      raidEffect: {
+        key: "black-ledger",
+        label: "Black Ledger",
+        desc: "Next raid rolls one star step lower.",
+        starBias: -1,
+      },
+    },
+    quests: {
+      standard: {
+        id: "black-audit-standard",
+        title: "Black Audit",
+        desc: "Gain Soulshards before the next Council.",
+        metricKey: "soulshardsEarnedSinceCouncil",
+        goalBands: [30, 60, 90],
+        reward: { type: "essence", bands: [120, 180, 260] },
+      },
+      hard: {
+        id: "black-audit-hard",
+        title: "Black Audit",
+        desc: "Gain even more Soulshards before the next Council.",
+        metricKey: "soulshardsEarnedSinceCouncil",
+        goalBands: [45, 75, 110],
+        reward: { type: "essence", bands: [180, 260, 350] },
+      },
+    },
+  },
+  lyralei: {
+    boon: {
+      key: "veiled-briefing",
+      title: "Veiled Briefing",
+      desc: "Lyralei shares a deep scout report.",
+      reward: null,
+      raidEffect: {
+        key: "veiled-briefing",
+        label: "Veiled Briefing",
+        desc: "Next raid reveals +3 invaders and party size -1.",
+        scoutRevealBonus: 3,
+        partySizeDelta: -1,
+      },
+    },
+    quests: {
+      standard: {
+        id: "eyes-in-the-dark-standard",
+        title: "Eyes in the Dark",
+        desc: "Reveal invaders before the next Council.",
+        metricKey: "revealedInvaderCount",
+        goalBands: [3, 5, 7],
+        reward: { type: "evolution", bands: [4, 6, 8] },
+      },
+      hard: {
+        id: "eyes-in-the-dark-hard",
+        title: "Eyes in the Dark",
+        desc: "Reveal even more invaders before the next Council.",
+        metricKey: "revealedInvaderCount",
+        goalBands: [5, 7, 9],
+        reward: { type: "evolution", bands: [7, 10, 14] },
+      },
+    },
+  },
+  maltheron: {
+    locked: true,
+    lockedReason: "Unlocks once the Flesh Market is fully implemented.",
+    boon: {
+      key: "flesh-market-license",
+      title: "Flesh Market License",
+      desc: "Future boon: unlock the Flesh Market until the next Council.",
+      reward: null,
+      raidEffect: null,
+    },
+    quests: {
+      standard: {
+        id: "fresh-stock-standard",
+        title: "Fresh Stock",
+        desc: "Future quest: feed Maltheron fresh material once the Flesh Market is live.",
+        metricKey: "monsterEvolutionCount",
+        goalBands: [1, 1, 1],
+        reward: { type: "darkcrystals", bands: [3, 5, 7] },
+      },
+      hard: {
+        id: "fresh-stock-hard",
+        title: "Fresh Stock",
+        desc: "Future quest: complete a larger Flesh Market order.",
+        metricKey: "monsterEvolutionCount",
+        goalBands: [2, 2, 2],
+        reward: { type: "darkcrystals", bands: [5, 8, 11] },
+      },
+    },
+  },
+  vexira: {
+    boon: {
+      key: "caustic-stockpile",
+      title: "Caustic Stockpile",
+      desc: "Vexira poisons your kill-zone for the next raid.",
+      reward: null,
+      raidEffect: {
+        key: "caustic-stockpile",
+        label: "Caustic Stockpile",
+        desc: "Next raid traps deal +20% damage.",
+        trapDamageMult: 0.2,
+      },
+    },
+    quests: {
+      standard: {
+        id: "slow-death-standard",
+        title: "Slow Death",
+        desc: "Kill poisoned or trap-damaged heroes before the next Council.",
+        metricKey: "trapOrPoisonKillCount",
+        goalBands: [3, 5, 7],
+        reward: { type: "essence", bands: [120, 180, 260] },
+      },
+      hard: {
+        id: "slow-death-hard",
+        title: "Slow Death",
+        desc: "Kill more poisoned or trap-damaged heroes before the next Council.",
+        metricKey: "trapOrPoisonKillCount",
+        goalBands: [4, 6, 8],
+        reward: { type: "essence", bands: [180, 260, 350] },
+      },
+    },
+  },
+  tharos: {
+    boon: {
+      key: "assassins-ledger",
+      title: "Assassin's Ledger",
+      desc: "Tharos marks the next raid's leader for death.",
+      reward: null,
+      raidEffect: {
+        key: "assassins-ledger",
+        label: "Assassin's Ledger",
+        desc: "Next raid reveals +2 invaders, and the highest-star invader starts at -20% HP.",
+        scoutRevealBonus: 2,
+        leaderHpMult: 0.8,
+      },
+    },
+    quests: {
+      standard: {
+        id: "cut-the-leader-standard",
+        title: "Cut the Leader",
+        desc: "Kill the highest-star invader in 1 raid before the next Council.",
+        metricKey: "highestStarLeaderKillCount",
+        goalBands: [1, 1, 1],
+        reward: { type: "soulshards", bands: [25, 40, 60] },
+      },
+      hard: {
+        id: "cut-the-leader-hard",
+        title: "Cut the Leader",
+        desc: "Kill the highest-star invader in 2 raids before the next Council.",
+        metricKey: "highestStarLeaderKillCount",
+        goalBands: [2, 2, 2],
+        reward: { type: "soulshards", bands: [35, 55, 80] },
+      },
+    },
+  },
+  xaldros: {
+    boon: {
+      key: "hall-of-mirrors",
+      title: "Hall of Mirrors",
+      desc: "Xaldros muddies the invaders' intent.",
+      reward: null,
+      raidEffect: {
+        key: "hall-of-mirrors",
+        label: "Hall of Mirrors",
+        desc: "Next raid rolls one star step lower and is slightly easier to lure away from the core route.",
+        starBias: -1,
+        lureBoost: 1,
+      },
+    },
+    quests: {
+      standard: {
+        id: "lead-them-astray-standard",
+        title: "Lead Them Astray",
+        desc: "Force detours before the next Council.",
+        metricKey: "detourCount",
+        goalBands: [4, 6, 8],
+        reward: { type: "evolution", bands: [4, 6, 8] },
+      },
+      hard: {
+        id: "lead-them-astray-hard",
+        title: "Lead Them Astray",
+        desc: "Force many detours before the next Council.",
+        metricKey: "detourCount",
+        goalBands: [6, 8, 10],
+        reward: { type: "evolution", bands: [7, 10, 14] },
+      },
+    },
+  },
+  zurkhan: {
+    boon: {
+      key: "beast-draft",
+      title: "Beast Draft",
+      desc: "Zurkhan sends one of his war-beasts to join the dungeon.",
+      reward: { type: "monster", count: 1, monsterPool: ["hellhound", "direBoar", "bonehound", "werewolf", "harpy"] },
+      raidEffect: null,
+    },
+    quests: {
+      standard: {
+        id: "trial-of-fangs-standard",
+        title: "Trial of Fangs",
+        desc: "Kill heroes inside monster rooms, not by traps.",
+        metricKey: "monsterRoomKillCount",
+        goalBands: [4, 6, 8],
+        reward: { type: "soulshards", bands: [25, 40, 60] },
+      },
+      hard: {
+        id: "trial-of-fangs-hard",
+        title: "Trial of Fangs",
+        desc: "Kill more heroes inside monster rooms, not by traps.",
+        metricKey: "monsterRoomKillCount",
+        goalBands: [6, 8, 10],
+        reward: { type: "soulshards", bands: [35, 55, 80] },
+      },
+    },
+  },
+  nihaza: {
+    locked: true,
+    lockedReason: "Unlocks once final-approach rules are formalized.",
+    boon: {
+      key: "ash-covenant",
+      title: "Ash Covenant",
+      desc: "Future boon: Nihaza will turn looming defeat into ash and attrition.",
+      reward: null,
+      raidEffect: null,
+    },
+    quests: {
+      standard: {
+        id: "ashes-remain-standard",
+        title: "Ashes Remain",
+        desc: "Future quest: survive a final-approach raid once that phase exists.",
+        metricKey: "highCoreRaidCount",
+        goalBands: [1, 1, 1],
+        reward: { type: "darkcrystals", bands: [3, 5, 7] },
+      },
+      hard: {
+        id: "ashes-remain-hard",
+        title: "Ashes Remain",
+        desc: "Future quest: survive repeated final-approach pressure.",
+        metricKey: "highCoreRaidCount",
+        goalBands: [2, 2, 2],
+        reward: { type: "darkcrystals", bands: [5, 8, 11] },
+      },
+    },
+  },
+};
+
 export const DOCTRINE_RULES = {
   trap: {
     key: "trap",
@@ -265,6 +647,12 @@ export function validateGameContent() {
     }
     if (!Array.isArray(faction.passiveBias) || faction.passiveBias.length === 0) {
       warnings.push(`Council faction "${key}" has no passive bias list.`);
+    }
+  }
+
+  for (const [key, sponsor] of Object.entries(COUNCIL_SPONSOR_CONTENT)) {
+    if (!sponsor.boon || !sponsor.quests?.standard || !sponsor.quests?.hard) {
+      warnings.push(`Council sponsor "${key}" is missing boon or quest definitions.`);
     }
   }
 

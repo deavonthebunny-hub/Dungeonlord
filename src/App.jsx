@@ -1,6 +1,13 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import "./App.css";
-import { COUNCIL_RAID_FACTIONS, DOCTRINE_RULES, HERO_ARCHETYPE_RULES, RAID_TYPE_META, validateGameContent } from "./gameContent";
+import {
+  COUNCIL_RAID_FACTIONS,
+  COUNCIL_SPONSOR_CONTENT,
+  DOCTRINE_RULES,
+  HERO_ARCHETYPE_RULES,
+  RAID_TYPE_META,
+  validateGameContent,
+} from "./gameContent";
 
 const W = 8;
 const H = 8;
@@ -547,19 +554,96 @@ const COUNCIL_DIALOGUE = [
   "{name}: Power gathers like stormclouds. Strike before it breaks.",
 ];
 
-const COUNCIL_OFFER_TEMPLATES = [
-  { type: "essence", title: "War Chest", desc: "Receive an Essence grant to fortify your dungeon." },
-  { type: "soulshards", title: "Soul Tithe", desc: "A tribute of Soulshards arrives by midnight." },
-  { type: "dominion", title: "Dominion Charter", desc: "Council grants a small burst of Dominion power." },
-  { type: "evolution", title: "Eldritch Codex", desc: "A tome of growth grants Evolution points." },
-  { type: "monster", title: "Conscription", desc: "A monster is pressed into your service." },
+const COUNCIL_QUEST_COUNTER_KEYS = [
+  "zeroCoreDamageRaidCount",
+  "survivedRaidCount",
+  "highCoreRaidCount",
+  "trapKillCount",
+  "trapOrPoisonKillCount",
+  "monsterRoomKillCount",
+  "detourCount",
+  "revealedInvaderCount",
+  "highestStarLeaderKillCount",
+  "soulshardsEarnedSinceCouncil",
+  "evolutionSpentSinceCouncil",
+  "monsterEvolutionCount",
 ];
 
-const COUNCIL_QUESTS = [
-  { key: "cull", title: "Cull the Vanguard", desc: "Defeat {goal} heroes before the next Council.", reward: { type: "essence" } },
-  { key: "harvest", title: "Harvest Souls", desc: "Defeat {goal} heroes before the next Council.", reward: { type: "soulshards" } },
-  { key: "survive", title: "Hold the Line", desc: "Defeat {goal} heroes before the next Council.", reward: { type: "evolution" } },
-];
+function createEmptyCouncilQuestCounters() {
+  return Object.fromEntries(COUNCIL_QUEST_COUNTER_KEYS.map((key) => [key, 0]));
+}
+
+function councilEraIndex(day = 1) {
+  if (day <= 20) return 0;
+  if (day <= 50) return 1;
+  return 2;
+}
+
+function councilBandValue(bands, day, fallback = 0) {
+  if (!Array.isArray(bands) || bands.length === 0) return fallback;
+  const idx = Math.max(0, Math.min(councilEraIndex(day), bands.length - 1));
+  return bands[idx] ?? fallback;
+}
+
+function buildCouncilReward(reward, day) {
+  if (!reward) return null;
+  if (Number.isFinite(reward.amount)) return { ...reward };
+  return {
+    ...reward,
+    amount: councilBandValue(reward.bands, day, 0),
+  };
+}
+
+function councilRewardLabel(reward) {
+  if (!reward) return "No direct reward";
+  if (reward.type === "monster") return `${reward.count || 1} themed monster`;
+  return `+${reward.amount} ${reward.type}`;
+}
+
+function buildCouncilBoon(member, day) {
+  const content = COUNCIL_SPONSOR_CONTENT[member.key] || null;
+  const boon = content?.boon || null;
+  if (!boon) return null;
+  return {
+    ...boon,
+    sponsorKey: member.key,
+    sponsorName: member.name,
+    reward: buildCouncilReward(boon.reward, day),
+    available: !content?.locked,
+    lockedReason: content?.lockedReason || "",
+  };
+}
+
+function buildCouncilQuestVariant(member, day, difficulty) {
+  const content = COUNCIL_SPONSOR_CONTENT[member.key] || null;
+  const quest = content?.quests?.[difficulty] || null;
+  if (!quest) return null;
+  return {
+    ...quest,
+    sponsorKey: member.key,
+    sponsorName: member.name,
+    difficulty,
+    goal: councilBandValue(quest.goalBands, day, 0),
+    progress: 0,
+    reward: buildCouncilReward(quest.reward, day),
+    available: !content?.locked,
+    lockedReason: content?.lockedReason || "",
+  };
+}
+
+function buildCouncilSponsorEntry(member, day) {
+  const content = COUNCIL_SPONSOR_CONTENT[member.key] || {};
+  return {
+    key: member.key,
+    available: !content.locked,
+    lockedReason: content.lockedReason || "",
+    boon: buildCouncilBoon(member, day),
+    quests: {
+      standard: buildCouncilQuestVariant(member, day, "standard"),
+      hard: buildCouncilQuestVariant(member, day, "hard"),
+    },
+  };
+}
 
 function buildCouncilSession(roster, day) {
   const speakers = pickUnique(roster, Math.min(4, roster.length));
@@ -570,86 +654,81 @@ function buildCouncilSession(roster, day) {
     dialogue.push(`${a.name} and ${b.name} clash over strategy, but no blood is spilled... this time.`);
   }
   const rumors = pickUnique(COUNCIL_RUMORS, 2);
-  const sponsors = pickUnique(roster, Math.min(2, roster.length));
-  const offers = pickUnique(COUNCIL_OFFER_TEMPLATES, 2).map((o, idx) => {
-    const amount = Math.max(1, Math.round(scaleByDay(20 + idx * 10, day, 0.06, 4)));
-    const sponsor = sponsors[idx % Math.max(1, sponsors.length)] || roster[0] || null;
-    return {
-      id: `${o.type}-${day}-${idx}`,
-      ...o,
-      amount,
-      sponsorKey: sponsor?.key || null,
-      sponsorName: sponsor?.name || "The Council",
-      raidEffect: buildCouncilOfferRaidEffect(sponsor?.key, day),
-    };
-  });
-  const questTemplate = pick(COUNCIL_QUESTS);
-  const goal = Math.max(6, Math.round(scaleByDay(8, day, 0.04, 3.5)));
-  const questSponsor = pick(roster);
-  const quest = {
-    id: `${questTemplate.key}-${day}`,
-    title: questTemplate.title,
-    goal,
-    progress: 0,
-    reward: { type: questTemplate.reward.type, amount: Math.max(2, Math.round(scaleByDay(12, day, 0.05, 4))) },
-    desc: questTemplate.desc.replace("{goal}", goal),
-    sponsorKey: questSponsor?.key || null,
-    sponsorName: questSponsor?.name || "The Council",
-  };
+  const sponsors = roster.map((member) => buildCouncilSponsorEntry(member, day));
   return {
     day,
     status: "pending",
     dialogue,
     rumors,
-    offers,
-    quest,
+    sponsors,
+    courtedSponsorKey: null,
+    acceptedCouncilBoonKey: null,
+    acceptedCouncilQuestId: null,
+    acceptedCouncilQuestDifficulty: null,
   };
 }
 
-function buildCouncilOfferRaidEffect(sponsorKey, day) {
-  switch (sponsorKey) {
-    case "lyralei":
-    case "tharos":
-      return {
-        key: "intel",
-        label: "Shadow Briefing",
-        desc: "Next raid reveals +2 extra invaders and suffers -1 party size.",
-        partySizeDelta: -1,
-        scoutRevealBonus: 2,
-      };
-    case "blackthorn":
-    case "xaldros":
-      return {
-        key: "fracture",
-        label: "Fractured Command",
-        desc: "Next raid loses cohesion and rolls one star step lower.",
-        starBias: -1,
-      };
-    case "grimjaw":
-    case "malachar":
-      return {
-        key: "sober-campaign",
-        label: "Measured Advance",
-        desc: "Next raid loses 10% ATK and party size is reduced by 1.",
-        partySizeDelta: -1,
-        atkMult: 0.9,
-      };
-    case "zephyra":
-      return {
-        key: "void-static",
-        label: "Void Static",
-        desc: "Next raid is easier to lure away from the core route.",
-        lureBoost: 2,
-        scoutRevealBonus: 1,
-      };
-    default:
-      return {
-        key: "pressure-relief",
-        label: "Pressure Relief",
-        desc: "Next raid size is reduced by 1.",
-        partySizeDelta: -1,
-      };
+function councilQuestProgressValue(stateLike, quest) {
+  if (!quest) return 0;
+  return Math.max(0, stateLike?.councilQuestCounters?.[quest.metricKey] || 0);
+}
+
+function canAcceptCouncilSponsorAction(session, sponsorKey) {
+  if (!session || session.status !== "attended" || !sponsorKey) return false;
+  return !session.courtedSponsorKey || session.courtedSponsorKey === sponsorKey;
+}
+
+function applyCouncilRewardToState(stateLike, reward, sponsorName = "", day = 1) {
+  if (!reward) {
+    return { nextState: stateLike, rewardText: sponsorName ? `${sponsorName} offers influence only.` : "No direct reward." };
   }
+  let nextState = { ...stateLike };
+  const currency = { ...(stateLike.currency || {}) };
+  if (reward.type === "essence") {
+    currency.essence += reward.amount || 0;
+    nextState.currency = currency;
+    return { nextState, rewardText: `+${reward.amount || 0} Essence` };
+  }
+  if (reward.type === "soulshards") {
+    currency.soulshards += reward.amount || 0;
+    nextState.currency = currency;
+    return { nextState, rewardText: `+${reward.amount || 0} Soulshards` };
+  }
+  if (reward.type === "evolution") {
+    currency.evolution += reward.amount || 0;
+    nextState.currency = currency;
+    return { nextState, rewardText: `+${reward.amount || 0} Evolution` };
+  }
+  if (reward.type === "dominion") {
+    const gain = Math.max(0, reward.amount || 0);
+    const nextDominion = Math.min(DOMINION_CAP, currency.dominion + gain);
+    const applied = Math.max(0, nextDominion - currency.dominion);
+    currency.dominion = nextDominion;
+    nextState.currency = currency;
+    return { nextState, rewardText: applied > 0 ? `+${applied} Dominion` : "Dominion already at cap" };
+  }
+  if (reward.type === "darkcrystals") {
+    currency.darkcrystals = (currency.darkcrystals || 0) + (reward.amount || 0);
+    nextState.currency = currency;
+    return { nextState, rewardText: `+${reward.amount || 0} Darkcrystals` };
+  }
+  if (reward.type === "monster") {
+    const count = Math.max(1, reward.count || 1);
+    const pool = Array.isArray(reward.monsterPool) && reward.monsterPool.length ? reward.monsterPool : MONSTER_KEYS;
+    const invMonsters = [...(stateLike.invMonsters || [])];
+    const addedNames = [];
+    for (let i = 0; i < count; i += 1) {
+      const monster = generateMonster(pick(pool), stateLike.turnsSurvived || 0, monsterStarCapForDay(day), day);
+      invMonsters.push(monster);
+      addedNames.push(monster.name);
+    }
+    nextState.invMonsters = invMonsters;
+    return {
+      nextState,
+      rewardText: count === 1 ? `${addedNames[0]} joins your inventory` : `${count} themed monsters join your inventory`,
+    };
+  }
+  return { nextState, rewardText: "Reward granted." };
 }
 
 function applyCouncilFavorShift(favorMap, memberKey, delta) {
@@ -815,9 +894,23 @@ function buildRaidModifiers(raidBoons = []) {
       acc.starBias += boon.starBias || 0;
       acc.atkMult *= boon.atkMult || 1;
       acc.lureBoost += boon.lureBoost || 0;
+      acc.coreShieldBonus += boon.coreShieldBonus || 0;
+      acc.coreRetaliationBonus += boon.coreRetaliationBonus || 0;
+      acc.trapDamageMult += boon.trapDamageMult || 0;
+      acc.leaderHpMult *= boon.leaderHpMult || 1;
       return acc;
     },
-    { partySizeDelta: 0, scoutRevealBonus: 0, starBias: 0, atkMult: 1, lureBoost: 0 }
+    {
+      partySizeDelta: 0,
+      scoutRevealBonus: 0,
+      starBias: 0,
+      atkMult: 1,
+      lureBoost: 0,
+      coreShieldBonus: 0,
+      coreRetaliationBonus: 0,
+      trapDamageMult: 0,
+      leaderHpMult: 1,
+    }
   );
 }
 
@@ -1071,6 +1164,7 @@ function normalizeHeroEntity(hero, day = 1, raidType = null) {
     raidOriginLabel: hero?.raidOriginLabel || null,
     traitPassiveKey: hero?.traitPassiveKey || null,
     traitPassiveName: hero?.traitPassiveName || null,
+    isRaidLeader: !!hero?.isRaidLeader,
     stats,
     name: hero?.name || `${HERO_NAMES[0]} the ${hero?.class || HERO_CLASSES[0]}`,
     statuses: hero?.statuses || {},
@@ -1083,6 +1177,8 @@ function normalizeHeroEntity(hero, day = 1, raidType = null) {
       wardedUsed: false,
       resoluteUsed: false,
       stoicUsed: false,
+      trapDamaged: false,
+      poisonedThisRaid: false,
       ...(hero?.counters || {}),
     },
   };
@@ -1123,6 +1219,7 @@ function generateHero(id, entrancePos, turnsSurvived, raidType, day = 1, options
     raidOriginLabel: raidTypeMeta(raidType).label,
     traitPassiveKey: null,
     traitPassiveName: null,
+    isRaidLeader: false,
     stats,
     name,
     statuses: {},
@@ -1182,6 +1279,7 @@ function generateCouncilRaider(id, entrancePos, turnsSurvived, day = 1, councilR
     raidOriginLabel: councilRaid?.label || RAID_TYPE_META.council.label,
     traitPassiveKey,
     traitPassiveName: MONSTER_PASSIVE_MAP[traitPassiveKey]?.name || "Faction Trait",
+    isRaidLeader: false,
     stats,
     name: `${attacker.memberName.split(" ")[0]} ${monsterBase.name}`,
     statuses: {},
@@ -1194,6 +1292,8 @@ function generateCouncilRaider(id, entrancePos, turnsSurvived, day = 1, councilR
       wardedUsed: false,
       resoluteUsed: false,
       stoicUsed: false,
+      trapDamaged: false,
+      poisonedThisRaid: false,
     },
   };
 }
@@ -1266,7 +1366,42 @@ function generateHeroParty(turnsSurvived, raidType, day = 1, options = {}) {
     party.push(hero);
     nextId += 1;
   }
-  return party;
+  return applyRaidPartyModifiers(party, options.raidBoons || []);
+}
+
+function applyRaidPartyModifiers(party, raidBoons = []) {
+  if (!Array.isArray(party) || party.length === 0) return [];
+  const raidMods = buildRaidModifiers(raidBoons);
+  const starsOf = (entity) => clampMonsterStar(entity?.stars || 1);
+  let leaderIdx = 0;
+  for (let i = 1; i < party.length; i += 1) {
+    const current = party[i];
+    const leader = party[leaderIdx];
+    const currentHp = current?.stats?.maxHp ?? current?.hp ?? 1;
+    const leaderHp = leader?.stats?.maxHp ?? leader?.hp ?? 1;
+    if (
+      starsOf(current) > starsOf(leader) ||
+      (starsOf(current) === starsOf(leader) &&
+        (currentHp > leaderHp || (currentHp === leaderHp && (current?.atk || 0) > (leader?.atk || 0))))
+    ) {
+      leaderIdx = i;
+    }
+  }
+  return party.map((member, idx) => {
+    const next = {
+      ...member,
+      stats: { ...(member.stats || {}) },
+      isRaidLeader: idx === leaderIdx,
+    };
+    if (idx === leaderIdx && raidMods.leaderHpMult !== 1) {
+      const baseMaxHp = next.stats.maxHp || next.hp || 1;
+      const hpRatio = Math.max(0, Math.min(1, (next.hp || baseMaxHp) / Math.max(1, baseMaxHp)));
+      const scaledMaxHp = Math.max(1, Math.round(baseMaxHp * raidMods.leaderHpMult));
+      next.stats.maxHp = scaledMaxHp;
+      next.hp = Math.max(1, Math.round(scaledMaxHp * hpRatio));
+    }
+    return next;
+  });
 }
 
 function generateRaidParty(turnsSurvived, raidType, day = 1, options = {}) {
@@ -1275,8 +1410,11 @@ function generateRaidParty(turnsSurvived, raidType, day = 1, options = {}) {
     const baseSize = DAY_START_PARTY_MIN + Math.floor(Math.random() * (DAY_START_PARTY_MAX - DAY_START_PARTY_MIN + 1));
     const size = Math.max(1, baseSize + 1 + (raidMods.partySizeDelta || 0));
     const basePos = { x: 0, y: 0 };
-    return Array.from({ length: size }, (_, idx) =>
+    return applyRaidPartyModifiers(
+      Array.from({ length: size }, (_, idx) =>
       generateCouncilRaider(idx + 1, basePos, turnsSurvived, day, options.councilRaid, options.raidBoons || [])
+      ),
+      options.raidBoons || []
     );
   }
   return generateHeroParty(turnsSurvived, raidType, day, options);
@@ -1686,6 +1824,8 @@ function chooseInvaderMove(entity, grid, corePos, raidBoons = [], doctrineEffect
     next: best?.next || null,
     options,
     intent: best ? best.intent : "Hold position",
+    lure: best?.lure || 0,
+    wasDetour: !!(best && !best.tile.core && best.lure >= 4),
   };
 }
 
@@ -1836,6 +1976,7 @@ function defaultState() {
       councilFavor: {},
       councilSession: null,
       councilQuest: null,
+      councilQuestCounters: createEmptyCouncilQuestCounters(),
       nextRaidType: null,
       pendingPunitiveRaid: false,
       pendingCouncilRaid: null,
@@ -1937,11 +2078,35 @@ function defaultState() {
         parsed.pendingCouncilRaid ||
         (pendingPunitiveRaid && council.roster?.length ? buildCouncilRaidFromRoster(council.roster, parsed.day || base.day, councilFavor) : null);
       const currentPartyRaidType = parsed.currentPartyRaidType || null;
-      const councilSession = parsed.councilSession || base.councilSession;
-      const councilQuest = parsed.councilQuest || base.councilQuest;
+      const savedDay = Math.max(1, parsed.day || base.day || 1);
+      const councilQuestCounters = createEmptyCouncilQuestCounters();
+      for (const key of COUNCIL_QUEST_COUNTER_KEYS) {
+        const value = parsed.councilQuestCounters?.[key];
+        councilQuestCounters[key] = Number.isFinite(value) ? Math.max(0, value) : 0;
+      }
+      let councilSession = parsed.councilSession || base.councilSession;
+      if (councilSession && Array.isArray(council.roster) && council.roster.length > 0) {
+        const rebuilt = buildCouncilSession(council.roster, councilSession.day || savedDay);
+        councilSession = {
+          ...rebuilt,
+          status: councilSession.status || rebuilt.status,
+          courtedSponsorKey: councilSession.courtedSponsorKey || null,
+          acceptedCouncilBoonKey: councilSession.acceptedCouncilBoonKey || null,
+          acceptedCouncilQuestId: councilSession.acceptedCouncilQuestId || null,
+          acceptedCouncilQuestDifficulty: councilSession.acceptedCouncilQuestDifficulty || null,
+        };
+      } else if (!Array.isArray(councilSession?.sponsors)) {
+        councilSession = null;
+      }
+      const councilQuest =
+        parsed.councilQuest && parsed.councilQuest.metricKey
+          ? {
+              ...parsed.councilQuest,
+              progress: Math.max(0, councilQuestCounters[parsed.councilQuest.metricKey] || parsed.councilQuest.progress || 0),
+            }
+          : base.councilQuest;
       const nextRaidBoons = Array.isArray(parsed.nextRaidBoons) ? parsed.nextRaidBoons.filter(Boolean) : [];
       const activeRaidBoons = Array.isArray(parsed.activeRaidBoons) ? parsed.activeRaidBoons.filter(Boolean) : [];
-      const savedDay = Math.max(1, parsed.day || base.day || 1);
       const normalizeHeroList = (list, raidType = null) =>
         Array.isArray(list) ? list.filter(Boolean).map((hero) => normalizeHeroEntity(hero, savedDay, raidType)) : [];
       return {
@@ -1962,6 +2127,7 @@ function defaultState() {
         councilFavor,
         councilSession,
         councilQuest,
+        councilQuestCounters,
         fleshMarketUntilDay,
         nextRaidType,
         pendingPunitiveRaid,
@@ -1985,6 +2151,23 @@ function defaultState() {
   }
 
   const [state, setState] = useState(() => loadSavedState() || defaultState());
+
+  function addCouncilQuestCounter(stateLike, metricKey, amount = 1) {
+    if (!metricKey || !Number.isFinite(amount) || amount === 0) return stateLike;
+    const counters = {
+      ...createEmptyCouncilQuestCounters(),
+      ...(stateLike.councilQuestCounters || {}),
+    };
+    counters[metricKey] = Math.max(0, (counters[metricKey] || 0) + amount);
+    const nextState = { ...stateLike, councilQuestCounters: counters };
+    if (nextState.councilQuest?.active && nextState.councilQuest.metricKey === metricKey) {
+      nextState.councilQuest = {
+        ...nextState.councilQuest,
+        progress: councilQuestProgressValue(nextState, nextState.councilQuest),
+      };
+    }
+    return nextState;
+  }
 
   useEffect(() => {
     try {
@@ -2498,8 +2681,11 @@ function defaultState() {
           tile.monsters = tile.monsters.map((m, i) => (i === source.index ? buffed : m));
         }
       }
+      let ns = { ...s, grid, invMonsters, currency, evolutionOffer: null };
+      ns = addCouncilQuestCounter(ns, "evolutionSpentSinceCouncil", cost);
+      ns = addCouncilQuestCounter(ns, "monsterEvolutionCount", 1);
       return addLog(
-        { ...s, grid, invMonsters, currency, evolutionOffer: null },
+        ns,
         `${target.name} reaches Stage ${nextStage}/${MAX_EVOLUTION_STAGE} as ${currentStage === 0 ? branchClass : evolvedBase.class}. ${passiveNote} (${cost} ${spend.source} EP).`
       );
     });
@@ -2822,12 +3008,15 @@ function defaultState() {
         partyQueue: party.map((h) => ({ ...h })),
         scoutQueue,
       };
+      if (scoutQueue.length > 0) {
+        ns = addCouncilQuestCounter(ns, "revealedInvaderCount", scoutQueue.length);
+      }
       const meta = raidTypeMeta(raidType, s.pendingCouncilRaid);
       ns = addLog(ns, `Day ${s.day} battle begins. ${meta.label}. Party size ${party.length}.`);
       ns = addLog(ns, meta.desc);
-      if (scoutQueue.length > 0) {
-        const previews = scoutQueue
-          .map((h) => `${h.name} (${formatStars(safeEntityStars(h))}, ATK ${h.atk}, HP ${h.hp})`)
+        if (scoutQueue.length > 0) {
+          const previews = scoutQueue
+          .map((h) => `${h.name}${h.isRaidLeader ? " [Leader]" : ""} (${formatStars(safeEntityStars(h))}, ATK ${h.atk}, HP ${h.hp})`)
           .join(" | ");
         ns = addLog(ns, `Scout's Mirror reveals: ${previews}`);
       }
@@ -2920,7 +3109,7 @@ function defaultState() {
       const raidMods = buildRaidModifiers(s.nextRaidBoons);
       const mirrorTier = maxUtilityTier(s.grid, "scout-mirror") + doctrineEffects.utilityScoutBonus;
       const doctrineShield = doctrineEffects.coreShieldBonus || 0;
-      const fortifiedCoreShield = (s.coreShield || 0) + doctrineShield;
+      const fortifiedCoreShield = (s.coreShield || 0) + doctrineShield + (raidMods.coreShieldBonus || 0);
       if (mirrorTier > 0) {
         const revealCount = Math.min(partyQueue.length, 2 + (mirrorTier - 1) + raidMods.scoutRevealBonus);
         scoutQueue = partyQueue.slice(0, revealCount).map((h) => ({ ...h }));
@@ -2955,14 +3144,20 @@ function defaultState() {
           nextRaidBoons: [],
           activeRaidBoons: [...(s.nextRaidBoons || [])],
         };
+        if (scoutQueue.length > 0 && !reuseParty) {
+          ns = addCouncilQuestCounter(ns, "revealedInvaderCount", scoutQueue.length);
+        }
         const meta = raidTypeMeta(raidType, s.pendingCouncilRaid);
         if (doctrineShield > 0) {
           ns = addLog(ns, `Core Doctrine fortifies the Core with +${doctrineShield} Shield.`);
         }
+        if (raidMods.coreShieldBonus > 0) {
+          ns = addLog(ns, `Council leverage fortifies the Core with +${raidMods.coreShieldBonus} Shield.`);
+        }
         ns = addLog(ns, `Raid started. ${meta.label}. Party size ${party.length}. ${invaderLabel(spawnResult.spawned)} breaches the Entrance.`);
         if (scoutQueue.length > 0) {
           const previews = scoutQueue
-            .map((h) => `${h.name} (${formatStars(safeEntityStars(h))}, ATK ${h.atk}, HP ${h.hp})`)
+            .map((h) => `${h.name}${h.isRaidLeader ? " [Leader]" : ""} (${formatStars(safeEntityStars(h))}, ATK ${h.atk}, HP ${h.hp})`)
             .join(" | ");
           ns = addLog(ns, `Scout's Mirror reveals: ${previews}`);
         }
@@ -2993,15 +3188,21 @@ function defaultState() {
         nextRaidBoons: [],
         activeRaidBoons: [...(s.nextRaidBoons || [])],
       };
+      if (scoutQueue.length > 0 && !reuseParty) {
+        ns = addCouncilQuestCounter(ns, "revealedInvaderCount", scoutQueue.length);
+      }
       const meta = raidTypeMeta(raidType, s.pendingCouncilRaid);
       if (doctrineShield > 0) {
         ns = addLog(ns, `Core Doctrine fortifies the Core with +${doctrineShield} Shield.`);
+      }
+      if (raidMods.coreShieldBonus > 0) {
+        ns = addLog(ns, `Council leverage fortifies the Core with +${raidMods.coreShieldBonus} Shield.`);
       }
       ns = addLog(ns, `Raid started. ${meta.label}. Party size ${party.length}. (Cap reached; no spawn yet.)`);
       if (scoutQueue.length > 0) {
         const previews = scoutQueue
           .slice(0, 2)
-          .map((h) => `${h.name} (${formatStars(safeEntityStars(h))}, ATK ${h.atk}, HP ${h.hp})`)
+          .map((h) => `${h.name}${h.isRaidLeader ? " [Leader]" : ""} (${formatStars(safeEntityStars(h))}, ATK ${h.atk}, HP ${h.hp})`)
           .join(" | ");
         ns = addLog(ns, `Scout's Mirror reveals: ${previews}`);
       }
@@ -3042,6 +3243,11 @@ function defaultState() {
       const dominionEffects = s.dominionEffects || {};
       const doctrineEffectsLocal = getDoctrineEffects(s.doctrines || {});
       const raidBoons = s.activeRaidBoons || [];
+      const raidMods = buildRaidModifiers(raidBoons);
+      let councilQuestCounters = {
+        ...createEmptyCouncilQuestCounters(),
+        ...(s.councilQuestCounters || {}),
+      };
       const raidMult = s.raidType === "council" ? 1.6 : s.raidType === "elite" ? 1.3 : 1;
 
       let turnsSurvived = s.turnsSurvived;
@@ -3106,6 +3312,10 @@ function defaultState() {
         }
         if (heroHasPassive(h, "Focused") && Math.random() < 0.5) return false;
         setStatus(h, key, turns, value);
+        if (key === "poison") {
+          h.counters = h.counters || {};
+          h.counters.poisonedThisRaid = true;
+        }
         if (label) push(label);
         return true;
       };
@@ -3132,6 +3342,19 @@ function defaultState() {
         }
         const totalEssence = essenceGain + extraEssence;
         const totalShards = shardGain + extraShards;
+        const deathTile = grid[h.y]?.[h.x];
+        if (why === "trap" || why === "arrows") {
+          councilQuestCounters.trapKillCount += 1;
+        }
+        if (h.counters?.trapDamaged || h.counters?.poisonedThisRaid) {
+          councilQuestCounters.trapOrPoisonKillCount += 1;
+        }
+        if (deathTile?.room === "monster" && why !== "trap" && why !== "arrows") {
+          councilQuestCounters.monsterRoomKillCount += 1;
+        }
+        if (h.isRaidLeader) {
+          councilQuestCounters.highestStarLeaderKillCount += 1;
+        }
         push(`${invaderLabel(h)} dies (${why}). +${totalEssence} Essence, +${totalShards} Soulshards`);
       }
 
@@ -3161,7 +3384,15 @@ function defaultState() {
       function applySiphon(h, x, y) {
         const tier = effectiveUtilityTier(x, y, "siphon-pylon");
         if (tier <= 0) return;
-        h.counters = h.counters || { stunnedOnce: false, siphonGained: 0, tookDamageThisRaid: false, cursedMark: 0 };
+        h.counters =
+          h.counters || {
+            stunnedOnce: false,
+            siphonGained: 0,
+            tookDamageThisRaid: false,
+            cursedMark: 0,
+            trapDamaged: false,
+            poisonedThisRaid: false,
+          };
         const cap = 10 + (tier - 1) * 5;
         if ((h.counters.siphonGained || 0) >= cap) return;
         essence += Math.round(1 * (eventMods.essenceMult || 1));
@@ -3184,7 +3415,15 @@ function defaultState() {
         }
         if (final > 0) {
           h.hp -= final;
-          h.counters = h.counters || { stunnedOnce: false, siphonGained: 0, tookDamageThisRaid: false, cursedMark: 0 };
+          h.counters =
+            h.counters || {
+              stunnedOnce: false,
+              siphonGained: 0,
+              tookDamageThisRaid: false,
+              cursedMark: 0,
+              trapDamaged: false,
+              poisonedThisRaid: false,
+            };
           h.counters.tookDamageThisRaid = true;
           rememberDanger(h, x, y, Math.max(1, Math.round(final / 4)));
           applySiphon(h, x, y);
@@ -3234,6 +3473,7 @@ function defaultState() {
         const wardTier = effectiveUtilityTier(x, y, "ward-lantern");
         if (wardTier > 0) mult += 0.25 + 0.05 * (wardTier - 1);
         if (artifactMods.trapMult) mult += artifactMods.trapMult;
+        if (raidMods.trapDamageMult) mult += raidMods.trapDamageMult;
         return Math.max(0, Math.round(dmg * mult));
       }
 
@@ -3265,6 +3505,8 @@ function defaultState() {
           wardedUsed: false,
           resoluteUsed: false,
           stoicUsed: false,
+          trapDamaged: false,
+          poisonedThisRaid: false,
         };
         h.counters.stoicUsed = false;
         if (h.hp <= 0) continue;
@@ -3289,10 +3531,11 @@ function defaultState() {
             }
           }
           coreHp -= heroAtk;
-          const coreCounter = DUNGEON_LORD_ATK + (doctrineEffectsLocal.dungeonlordAtkBonus || 0);
+          const coreCounter =
+            DUNGEON_LORD_ATK + (doctrineEffectsLocal.dungeonlordAtkBonus || 0) + (raidMods.coreRetaliationBonus || 0);
           const coreDmg = applyHeroDamage(h, coreCounter, h.x, h.y, true);
           push(
-            `${invaderLabel(h)} hits Core for ${heroAtk}. Core HP ${Math.max(0, coreHp)}. Core retaliates for ${coreDmg} (${DUNGEON_LORD_ATK}${doctrineEffectsLocal.dungeonlordAtkBonus ? `+${doctrineEffectsLocal.dungeonlordAtkBonus}` : ""}). ${invaderLabel(h)} HP ${Math.max(0, h.hp)}`
+            `${invaderLabel(h)} hits Core for ${heroAtk}. Core HP ${Math.max(0, coreHp)}. Core retaliates for ${coreDmg} (${DUNGEON_LORD_ATK}${doctrineEffectsLocal.dungeonlordAtkBonus ? `+${doctrineEffectsLocal.dungeonlordAtkBonus}` : ""}${raidMods.coreRetaliationBonus ? `+${raidMods.coreRetaliationBonus}` : ""}). ${invaderLabel(h)} HP ${Math.max(0, h.hp)}`
           );
 
           if (h.hp <= 0) {
@@ -3458,6 +3701,9 @@ function defaultState() {
             h.memory = h.memory || { danger: {}, lastIntent: null };
             h.memory.lastIntent = moveChoice.intent;
             moved = true;
+            if (moveChoice.wasDetour) {
+              councilQuestCounters.detourCount += 1;
+            }
             push(`${invaderLabel(h)} moves to (${h.x + 1},${h.y + 1}) - ${moveChoice.intent}`);
           } else {
             push(`${invaderLabel(h)} waits (no path).`);
@@ -3513,6 +3759,9 @@ function defaultState() {
               let dealt = 0;
               if (trapDmg > 0) {
                 dealt = applyHeroDamage(h, trapDmg, h.x, h.y, false);
+                if (dealt > 0) {
+                  h.counters.trapDamaged = true;
+                }
               }
 
               if (trapKey === "poison-vent") {
@@ -3713,6 +3962,7 @@ function defaultState() {
         scoutQueue,
         partyQueue,
         dpRegenCounter,
+        councilQuestCounters,
         activeRaidBoons: raidActive ? raidBoons : [],
       };
       nextState.dominionEffects = { monsterAtk: 0, monsterFirstStrike: false, pulsePending: false };
@@ -3749,18 +3999,25 @@ function defaultState() {
           nextState.currency = { ...nextState.currency, evolution: nextState.currency.evolution + evoGain };
           nextState = addLog(nextState, `Evolution gained: +${evoGain}.`);
         }
+        const completedRaidCoreDamage = Math.max(0, (s.raidStartCoreHp || getCoreMaxHp(s)) - coreHp);
+        nextState = addCouncilQuestCounter(nextState, "survivedRaidCount", 1);
+        if (completedRaidCoreDamage === 0) {
+          nextState = addCouncilQuestCounter(nextState, "zeroCoreDamageRaidCount", 1);
+        }
+        if (coreHp >= Math.ceil(getCoreMaxHp(nextState) * 0.8)) {
+          nextState = addCouncilQuestCounter(nextState, "highCoreRaidCount", 1);
+        }
+        const raidSoulshardsGained = Math.max(0, soulshards - (s.raidStartShards || 0));
+        if (raidSoulshardsGained > 0) {
+          nextState = addCouncilQuestCounter(nextState, "soulshardsEarnedSinceCouncil", raidSoulshardsGained);
+        }
         if (nextState.councilQuest?.active) {
-          const progress = (nextState.councilQuest.progress || 0) + (s.raidKills || 0);
+          const progress = councilQuestProgressValue(nextState, nextState.councilQuest);
           const goal = nextState.councilQuest.goal || 0;
           if (progress >= goal) {
-            const reward = nextState.councilQuest.reward || { type: "essence", amount: 0 };
-            const currency = { ...nextState.currency };
-            if (reward.type === "soulshards") currency.soulshards += reward.amount;
-            else if (reward.type === "dominion") currency.dominion = Math.min(DOMINION_CAP, currency.dominion + reward.amount);
-            else if (reward.type === "evolution") currency.evolution += reward.amount;
-            else currency.essence += reward.amount;
-            nextState.currency = currency;
-            nextState = addLog(nextState, `Council quest completed: ${nextState.councilQuest.title}. Reward claimed.`);
+            const rewardResult = applyCouncilRewardToState(nextState, nextState.councilQuest.reward, nextState.councilQuest.sponsorName, nextState.day);
+            nextState = rewardResult.nextState;
+            nextState = addLog(nextState, `Council quest completed: ${nextState.councilQuest.title}. ${rewardResult.rewardText || "Reward claimed."}`);
             nextState.councilQuest = { ...nextState.councilQuest, active: false, progress: goal };
           } else {
             nextState.councilQuest = { ...nextState.councilQuest, progress };
@@ -3778,6 +4035,11 @@ function defaultState() {
             roster,
             lastRoster: roster,
           };
+          if (nextState.councilQuest?.active) {
+            nextState = addLog(nextState, `Council quest expired: ${nextState.councilQuest.title}.`);
+          }
+          nextState.councilQuest = null;
+          nextState.councilQuestCounters = createEmptyCouncilQuestCounters();
           const punitive = council.declinedStreak >= 2;
           nextState.nextRaidType = punitive ? "council" : "elite";
           nextState.pendingPunitiveRaid = punitive;
@@ -3898,6 +4160,7 @@ function defaultState() {
         councilFavor: {},
         councilSession: null,
         councilQuest: null,
+        councilQuestCounters: createEmptyCouncilQuestCounters(),
         nextRaidType: null,
         pendingPunitiveRaid: false,
         pendingCouncilRaid: null,
@@ -3982,6 +4245,9 @@ function defaultState() {
           partyQueue: party.map((h) => ({ ...h })),
           scoutQueue,
         };
+        if (scoutQueue.length > 0) {
+          ns = addCouncilQuestCounter(ns, "revealedInvaderCount", scoutQueue.length);
+        }
         ns = addLog(ns, "Council choice updated today's raid.");
       }
       return ns;
@@ -4035,53 +4301,71 @@ function defaultState() {
           partyQueue: party.map((h) => ({ ...h })),
           scoutQueue,
         };
+        if (scoutQueue.length > 0) {
+          ns = addCouncilQuestCounter(ns, "revealedInvaderCount", scoutQueue.length);
+        }
         ns = addLog(ns, "Council choice updated today's raid.");
       }
       return ns;
     });
   }
 
-  function acceptCouncilOffer(offerId) {
+  function acceptCouncilBoon(sponsorKey) {
     setState((s) => {
       if (!s.councilSession || s.councilSession.status !== "attended") return s;
-      const offer = (s.councilSession.offers || []).find((o) => o.id === offerId);
-      if (!offer) return s;
-      let ns = { ...s };
-      const currency = { ...s.currency };
-      if (offer.type === "soulshards") currency.soulshards += offer.amount;
-      else if (offer.type === "dominion") currency.dominion = Math.min(DOMINION_CAP, currency.dominion + offer.amount);
-      else if (offer.type === "evolution") currency.evolution += offer.amount;
-      else if (offer.type === "monster") {
-        const count = Math.max(1, Math.min(2, Math.round(offer.amount / 20)));
-        const invMonsters = [...s.invMonsters];
-        for (let i = 0; i < count; i++) {
-          invMonsters.push(generateMonster(pick(MONSTER_KEYS), s.turnsSurvived, undefined, s.day));
-        }
-        ns.invMonsters = invMonsters;
-      } else {
-        currency.essence += offer.amount;
+      if (s.councilSession.acceptedCouncilBoonKey) return addLog(s, "You already accepted a Council boon.");
+      if (!canAcceptCouncilSponsorAction(s.councilSession, sponsorKey)) return addLog(s, "You have already courted another sponsor this Council.");
+      const sponsor = (s.councilSession.sponsors || []).find((entry) => entry.key === sponsorKey);
+      const boon = sponsor?.boon;
+      if (!sponsor || !boon) return s;
+      if (!sponsor.available || boon.available === false) {
+        return addLog(s, boon.lockedReason || sponsor.lockedReason || "That sponsor's boon is not available yet.");
       }
-      ns.councilFavor = applyCouncilFavorShift(s.councilFavor || {}, offer.sponsorKey, 2);
-      ns.nextRaidBoons = [...(s.nextRaidBoons || []), { ...(offer.raidEffect || {}), sponsorKey: offer.sponsorKey, sponsorName: offer.sponsorName }].filter(Boolean);
-      ns.currency = currency;
+      let ns = { ...s };
+      const rewardResult = applyCouncilRewardToState(ns, boon.reward, boon.sponsorName, s.day);
+      ns = rewardResult.nextState;
+      ns.councilFavor = applyCouncilFavorShift(s.councilFavor || {}, sponsorKey, 2);
+      if (boon.raidEffect) {
+        ns.nextRaidBoons = [
+          ...(s.nextRaidBoons || []),
+          { ...boon.raidEffect, sponsorKey: boon.sponsorKey, sponsorName: boon.sponsorName },
+        ].filter(Boolean);
+      }
       ns.councilSession = {
         ...s.councilSession,
-        offers: (s.councilSession.offers || []).filter((o) => o.id !== offerId),
+        courtedSponsorKey: s.councilSession.courtedSponsorKey || sponsorKey,
+        acceptedCouncilBoonKey: sponsorKey,
       };
-      return addLog(ns, `Council boon received: ${offer.title} from ${offer.sponsorName}. ${offer.raidEffect?.desc || ""}`.trim());
+      const rewardText = rewardResult.rewardText ? ` ${rewardResult.rewardText}.` : "";
+      const leverageText = boon.raidEffect?.desc ? ` ${boon.raidEffect.desc}` : "";
+      return addLog(ns, `Council boon received: ${boon.title} from ${boon.sponsorName}.${rewardText}${leverageText}`.trim());
     });
   }
 
-  function acceptCouncilQuest() {
+  function acceptCouncilQuest(sponsorKey, difficulty) {
     setState((s) => {
       if (!s.councilSession || s.councilSession.status !== "attended") return s;
       if (s.councilQuest?.active) return addLog(s, "You already have an active Council quest.");
-      const quest = s.councilSession.quest;
+      if (!canAcceptCouncilSponsorAction(s.councilSession, sponsorKey)) return addLog(s, "You have already courted another sponsor this Council.");
+      const sponsor = (s.councilSession.sponsors || []).find((entry) => entry.key === sponsorKey);
+      const quest = sponsor?.quests?.[difficulty];
       if (!quest) return s;
-      const councilQuest = { ...quest, active: true };
-      const councilSession = { ...s.councilSession, quest: null };
-      const councilFavor = applyCouncilFavorShift(s.councilFavor || {}, quest.sponsorKey, 1);
-      return addLog({ ...s, councilQuest, councilSession, councilFavor }, `Council quest accepted: ${quest.title} (${quest.sponsorName}).`);
+      if (!sponsor?.available || quest.available === false) {
+        return addLog(s, quest.lockedReason || sponsor?.lockedReason || "That sponsor's quest is not available yet.");
+      }
+      const councilQuest = {
+        ...quest,
+        active: true,
+        progress: councilQuestProgressValue(s, quest),
+      };
+      const councilSession = {
+        ...s.councilSession,
+        courtedSponsorKey: s.councilSession.courtedSponsorKey || sponsorKey,
+        acceptedCouncilQuestId: quest.id,
+        acceptedCouncilQuestDifficulty: difficulty,
+      };
+      const councilFavor = applyCouncilFavorShift(s.councilFavor || {}, sponsorKey, 1);
+      return addLog({ ...s, councilQuest, councilSession, councilFavor }, `Council quest accepted: ${quest.title} (${quest.sponsorName}, ${difficulty}).`);
     });
   }
 
@@ -4402,9 +4686,14 @@ function defaultState() {
   const selectedTileAuras = describeTileAuras(state.selected.x, state.selected.y);
   const selectedHeroIntent = selectedHeroes[0] && core ? chooseInvaderMove(selectedHeroes[0], state.grid, core, state.activeRaidBoons, doctrineEffects) : null;
   const focusedCouncilFavor = focusedCouncilMember ? state.councilFavor?.[focusedCouncilMember.key] || 0 : 0;
+  const focusedCouncilSponsor =
+    focusedCouncilMember && state.councilSession?.sponsors
+      ? state.councilSession.sponsors.find((sponsor) => sponsor.key === focusedCouncilMember.key) || null
+      : null;
   const focusedCouncilBoons = focusedCouncilMember
     ? (state.nextRaidBoons || []).filter((boon) => boon.sponsorKey === focusedCouncilMember.key)
     : [];
+  const activeCouncilQuestProgress = state.councilQuest?.active ? councilQuestProgressValue(state, state.councilQuest) : 0;
 
   const previewPathKeys = useMemo(() => {
     if (selectedHeroes[0] && core) {
@@ -4652,6 +4941,16 @@ function defaultState() {
                     <div className="muted">Personality: {focusedCouncilMember.personality}</div>
                     <div className="muted">Current Deal: {focusedCouncilMember.deal}</div>
                     <div className="muted">
+                      Sponsor Status:{" "}
+                      {focusedCouncilSponsor
+                        ? focusedCouncilSponsor.available
+                          ? state.councilSession.courtedSponsorKey === focusedCouncilSponsor.key
+                            ? "Courted"
+                            : "Available"
+                          : "Coming Later"
+                        : "Unavailable"}
+                    </div>
+                    <div className="muted">
                       Rivalries:{" "}
                       {(focusedCouncilMember.rivalries || [])
                         .map((r) => COUNCIL_MEMBERS.find((m) => m.key === r)?.name || r)
@@ -4686,55 +4985,115 @@ function defaultState() {
                 </div>
               </div>
               <div className="card">
-                <div className="cardTitle">Boons</div>
-                {state.councilSession.offers.length ? (
-                  <div className="entityList">
-                    {state.councilSession.offers.map((o) => (
-                      <div className="entityItem" key={o.id}>
-                        <div className="entityName">{o.title}</div>
-                        <div className="entityMeta">{o.sponsorName}</div>
-                        <div className="entityMeta">
-                          {o.desc} ({o.type === "monster" ? "Recruit" : `+${o.amount}`})
-                        </div>
-                        <div className="muted small">{o.raidEffect?.desc || "No raid leverage."}</div>
-                        <div className="row">
-                          <button className="btn" onClick={() => acceptCouncilOffer(o.id)}>
-                            Accept
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                <div className="cardTitle">Sponsor Boon</div>
+                {focusedCouncilSponsor?.boon ? (
+                  <>
+                    <div className="entityName">{focusedCouncilSponsor.boon.title}</div>
+                    <div className="entityMeta">{focusedCouncilSponsor.boon.desc}</div>
+                    <div className="muted">{councilRewardLabel(focusedCouncilSponsor.boon.reward)}</div>
+                    <div className="muted small">{focusedCouncilSponsor.boon.raidEffect?.desc || "No next-raid leverage."}</div>
+                    {!focusedCouncilSponsor.available ? <div className="muted small">{focusedCouncilSponsor.lockedReason}</div> : null}
+                    <div className="row">
+                      {state.councilSession.status !== "attended" ? (
+                        <button className="btn" disabled>
+                          Attend First
+                        </button>
+                      ) : !focusedCouncilSponsor.available ? (
+                        <button className="btn" disabled>
+                          Coming Later
+                        </button>
+                      ) : state.councilSession.acceptedCouncilBoonKey === focusedCouncilSponsor.key ? (
+                        <button className="btn" disabled>
+                          Accepted
+                        </button>
+                      ) : state.councilSession.acceptedCouncilBoonKey ? (
+                        <button className="btn" disabled>
+                          Boon Taken
+                        </button>
+                      ) : state.councilSession.courtedSponsorKey && state.councilSession.courtedSponsorKey !== focusedCouncilSponsor.key ? (
+                        <button className="btn" disabled>
+                          Courting Another Sponsor
+                        </button>
+                      ) : (
+                        <button className="btn" onClick={() => acceptCouncilBoon(focusedCouncilSponsor.key)}>
+                          Accept Boon
+                        </button>
+                      )}
+                    </div>
+                  </>
                 ) : (
-                  <div className="entityEmpty">No boons remaining.</div>
+                  <div className="entityEmpty">Select a Dungeonlord.</div>
                 )}
               </div>
               <div className="card">
-                <div className="cardTitle">Council Quest</div>
+                <div className="cardTitle">Active Council Quest</div>
                 {state.councilQuest?.active ? (
                   <>
                     <div className="entityName">{state.councilQuest.title}</div>
                     <div className="entityMeta">{state.councilQuest.desc}</div>
+                    <div className="muted">{state.councilQuest.sponsorName}</div>
                     <div className="muted">
-                      Progress: {state.councilQuest.progress}/{state.councilQuest.goal}
+                      Progress: {activeCouncilQuestProgress}/{state.councilQuest.goal}
                     </div>
-                  </>
-                ) : state.councilSession.quest ? (
-                  <>
-                    <div className="entityName">{state.councilSession.quest.title}</div>
-                    <div className="entityMeta">{state.councilSession.quest.desc}</div>
-                    <div className="muted">{state.councilSession.quest.sponsorName}</div>
-                    <div className="muted">
-                      Reward: +{state.councilSession.quest.reward.amount} {state.councilSession.quest.reward.type}
-                    </div>
-                    <div className="row">
-                      <button className="btn" onClick={acceptCouncilQuest}>
-                        Accept Quest
-                      </button>
-                    </div>
+                    <div className="muted">Reward: {councilRewardLabel(state.councilQuest.reward)}</div>
                   </>
                 ) : (
                   <div className="entityEmpty">No active quest.</div>
+                )}
+              </div>
+              <div className="card">
+                <div className="cardTitle">Sponsor Quests</div>
+                {focusedCouncilSponsor ? (
+                  <div className="entityList">
+                    {["standard", "hard"].map((difficulty) => {
+                      const quest = focusedCouncilSponsor.quests?.[difficulty];
+                      if (!quest) return null;
+                      const taken = state.councilSession.acceptedCouncilQuestId === quest.id;
+                      const blockedBySponsor =
+                        !!state.councilSession.courtedSponsorKey && state.councilSession.courtedSponsorKey !== focusedCouncilSponsor.key;
+                      return (
+                        <div className="entityItem" key={quest.id}>
+                          <div className="entityName">
+                            {quest.title} ({difficulty})
+                          </div>
+                          <div className="entityMeta">{quest.desc}</div>
+                          <div className="muted">Goal: {quest.goal}</div>
+                          <div className="muted">Current Progress: {councilQuestProgressValue(state, quest)}</div>
+                          <div className="muted">Reward: {councilRewardLabel(quest.reward)}</div>
+                          {!quest.available ? <div className="muted small">{quest.lockedReason}</div> : null}
+                          <div className="row">
+                            {state.councilSession.status !== "attended" ? (
+                              <button className="btn" disabled>
+                                Attend First
+                              </button>
+                            ) : !quest.available ? (
+                              <button className="btn" disabled>
+                                Coming Later
+                              </button>
+                            ) : taken ? (
+                              <button className="btn" disabled>
+                                Accepted
+                              </button>
+                            ) : state.councilSession.acceptedCouncilQuestId || state.councilQuest?.active ? (
+                              <button className="btn" disabled>
+                                Quest Taken
+                              </button>
+                            ) : blockedBySponsor ? (
+                              <button className="btn" disabled>
+                                Courting Another Sponsor
+                              </button>
+                            ) : (
+                              <button className="btn" onClick={() => acceptCouncilQuest(focusedCouncilSponsor.key, difficulty)}>
+                                Accept {difficulty}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="entityEmpty">Select a Dungeonlord.</div>
                 )}
               </div>
             </div>
@@ -5068,7 +5427,7 @@ function defaultState() {
                             HP {h.hp}/{safeEntityMaxHp(h)} | ATK {h.atk} | DEF {h.def || 0} | SHD {h.shd || 0} | SPD {h.spd || 0}
                           </div>
                           <div className="muted">
-                            Origin {h.raidOriginLabel || "Hero Raid"}{h.factionName ? ` | ${h.factionName}` : ""} | Behavior {h.archetypeLabel || "Zealot"}{h.memory?.lastIntent ? ` | Intent ${h.memory.lastIntent}` : ""}
+                            Origin {h.raidOriginLabel || "Hero Raid"}{h.factionName ? ` | ${h.factionName}` : ""}{h.isRaidLeader ? " | Leader" : ""} | Behavior {h.archetypeLabel || "Zealot"}{h.memory?.lastIntent ? ` | Intent ${h.memory.lastIntent}` : ""}
                           </div>
                         </div>
                       ))}
@@ -5483,7 +5842,7 @@ function defaultState() {
                           HP {h.hp}/{safeEntityMaxHp(h)} | ATK {h.atk} | DEF {h.def || 0} | SHD {h.shd || 0} | SPD {h.spd || 0}
                         </div>
                         <div className="muted small">{invaderPassiveSummary(h)}</div>
-                        <div className="muted small">{h.raidOriginLabel || "Hero Raid"}{h.factionName ? ` | ${h.factionName}` : ""}</div>
+                        <div className="muted small">{h.raidOriginLabel || "Hero Raid"}{h.factionName ? ` | ${h.factionName}` : ""}{h.isRaidLeader ? " | Leader" : ""}</div>
                       </div>
                     ))}
                 </div>
@@ -5521,7 +5880,7 @@ function defaultState() {
                         HP {h.hp}/{safeEntityMaxHp(h)} | ATK {h.atk}
                       </div>
                       <div className="muted small">{invaderPassiveSummary(h)}</div>
-                      <div className="muted small">{h.raidOriginLabel || "Hero Raid"}{h.factionName ? ` | ${h.factionName}` : ""}</div>
+                      <div className="muted small">{h.raidOriginLabel || "Hero Raid"}{h.factionName ? ` | ${h.factionName}` : ""}{h.isRaidLeader ? " | Leader" : ""}</div>
                     </div>
                   ))}
                 </div>
@@ -5728,13 +6087,18 @@ function defaultState() {
                   <div className="cardTitle">Attending Lords</div>
                   <div className="entityList">
                     {(state.council?.roster || []).map((m) => (
-                      <div className="entityItem" key={`council-${m.key}`}>
+                      <button
+                        className={`entityItem ${focusedCouncilMember?.key === m.key ? "active" : ""}`}
+                        key={`council-${m.key}`}
+                        onClick={() => setFocusedCouncilKey(m.key)}
+                        type="button"
+                      >
                         <div className="entityName">
                           {m.name} - {m.title}
                         </div>
                         <div className="entityMeta">{m.theme}</div>
                         <div className="muted">{m.role}</div>
-                      </div>
+                      </button>
                     ))}
                   </div>
                   {state.councilSession.status === "pending" && (
@@ -5774,60 +6138,119 @@ function defaultState() {
                 </div>
 
                 <div className="card">
-                  <div className="cardTitle">Boons</div>
-                  {state.councilSession.status === "attended" ? (
-                    state.councilSession.offers.length ? (
-                      <div className="entityList">
-                        {state.councilSession.offers.map((o) => (
-                          <div className="entityItem" key={o.id}>
-                            <div className="entityName">{o.title}</div>
-                            <div className="entityMeta">{o.sponsorName}</div>
-                            <div className="entityMeta">
-                              {o.desc} ({o.type === "monster" ? "Recruit" : `+${o.amount}`})
-                            </div>
-                            <div className="muted small">{o.raidEffect?.desc || "No raid leverage."}</div>
-                            <div className="row">
-                              <button className="btn" onClick={() => acceptCouncilOffer(o.id)}>
-                                Accept
-                              </button>
-                            </div>
-                          </div>
-                        ))}
+                  <div className="cardTitle">Sponsor Boon</div>
+                  {focusedCouncilSponsor?.boon ? (
+                    <>
+                      <div className="entityName">{focusedCouncilSponsor.boon.title}</div>
+                      <div className="entityMeta">{focusedCouncilSponsor.boon.desc}</div>
+                      <div className="muted">{councilRewardLabel(focusedCouncilSponsor.boon.reward)}</div>
+                      <div className="muted small">{focusedCouncilSponsor.boon.raidEffect?.desc || "No next-raid leverage."}</div>
+                      {!focusedCouncilSponsor.available ? <div className="muted small">{focusedCouncilSponsor.lockedReason}</div> : null}
+                      <div className="row">
+                        {state.councilSession.status !== "attended" ? (
+                          <button className="btn" disabled>
+                            Attend First
+                          </button>
+                        ) : !focusedCouncilSponsor.available ? (
+                          <button className="btn" disabled>
+                            Coming Later
+                          </button>
+                        ) : state.councilSession.acceptedCouncilBoonKey === focusedCouncilSponsor.key ? (
+                          <button className="btn" disabled>
+                            Accepted
+                          </button>
+                        ) : state.councilSession.acceptedCouncilBoonKey ? (
+                          <button className="btn" disabled>
+                            Boon Taken
+                          </button>
+                        ) : state.councilSession.courtedSponsorKey && state.councilSession.courtedSponsorKey !== focusedCouncilSponsor.key ? (
+                          <button className="btn" disabled>
+                            Courting Another Sponsor
+                          </button>
+                        ) : (
+                          <button className="btn" onClick={() => acceptCouncilBoon(focusedCouncilSponsor.key)}>
+                            Accept Boon
+                          </button>
+                        )}
                       </div>
-                    ) : (
-                      <div className="entityEmpty">No boons remaining.</div>
-                    )
+                    </>
                   ) : (
-                    <div className="entityEmpty">Attend the Council to access boons.</div>
+                    <div className="entityEmpty">
+                      {state.councilSession.status === "attended" ? "Select a Dungeonlord to review their boon." : "Attend the Council to access boons."}
+                    </div>
                   )}
                 </div>
 
                 <div className="card">
-                  <div className="cardTitle">Council Quest</div>
+                  <div className="cardTitle">Active Council Quest</div>
                   {state.councilQuest?.active ? (
                     <>
                       <div className="entityName">{state.councilQuest.title}</div>
                       <div className="entityMeta">{state.councilQuest.desc}</div>
+                      <div className="muted">{state.councilQuest.sponsorName}</div>
                       <div className="muted">
-                        Progress: {state.councilQuest.progress}/{state.councilQuest.goal}
+                        Progress: {activeCouncilQuestProgress}/{state.councilQuest.goal}
                       </div>
-                    </>
-                  ) : state.councilSession.status === "attended" && state.councilSession.quest ? (
-                    <>
-                      <div className="entityName">{state.councilSession.quest.title}</div>
-                      <div className="entityMeta">{state.councilSession.quest.desc}</div>
-                      <div className="muted">{state.councilSession.quest.sponsorName}</div>
-                      <div className="muted">
-                        Reward: +{state.councilSession.quest.reward.amount} {state.councilSession.quest.reward.type}
-                      </div>
-                      <div className="row">
-                        <button className="btn" onClick={acceptCouncilQuest}>
-                          Accept Quest
-                        </button>
-                      </div>
+                      <div className="muted">Reward: {councilRewardLabel(state.councilQuest.reward)}</div>
                     </>
                   ) : (
                     <div className="entityEmpty">No active quest.</div>
+                  )}
+                </div>
+
+                <div className="card">
+                  <div className="cardTitle">Sponsor Quests</div>
+                  {focusedCouncilSponsor ? (
+                    <div className="entityList">
+                      {["standard", "hard"].map((difficulty) => {
+                        const quest = focusedCouncilSponsor.quests?.[difficulty];
+                        if (!quest) return null;
+                        const taken = state.councilSession.acceptedCouncilQuestId === quest.id;
+                        const blockedBySponsor =
+                          !!state.councilSession.courtedSponsorKey && state.councilSession.courtedSponsorKey !== focusedCouncilSponsor.key;
+                        return (
+                          <div className="entityItem" key={quest.id}>
+                            <div className="entityName">
+                              {quest.title} ({difficulty})
+                            </div>
+                            <div className="entityMeta">{quest.desc}</div>
+                            <div className="muted">Goal: {quest.goal}</div>
+                            <div className="muted">Progress: {councilQuestProgressValue(state, quest)}</div>
+                            <div className="muted">Reward: {councilRewardLabel(quest.reward)}</div>
+                            {!quest.available ? <div className="muted small">{quest.lockedReason}</div> : null}
+                            <div className="row">
+                              {state.councilSession.status !== "attended" ? (
+                                <button className="btn" disabled>
+                                  Attend First
+                                </button>
+                              ) : !quest.available ? (
+                                <button className="btn" disabled>
+                                  Coming Later
+                                </button>
+                              ) : taken ? (
+                                <button className="btn" disabled>
+                                  Accepted
+                                </button>
+                              ) : state.councilSession.acceptedCouncilQuestId || state.councilQuest?.active ? (
+                                <button className="btn" disabled>
+                                  Quest Taken
+                                </button>
+                              ) : blockedBySponsor ? (
+                                <button className="btn" disabled>
+                                  Courting Another Sponsor
+                                </button>
+                              ) : (
+                                <button className="btn" onClick={() => acceptCouncilQuest(focusedCouncilSponsor.key, difficulty)}>
+                                  Accept {difficulty}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="entityEmpty">Select a Dungeonlord to review their quests.</div>
                   )}
                 </div>
               </>
