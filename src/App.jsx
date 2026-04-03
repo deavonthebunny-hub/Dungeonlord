@@ -4211,12 +4211,13 @@ function defaultState() {
     const tier = t.room ? " tier-" + (t.roomTier || 1) : "";
     const path = previewPathKeys.has(keyOf(x, y)) ? " path-preview" : "";
     const lure = lureCandidateKeys.has(keyOf(x, y)) ? " lure-candidate" : "";
-    if (t.entrance) return "tile entrance" + sel + path + lure;
-    if (t.core) return "tile core" + sel + path + lure;
-    if (t.room === "trap") return "tile trap" + tier + sel + path + lure;
-    if (t.room === "monster") return "tile monster" + tier + sel + path + lure;
-    if (t.room === "utility") return "tile utility" + tier + sel + path + lure;
-    return "tile" + sel + path + lure;
+    const aura = tileHasAura(x, y) ? " aura-affected" : "";
+    if (t.entrance) return "tile entrance" + sel + path + lure + aura;
+    if (t.core) return "tile core" + sel + path + lure + aura;
+    if (t.room === "trap") return "tile trap" + tier + sel + path + lure + aura;
+    if (t.room === "monster") return "tile monster" + tier + sel + path + lure + aura;
+    if (t.room === "utility") return "tile utility" + tier + sel + path + lure + aura;
+    return "tile" + sel + path + lure + aura;
   }
 
   function roomTypeName(tile) {
@@ -4386,8 +4387,8 @@ function defaultState() {
     return "";
   }
 
-  function tileAuraChip(x, y) {
-    return describeTileAuras(x, y).length > 0 ? "•" : "";
+  function tileHasAura(x, y) {
+    return describeTileAuras(x, y).length > 0;
   }
 
   const selectedTileAuras = describeTileAuras(state.selected.x, state.selected.y);
@@ -4758,12 +4759,10 @@ function defaultState() {
                       const monstersHere = t.room === "monster" ? t.monsters.length : 0;
                       const glyph = getTileGlyph(t, heroesHere.length, monstersHere);
                       const stateChip = tileStateChip(t, x, y);
-                      const auraChip = tileAuraChip(x, y);
-                      if (!glyph.text && !glyph.subtext && !stateChip && !auraChip) return null;
+                      if (!glyph.text && !glyph.subtext && !stateChip) return null;
                       return (
                         <>
                           {stateChip ? <span className="tileChip tileChipState">{stateChip}</span> : null}
-                          {auraChip ? <span className="tileChip tileChipAura">{auraChip}</span> : null}
                           {glyph.text ? <span className={`tileGlyph ${glyph.tone || ""}`}>{glyph.text}</span> : null}
                           {glyph.subtext ? <span className="tileGlyphSub">{glyph.subtext}</span> : null}
                         </>
