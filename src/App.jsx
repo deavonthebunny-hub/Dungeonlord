@@ -1462,7 +1462,7 @@ function hasUtilityAura(grid, x, y, key) {
 }
 
 function tileWalkable(t) {
-  return t.entrance || t.core || t.room === "trap" || t.room === "monster" || t.room === "utility";
+  return t.entrance || t.core || t.room === "trap" || t.room === "monster";
 }
 
 function findEntranceAndCore(grid) {
