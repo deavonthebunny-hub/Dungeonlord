@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import "./App.css";
+import { COUNCIL_RAID_FACTIONS, DOCTRINE_RULES, HERO_ARCHETYPE_RULES, RAID_TYPE_META } from "./gameContent";
 
 const W = 8;
 const H = 8;
@@ -112,6 +113,7 @@ const HERO_PASSIVE_RULES = [
   { key: "resolute", name: "Resolute", desc: "Unaffected by Slow for 1 turn when it would apply." },
 ];
 const HERO_PASSIVES = HERO_PASSIVE_RULES.map((p) => p.name);
+const HERO_PASSIVE_MAP = Object.fromEntries(HERO_PASSIVE_RULES.map((p) => [p.key, p]));
 
 const MONSTER_ARCHETYPES = ["Brute", "Skirmisher", "Hexer", "Packlord", "Tyrant", "Stalker"];
 const MONSTER_PASSIVE_RULES = [
@@ -561,12 +563,22 @@ function buildCouncilSession(roster, day) {
     dialogue.push(`${a.name} and ${b.name} clash over strategy, but no blood is spilled... this time.`);
   }
   const rumors = pickUnique(COUNCIL_RUMORS, 2);
+  const sponsors = pickUnique(roster, Math.min(2, roster.length));
   const offers = pickUnique(COUNCIL_OFFER_TEMPLATES, 2).map((o, idx) => {
     const amount = Math.max(1, Math.round(scaleByDay(20 + idx * 10, day, 0.06, 4)));
-    return { id: `${o.type}-${day}-${idx}`, ...o, amount };
+    const sponsor = sponsors[idx % Math.max(1, sponsors.length)] || roster[0] || null;
+    return {
+      id: `${o.type}-${day}-${idx}`,
+      ...o,
+      amount,
+      sponsorKey: sponsor?.key || null,
+      sponsorName: sponsor?.name || "The Council",
+      raidEffect: buildCouncilOfferRaidEffect(sponsor?.key, day),
+    };
   });
   const questTemplate = pick(COUNCIL_QUESTS);
   const goal = Math.max(6, Math.round(scaleByDay(8, day, 0.04, 3.5)));
+  const questSponsor = pick(roster);
   const quest = {
     id: `${questTemplate.key}-${day}`,
     title: questTemplate.title,
@@ -574,6 +586,8 @@ function buildCouncilSession(roster, day) {
     progress: 0,
     reward: { type: questTemplate.reward.type, amount: Math.max(2, Math.round(scaleByDay(12, day, 0.05, 4))) },
     desc: questTemplate.desc.replace("{goal}", goal),
+    sponsorKey: questSponsor?.key || null,
+    sponsorName: questSponsor?.name || "The Council",
   };
   return {
     day,
@@ -582,6 +596,90 @@ function buildCouncilSession(roster, day) {
     rumors,
     offers,
     quest,
+  };
+}
+
+function buildCouncilOfferRaidEffect(sponsorKey, day) {
+  switch (sponsorKey) {
+    case "lyralei":
+    case "tharos":
+      return {
+        key: "intel",
+        label: "Shadow Briefing",
+        desc: "Next raid reveals +2 extra invaders and suffers -1 party size.",
+        partySizeDelta: -1,
+        scoutRevealBonus: 2,
+      };
+    case "blackthorn":
+    case "xaldros":
+      return {
+        key: "fracture",
+        label: "Fractured Command",
+        desc: "Next raid loses cohesion and rolls one star step lower.",
+        starBias: -1,
+      };
+    case "grimjaw":
+    case "malachar":
+      return {
+        key: "sober-campaign",
+        label: "Measured Advance",
+        desc: "Next raid loses 10% ATK and party size is reduced by 1.",
+        partySizeDelta: -1,
+        atkMult: 0.9,
+      };
+    case "zephyra":
+      return {
+        key: "void-static",
+        label: "Void Static",
+        desc: "Next raid is easier to lure away from the core route.",
+        lureBoost: 2,
+        scoutRevealBonus: 1,
+      };
+    default:
+      return {
+        key: "pressure-relief",
+        label: "Pressure Relief",
+        desc: "Next raid size is reduced by 1.",
+        partySizeDelta: -1,
+      };
+  }
+}
+
+function applyCouncilFavorShift(favorMap, memberKey, delta) {
+  if (!memberKey) return favorMap || {};
+  const next = { ...(favorMap || {}) };
+  next[memberKey] = (next[memberKey] || 0) + delta;
+  const member = COUNCIL_MEMBERS.find((m) => m.key === memberKey);
+  for (const rivalKey of member?.rivalries || []) {
+    next[rivalKey] = (next[rivalKey] || 0) - Math.sign(delta || 0);
+  }
+  return next;
+}
+
+function buildCouncilRaidFromRoster(roster = [], day = 1, favorMap = {}) {
+  const sorted = [...roster].sort((a, b) => {
+    const aScore = (favorMap[a.key] || 0) + Math.random() * 0.35;
+    const bScore = (favorMap[b.key] || 0) + Math.random() * 0.35;
+    return aScore - bScore;
+  });
+  const attackerCount = sorted.length > 1 && day >= 40 ? 2 : 1;
+  const attackers = sorted.slice(0, attackerCount).map((member) => {
+    const faction = COUNCIL_RAID_FACTIONS[member.key] || {};
+    return {
+      key: member.key,
+      memberName: member.name,
+      memberTitle: member.title,
+      raidName: faction.raidName || member.title,
+      desc: faction.desc || member.theme,
+      raidModifier: faction.raidModifier || member.role,
+    };
+  });
+  return {
+    day,
+    attackers,
+    label: `Council Retaliation: ${attackers.map((a) => a.memberName).join(" & ")}`,
+    desc: attackers.map((a) => a.raidName).join(" / "),
+    modifierText: attackers.map((a) => a.raidModifier).join(" "),
   };
 }
 
@@ -647,6 +745,109 @@ function rollAuthoritativeStar(day = 1, explicitCap) {
   if (r < 0.8) return 3;
   if (r < 0.97) return 4;
   return 5;
+}
+
+function normalizeHeroPassiveKey(value) {
+  if (!value) return HERO_PASSIVE_RULES[0].key;
+  if (HERO_PASSIVE_MAP[value]) return value;
+  return HERO_PASSIVE_RULES.find((rule) => rule.name === value)?.key || HERO_PASSIVE_RULES[0].key;
+}
+
+function getHeroArchetypeRule(key) {
+  return HERO_ARCHETYPE_RULES[key] || HERO_ARCHETYPE_RULES.zealot;
+}
+
+function pickHeroPassiveRule(pool = HERO_PASSIVE_RULES) {
+  const normalizedPool = Array.isArray(pool)
+    ? pool
+        .map((entry) => {
+          if (typeof entry === "string") return HERO_PASSIVE_RULES.find((rule) => rule.name === entry || rule.key === entry);
+          return entry;
+        })
+        .filter(Boolean)
+    : HERO_PASSIVE_RULES;
+  return pick(normalizedPool.length ? normalizedPool : HERO_PASSIVE_RULES);
+}
+
+function pickHeroArchetypeKey(heroClass, passiveKey, raidType = null) {
+  const key = normalizeHeroPassiveKey(passiveKey);
+  if (raidType === "elite") {
+    if (["brave", "stoic", "unyielding"].includes(key)) return "zealot";
+    if (["focused", "warded"].includes(key)) return "cautious";
+  }
+  if (["cunning", "quick"].includes(key)) return "scout";
+  if (["brave", "bloodlust"].includes(key)) return "breaker";
+  if (["stoic", "warded", "focused"].includes(key)) return "cautious";
+  if (["Mage", "Cleric"].includes(heroClass)) return "purifier";
+  if (["Ranger", "Rogue"].includes(heroClass)) return "scout";
+  return "zealot";
+}
+
+function applyRaidStarBias(stars, day = 1, raidType = null, bias = 0) {
+  const cap = monsterStarCapForDay(day);
+  let next = clampMonsterStar(stars);
+  const totalBias =
+    bias +
+    (raidType === "elite" ? 0.45 : 0) +
+    (raidType === "council" ? 0.6 : 0);
+  if (totalBias > 0 && Math.random() < totalBias) {
+    next = Math.min(cap, next + 1);
+  }
+  if (totalBias < 0 && Math.random() < Math.abs(totalBias)) {
+    next = Math.max(1, next - 1);
+  }
+  return next;
+}
+
+function buildRaidModifiers(raidBoons = []) {
+  return (raidBoons || []).reduce(
+    (acc, boon) => {
+      if (!boon) return acc;
+      acc.partySizeDelta += boon.partySizeDelta || 0;
+      acc.scoutRevealBonus += boon.scoutRevealBonus || 0;
+      acc.starBias += boon.starBias || 0;
+      acc.atkMult *= boon.atkMult || 1;
+      acc.lureBoost += boon.lureBoost || 0;
+      return acc;
+    },
+    { partySizeDelta: 0, scoutRevealBonus: 0, starBias: 0, atkMult: 1, lureBoost: 0 }
+  );
+}
+
+function getDoctrineEffects(doctrines = {}) {
+  const trap = doctrines?.trap || 0;
+  const monster = doctrines?.monster || 0;
+  const utility = doctrines?.utility || 0;
+  const core = doctrines?.core || 0;
+  return {
+    trapFlatDamage: trap >= 1 ? 2 : 0,
+    trapChargeBonus: trap >= 2 ? 1 : 0,
+    trapCooldownReduction: trap >= 3 ? 1 : 0,
+    monsterAtkBonus: monster >= 1 ? 1 : 0,
+    monsterHpBonus: monster >= 2 ? 3 : 0,
+    monsterRoomCapBonus: monster >= 3 ? 1 : 0,
+    utilityPotencyBonus: utility >= 1 ? 1 : 0,
+    utilityScoutBonus: utility >= 2 ? 1 : 0,
+    utilityPotencyBonusExtra: utility >= 3 ? 1 : 0,
+    coreMaxHpBonus: core >= 1 ? 25 : 0,
+    coreShieldBonus: core >= 2 ? 5 : 0,
+    dungeonlordAtkBonus: core >= 3 ? 2 : 0,
+  };
+}
+
+function raidTypeMeta(raidType, councilRaid = null) {
+  if (raidType === "council" && councilRaid) {
+    return {
+      label: councilRaid.label,
+      desc: `${RAID_TYPE_META.council.desc} ${councilRaid.desc}. ${councilRaid.modifierText}`,
+    };
+  }
+  return RAID_TYPE_META[raidType || "normal"] || RAID_TYPE_META.normal;
+}
+
+function getCoreMaxHp(stateLike) {
+  const doctrineEffects = getDoctrineEffects(stateLike?.doctrines || {});
+  return CORE_MAX_HP + doctrineEffects.coreMaxHpBonus;
 }
 
 function rollPassiveCount(stars) {
@@ -799,13 +1000,13 @@ function spendEvolutionPoints(personalPoints, globalPoints, cost) {
   };
 }
 
-function trapChargesForStar(star) {
-  return 1 + Math.floor((clampMonsterStar(star) - 1) / 2);
+function trapChargesForStar(star, doctrineEffects = null) {
+  return 1 + Math.floor((clampMonsterStar(star) - 1) / 2) + (doctrineEffects?.trapChargeBonus || 0);
 }
 
-function trapCooldownAfterTrigger(trapType, star) {
+function trapCooldownAfterTrigger(trapType, star, doctrineEffects = null) {
   const baseCooldown = TRAP_MAP[trapType]?.baseCooldown ?? 1;
-  return Math.max(0, baseCooldown - Math.floor((clampMonsterStar(star) - 1) / 2));
+  return Math.max(0, baseCooldown - Math.floor((clampMonsterStar(star) - 1) / 2) - (doctrineEffects?.trapCooldownReduction || 0));
 }
 
 function scaleStat(base, stars) {
@@ -836,6 +1037,10 @@ function normalizeHeroEntity(hero, day = 1, raidType = null) {
   const stats = buildHeroStats(stars, raidType);
   const previousMaxHp = Math.max(1, hero?.stats?.maxHp ?? hero?.hp ?? stats.maxHp);
   const hpRatio = clamp((hero?.hp ?? previousMaxHp) / previousMaxHp, 0, 1);
+  const heroPassiveKey = normalizeHeroPassiveKey(hero?.heroPassiveKey || hero?.passive);
+  const archetypeKey = HERO_ARCHETYPE_RULES[hero?.archetypeKey]
+    ? hero.archetypeKey
+    : pickHeroArchetypeKey(hero?.class, heroPassiveKey, raidType);
   return {
     ...hero,
     id: Number.isFinite(hero?.id) ? hero.id : 1,
@@ -849,10 +1054,20 @@ function normalizeHeroEntity(hero, day = 1, raidType = null) {
     race: hero?.race || HERO_RACES[0],
     class: hero?.class || HERO_CLASSES[0],
     stars,
-    passive: hero?.passive || HERO_PASSIVES[0],
+    passive: hero?.passive || HERO_PASSIVE_MAP[heroPassiveKey]?.name || HERO_PASSIVES[0],
+    heroPassiveKey,
+    archetypeKey,
+    archetypeLabel: getHeroArchetypeRule(archetypeKey).name,
+    unitKind: hero?.unitKind || "hero",
+    factionKey: hero?.factionKey || null,
+    factionName: hero?.factionName || null,
+    raidOriginLabel: hero?.raidOriginLabel || null,
+    traitPassiveKey: hero?.traitPassiveKey || null,
+    traitPassiveName: hero?.traitPassiveName || null,
     stats,
     name: hero?.name || `${HERO_NAMES[0]} the ${hero?.class || HERO_CLASSES[0]}`,
     statuses: hero?.statuses || {},
+    memory: hero?.memory || { danger: {}, lastIntent: null },
     counters: {
       stunnedOnce: false,
       siphonGained: 0,
@@ -866,11 +1081,15 @@ function normalizeHeroEntity(hero, day = 1, raidType = null) {
   };
 }
 
-function generateHero(id, entrancePos, turnsSurvived, raidType, day = 1) {
-  const stars = rollAuthoritativeStar(day);
-  const race = pick(HERO_RACES);
-  const heroClass = pick(HERO_CLASSES);
-  const passive = pick(HERO_PASSIVES);
+function generateHero(id, entrancePos, turnsSurvived, raidType, day = 1, options = {}) {
+  const classPool = options.classPool || HERO_CLASSES;
+  const passivePool = options.passivePool || HERO_PASSIVE_RULES;
+  const racePool = options.racePool || HERO_RACES;
+  const passiveRule = pickHeroPassiveRule(passivePool);
+  const heroClass = pick(classPool);
+  const archetypeKey = options.archetypeKey || pickHeroArchetypeKey(heroClass, passiveRule.key, raidType);
+  const stars = applyRaidStarBias(rollAuthoritativeStar(day), day, raidType, options.starBias || 0);
+  const race = pick(racePool);
   const name = `${pick(HERO_NAMES)} the ${heroClass}`;
   const stats = buildHeroStats(stars, raidType);
 
@@ -887,10 +1106,79 @@ function generateHero(id, entrancePos, turnsSurvived, raidType, day = 1) {
     race,
     class: heroClass,
     stars,
-    passive,
+    passive: passiveRule.name,
+    heroPassiveKey: passiveRule.key,
+    archetypeKey,
+    archetypeLabel: getHeroArchetypeRule(archetypeKey).name,
+    unitKind: "hero",
+    factionKey: null,
+    factionName: null,
+    raidOriginLabel: raidTypeMeta(raidType).label,
+    traitPassiveKey: null,
+    traitPassiveName: null,
     stats,
     name,
     statuses: {},
+    memory: { danger: {}, lastIntent: null },
+    counters: {
+      stunnedOnce: false,
+      siphonGained: 0,
+      tookDamageThisRaid: false,
+      cursedMark: 0,
+      wardedUsed: false,
+      resoluteUsed: false,
+      stoicUsed: false,
+    },
+  };
+}
+
+function generateCouncilRaider(id, entrancePos, turnsSurvived, day = 1, councilRaid = null, raidBoons = []) {
+  const attackers = councilRaid?.attackers?.length ? councilRaid.attackers : [{ key: "malachar", memberName: "The Council" }];
+  const attacker = attackers[(id - 1) % attackers.length];
+  const faction = COUNCIL_RAID_FACTIONS[attacker.key] || COUNCIL_RAID_FACTIONS.malachar;
+  const raidMods = buildRaidModifiers(raidBoons);
+  const monsterKey = pick(faction.monsterPool);
+  const monsterBase = MONSTERS[monsterKey] || MONSTERS.goblin;
+  const className = pick(faction.classPool.filter(Boolean).length ? faction.classPool : MONSTER_CLASS_RULES[monsterKey] || MONSTER_ARCHETYPES);
+  const traitPassiveKey = pick(faction.passiveBias.filter(Boolean).length ? faction.passiveBias : MONSTER_PASSIVES);
+  const passiveRule = pickHeroPassiveRule(HERO_PASSIVE_RULES);
+  const archetypeKey = pick(faction.archetypes?.length ? faction.archetypes : Object.keys(HERO_ARCHETYPE_RULES));
+  const stars = applyRaidStarBias(rollAuthoritativeStar(day), day, "council", raidMods.starBias || 0);
+  const monsterStats = buildMonsterStats(monsterKey, stars, 0);
+  const stats = {
+    maxHp: Math.max(1, Math.round(monsterStats.maxHp * (faction.statBias?.hp || 1))),
+    atk: Math.max(1, Math.round(monsterStats.atk * (faction.statBias?.atk || 1) * (raidMods.atkMult || 1))),
+    def: Math.max(0, Math.round((monsterStats.def || 0) * (faction.statBias?.def || 1))),
+    shd: Math.max(0, Math.floor(stars / 2)),
+    spd: Math.max(1, 2 + stars + (archetypeKey === "scout" ? 1 : 0)),
+  };
+  return {
+    id,
+    x: entrancePos.x,
+    y: entrancePos.y,
+    hp: stats.maxHp,
+    atk: stats.atk,
+    def: stats.def,
+    shd: stats.shd,
+    spd: stats.spd,
+    prev: null,
+    race: monsterBase.name,
+    class: className,
+    stars,
+    passive: `${passiveRule.name} / ${MONSTER_PASSIVE_MAP[traitPassiveKey]?.name || "Faction Trait"}`,
+    heroPassiveKey: passiveRule.key,
+    archetypeKey,
+    archetypeLabel: getHeroArchetypeRule(archetypeKey).name,
+    unitKind: "council-raider",
+    factionKey: attacker.key,
+    factionName: attacker.memberName,
+    raidOriginLabel: councilRaid?.label || RAID_TYPE_META.council.label,
+    traitPassiveKey,
+    traitPassiveName: MONSTER_PASSIVE_MAP[traitPassiveKey]?.name || "Faction Trait",
+    stats,
+    name: `${attacker.memberName.split(" ")[0]} ${monsterBase.name}`,
+    statuses: {},
+    memory: { danger: {}, lastIntent: null },
     counters: {
       stunnedOnce: false,
       siphonGained: 0,
@@ -948,17 +1236,43 @@ function initMonsterInventory(turnsSurvived, count = 4, starCap, day = 1) {
   return Array.from({ length: count }, () => generateMonster(pick(MONSTER_KEYS), turnsSurvived, starCap, day));
 }
 
-function generateHeroParty(turnsSurvived, raidType, day = 1) {
-  const size = DAY_START_PARTY_MIN + Math.floor(Math.random() * (DAY_START_PARTY_MAX - DAY_START_PARTY_MIN + 1));
+function generateHeroParty(turnsSurvived, raidType, day = 1, options = {}) {
+  const raidMods = buildRaidModifiers(options.raidBoons || []);
+  const baseSize = DAY_START_PARTY_MIN + Math.floor(Math.random() * (DAY_START_PARTY_MAX - DAY_START_PARTY_MIN + 1));
+  const eliteBonus = raidType === "elite" ? 1 : 0;
+  const size = Math.max(1, baseSize + eliteBonus + (raidMods.partySizeDelta || 0));
   const basePos = { x: 0, y: 0 };
   const party = [];
   let nextId = 1;
+  const eliteOptions =
+    raidType === "elite"
+      ? {
+          classPool: ["Warrior", "Ranger", "Cleric", "Monk", "Warrior", "Ranger"],
+          passivePool: ["Brave", "Stoic", "Focused", "Warded", "Quick", "Unyielding"],
+          starBias: 0.35 + (raidMods.starBias || 0),
+        }
+      : {
+          starBias: raidMods.starBias || 0,
+        };
   for (let i = 0; i < size; i++) {
-    const hero = generateHero(nextId, basePos, turnsSurvived, raidType, day);
+    const hero = generateHero(nextId, basePos, turnsSurvived, raidType, day, eliteOptions);
     party.push(hero);
     nextId += 1;
   }
   return party;
+}
+
+function generateRaidParty(turnsSurvived, raidType, day = 1, options = {}) {
+  if (raidType === "council") {
+    const raidMods = buildRaidModifiers(options.raidBoons || []);
+    const baseSize = DAY_START_PARTY_MIN + Math.floor(Math.random() * (DAY_START_PARTY_MAX - DAY_START_PARTY_MIN + 1));
+    const size = Math.max(1, baseSize + 1 + (raidMods.partySizeDelta || 0));
+    const basePos = { x: 0, y: 0 };
+    return Array.from({ length: size }, (_, idx) =>
+      generateCouncilRaider(idx + 1, basePos, turnsSurvived, day, options.councilRaid, options.raidBoons || [])
+    );
+  }
+  return generateHeroParty(turnsSurvived, raidType, day, options);
 }
 
 function generateTraderStock(turnsSurvived, day = 1) {
@@ -1237,6 +1551,127 @@ function aStarPath(grid, start, goal) {
   return null;
 }
 
+function pathDistance(grid, start, goal) {
+  const path = aStarPath(grid, start, goal);
+  return path ? Math.max(0, path.length - 1) : Number.POSITIVE_INFINITY;
+}
+
+function trapThreatScore(tile) {
+  if (!tile || tile.room !== "trap" || !tile.trap || tile.trapBroken) return 0;
+  const trap = TRAP_MAP[tile.trapType];
+  const star = clampMonsterStar(tile.trapStar ?? tile.trapStars ?? 1);
+  const rank = Math.max(1, tile.trapRank ?? tile.roomTier ?? 1);
+  const base = trap?.baseDmg || 0;
+  return Math.max(1, Math.round(base * (1 + 0.25 * (star - 1)) + (rank - 1) * 2));
+}
+
+function tileThreatScore(grid, x, y) {
+  const tile = grid[y]?.[x];
+  if (!tile) return 0;
+  let threat = 0;
+  if (tile.room === "trap") {
+    threat += trapThreatScore(tile);
+    if ((tile.trapCooldownRemaining || 0) > 0) threat *= 0.5;
+  }
+  if (tile.room === "monster") {
+    const monsters = tile.monsters || [];
+    threat += monsters.reduce((sum, monster) => sum + Math.max(1, monster.atk || 0), 0);
+    threat += monsters.length * 2;
+  }
+  if (tile.room === "utility") {
+    if (tile.roomType === "fear-idol") threat += 2;
+    if (tile.roomType === "ward-lantern") threat += 1;
+  }
+  return threat;
+}
+
+function branchLureScore(grid, start, corePos, maxDepth = 4) {
+  const seen = new Set([keyOf(start.x, start.y)]);
+  const queue = [{ ...start, depth: 0 }];
+  let value = 0;
+  const directDist = pathDistance(grid, start, corePos);
+  while (queue.length > 0) {
+    const cur = queue.shift();
+    const tile = grid[cur.y]?.[cur.x];
+    if (!tile) continue;
+    if (tile.room === "trap") value += 3;
+    else if (tile.room === "monster") value += 4 + Math.min(3, tile.monsters?.length || 0);
+    else if (tile.room === "utility") value += 2;
+    if (cur.depth >= maxDepth) continue;
+    for (const next of neighbors(cur.x, cur.y)) {
+      if (!tileWalkable(grid[next.y][next.x])) continue;
+      const nextKey = keyOf(next.x, next.y);
+      if (seen.has(nextKey)) continue;
+      const coreDist = pathDistance(grid, next, corePos);
+      if (coreDist > directDist + 3) continue;
+      seen.add(nextKey);
+      queue.push({ ...next, depth: cur.depth + 1 });
+    }
+  }
+  return value;
+}
+
+function invaderLabel(entity) {
+  if (!entity) return "Invader";
+  if (entity.unitKind === "council-raider") {
+    const prefix = entity.factionName ? entity.factionName.split(" ")[0] : "Raider";
+    return `${prefix}#${entity.id}`;
+  }
+  if (entity.raidOriginLabel === RAID_TYPE_META.elite.label) return `Elite#${entity.id}`;
+  return `Hero#${entity.id}`;
+}
+
+function invaderPassiveSummary(entity) {
+  if (!entity) return "None";
+  if (entity.unitKind === "council-raider" && entity.traitPassiveName) {
+    return `${entity.passive} | Trait ${entity.traitPassiveName}`;
+  }
+  return entity.passive || "None";
+}
+
+function chooseInvaderMove(entity, grid, corePos, raidBoons = [], doctrineEffects = {}) {
+  if (!entity || !corePos) return { next: null, options: [], intent: "No path" };
+  const archetype = getHeroArchetypeRule(entity.archetypeKey);
+  const current = { x: entity.x, y: entity.y };
+  const currentCoreDist = pathDistance(grid, current, corePos);
+  const raidMods = buildRaidModifiers(raidBoons);
+  const options = neighbors(entity.x, entity.y)
+    .filter((next) => tileWalkable(grid[next.y][next.x]))
+    .map((next) => {
+      const tile = grid[next.y][next.x];
+      const coreDist = pathDistance(grid, next, corePos);
+      if (!Number.isFinite(coreDist)) return null;
+      const threat = tileThreatScore(grid, next.x, next.y) + (entity.memory?.danger?.[keyOf(next.x, next.y)] || 0);
+      const lure = branchLureScore(grid, next, corePos) + (raidMods.lureBoost || 0) + (doctrineEffects.utilityScoutBonus || 0);
+      const roomBias =
+        (tile.room === "trap" ? archetype.weights.trap : 0) +
+        (tile.room === "monster" ? archetype.weights.monster : 0) +
+        (tile.room === "utility" ? archetype.weights.utility : 0);
+      const progress = Number.isFinite(currentCoreDist) ? currentCoreDist - coreDist : 0;
+      const backtrackPenalty = entity.prev && entity.prev.x === next.x && entity.prev.y === next.y ? archetype.weights.backtrack : 0;
+      const score = progress * archetype.weights.core + lure * archetype.weights.lure + roomBias - threat * archetype.weights.danger - backtrackPenalty;
+      const intent =
+        tile.core
+          ? "Press Core"
+          : tile.room === "monster"
+          ? "Pressure monster room"
+          : tile.room === "trap"
+          ? "Force the trap line"
+          : tile.room === "utility"
+          ? "Disrupt support"
+          : "Advance";
+      return { next, tile, score, threat, lure, coreDist, intent };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.score - a.score || a.coreDist - b.coreDist);
+  const best = options[0] || null;
+  return {
+    next: best?.next || null,
+    options,
+    intent: best ? best.intent : "Hold position",
+  };
+}
+
 function anyUtilityRoom(grid, key) {
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
@@ -1315,7 +1750,7 @@ export default function App() {
   const [fuseB, setFuseB] = useState("");
   const [sacrificeIdx, setSacrificeIdx] = useState("");
 function defaultState() {
-    const startingParty = generateHeroParty(0, null, 1);
+    const startingParty = generateRaidParty(0, null, 1);
     const dailyEvent = rollDailyEvent();
     const traderStock = generateTraderStock(0, 1);
     const shadyStock = generateArtifactStock();
@@ -1336,9 +1771,15 @@ function defaultState() {
         essence: 10,
         darkcrystals: 0,
       },
+      doctrines: {
+        trap: 0,
+        monster: 0,
+        utility: 0,
+        core: 0,
+      },
       artifacts: [],
       shadyStock,
-      coreHp: CORE_MAX_HP,
+      coreHp: getCoreMaxHp({ doctrines: { trap: 0, monster: 0, utility: 0, core: 0 } }),
       coreShield: 0,
       fleshMarketUntilDay: 0,
       heroes: [],
@@ -1350,7 +1791,7 @@ function defaultState() {
       raidStartTurn: 0,
       raidStartEssence: 0,
       raidStartShards: 30,
-      raidStartCoreHp: CORE_MAX_HP,
+      raidStartCoreHp: getCoreMaxHp({ doctrines: { trap: 0, monster: 0, utility: 0, core: 0 } }),
       raidKills: 0,
       raidType: null,
       lastRaidReport: null,
@@ -1375,10 +1816,14 @@ function defaultState() {
         lastRoster: [],
         declinedStreak: 0,
       },
+      councilFavor: {},
       councilSession: null,
       councilQuest: null,
       nextRaidType: null,
       pendingPunitiveRaid: false,
+      pendingCouncilRaid: null,
+      nextRaidBoons: [],
+      activeRaidBoons: [],
       dungeonLevel: 1,
       selectedTrapType: TRAP_TYPES[0].key,
       selectedMonsterRoomType: MONSTER_ROOMS[0].key,
@@ -1449,6 +1894,12 @@ function defaultState() {
       const traderStock = parsed.traderStock || base.traderStock;
       const shadyStock = parsed.shadyStock || base.shadyStock;
       const artifacts = parsed.artifacts || base.artifacts;
+      const doctrines = {
+        trap: Math.max(0, parsed.doctrines?.trap || 0),
+        monster: Math.max(0, parsed.doctrines?.monster || 0),
+        utility: Math.max(0, parsed.doctrines?.utility || 0),
+        core: Math.max(0, parsed.doctrines?.core || 0),
+      };
       const dominionEffects = parsed.dominionEffects || base.dominionEffects;
       const evolutionOffer = parsed.evolutionOffer || base.evolutionOffer;
       const coreShield = Number.isFinite(parsed.coreShield) ? parsed.coreShield : base.coreShield;
@@ -1460,13 +1911,19 @@ function defaultState() {
         lastRoster: Array.isArray(councilRaw.lastRoster) ? councilRaw.lastRoster : [],
         declinedStreak: Number.isFinite(councilRaw.declinedStreak) ? councilRaw.declinedStreak : 0,
       };
+      const councilFavor = parsed.councilFavor && typeof parsed.councilFavor === "object" ? parsed.councilFavor : {};
       const fleshMarketUntilDay = parsed.fleshMarketUntilDay || base.fleshMarketUntilDay;
       const nextRaidType = parsed.nextRaidType || base.nextRaidType;
       const pendingPunitiveRaid =
         !!parsed.pendingPunitiveRaid || (council.declinedStreak >= 2 && nextRaidType === "council");
+      const pendingCouncilRaid =
+        parsed.pendingCouncilRaid ||
+        (pendingPunitiveRaid && council.roster?.length ? buildCouncilRaidFromRoster(council.roster, parsed.day || base.day, councilFavor) : null);
       const currentPartyRaidType = parsed.currentPartyRaidType || null;
       const councilSession = parsed.councilSession || base.councilSession;
       const councilQuest = parsed.councilQuest || base.councilQuest;
+      const nextRaidBoons = Array.isArray(parsed.nextRaidBoons) ? parsed.nextRaidBoons.filter(Boolean) : [];
+      const activeRaidBoons = Array.isArray(parsed.activeRaidBoons) ? parsed.activeRaidBoons.filter(Boolean) : [];
       const savedDay = Math.max(1, parsed.day || base.day || 1);
       const normalizeHeroList = (list, raidType = null) =>
         Array.isArray(list) ? list.filter(Boolean).map((hero) => normalizeHeroEntity(hero, savedDay, raidType)) : [];
@@ -1476,6 +1933,7 @@ function defaultState() {
         grid,
         selected,
         currency,
+        doctrines,
         dailyEvent,
         traderStock,
         shadyStock,
@@ -1484,11 +1942,15 @@ function defaultState() {
         evolutionOffer,
         coreShield,
         council,
+        councilFavor,
         councilSession,
         councilQuest,
         fleshMarketUntilDay,
         nextRaidType,
         pendingPunitiveRaid,
+        pendingCouncilRaid,
+        nextRaidBoons,
+        activeRaidBoons,
         currentPartyRaidType,
         heroes: normalizeHeroList(parsed.heroes, parsed.raidType || currentPartyRaidType),
         currentParty: normalizeHeroList(parsed.currentParty, currentPartyRaidType),
@@ -1544,6 +2006,8 @@ function defaultState() {
   const { entrance, core } = useMemo(() => findEntranceAndCore(state.grid), [state.grid]);
   const validation = useMemo(() => validateDungeon(state.grid), [state.grid]);
   const roomsPlaced = useMemo(() => countRooms(state.grid), [state.grid]);
+  const doctrineEffects = useMemo(() => getDoctrineEffects(state.doctrines || {}), [state.doctrines]);
+  const coreMaxHp = useMemo(() => getCoreMaxHp(state), [state.doctrines]);
   const dungeonLevel = Number.isFinite(state.dungeonLevel) ? state.dungeonLevel : 1;
   const maxRooms = MAX_ROOMS_BASE + (dungeonLevel - 1) * ROOMS_PER_LEVEL;
 
@@ -2038,7 +2502,7 @@ function defaultState() {
       const grid = cloneGrid(s.grid);
       const t = grid[s.selected.y][s.selected.x];
       if (t.room !== "monster") return addLog(s, "Select a monster room first.");
-      const cap = monsterRoomCap(t.roomTier || 1);
+      const cap = monsterRoomCap(t.roomTier || 1) + getDoctrineEffects(s.doctrines).monsterRoomCapBonus;
       if (t.monsters.length >= cap) return addLog(s, `Monster room is full (max ${cap}).`);
       if (s.invMonsters.length <= 0) return addLog(s, "No monsters in inventory.");
 
@@ -2154,6 +2618,37 @@ function defaultState() {
     });
   }
 
+  function upgradeDoctrine(kind) {
+    if (locked) return;
+    if (!isBuildPhase) {
+      setState((s) => addLog(s, "Doctrines can only be advanced during the build phase."));
+      return;
+    }
+    setState((s) => {
+      const rule = DOCTRINE_RULES[kind];
+      if (!rule) return s;
+      const currentLevel = s.doctrines?.[kind] || 0;
+      const nextLevelDef = rule.levels[currentLevel];
+      if (!nextLevelDef) return addLog(s, `${rule.name} is already mastered.`);
+      const currencyKey = rule.currency;
+      if ((s.currency?.[currencyKey] || 0) < nextLevelDef.cost) {
+        return addLog(s, `Not enough ${currencyKey} for ${rule.name} (${nextLevelDef.cost}).`);
+      }
+      const doctrines = { ...(s.doctrines || {}), [kind]: currentLevel + 1 };
+      const currency = { ...s.currency, [currencyKey]: (s.currency?.[currencyKey] || 0) - nextLevelDef.cost };
+      let coreHp = s.coreHp;
+      if (kind === "core") {
+        const previousMax = getCoreMaxHp(s);
+        const nextMax = getCoreMaxHp({ doctrines });
+        coreHp = Math.min(nextMax, Math.max(1, coreHp + (nextMax - previousMax)));
+      }
+      return addLog(
+        { ...s, doctrines, currency, coreHp },
+        `${rule.name} advanced to ${currentLevel + 1}/${rule.levels.length}. ${nextLevelDef.desc}`
+      );
+    });
+  }
+
   function roomUpgradeCost(tier) {
     return 20 + tier * 10;
   }
@@ -2182,7 +2677,7 @@ function defaultState() {
       if (t.room === "trap") {
         t.trapRank = nextTier;
         if (t.trap) {
-          t.trapChargesRemaining = trapChargesForStar(t.trapStar || t.trapStars || 1);
+          t.trapChargesRemaining = trapChargesForStar(t.trapStar || t.trapStars || 1, getDoctrineEffects(s.doctrines));
           t.trapCooldownRemaining = 0;
         }
       }
@@ -2282,11 +2777,16 @@ function defaultState() {
     }
     setState((s) => {
       const raidType = s.pendingPunitiveRaid ? "council" : s.nextRaidType;
-      const party = generateHeroParty(s.turnsSurvived, raidType, s.day);
+      const party = generateRaidParty(s.turnsSurvived, raidType, s.day, {
+        councilRaid: s.pendingCouncilRaid,
+        raidBoons: s.nextRaidBoons,
+      });
       let scoutQueue = [];
-      const mirrorTier = maxUtilityTier(s.grid, "scout-mirror");
+      const doctrineEffects = getDoctrineEffects(s.doctrines);
+      const raidMods = buildRaidModifiers(s.nextRaidBoons);
+      const mirrorTier = maxUtilityTier(s.grid, "scout-mirror") + doctrineEffects.utilityScoutBonus;
       if (mirrorTier > 0) {
-        const revealCount = Math.min(party.length, 2 + (mirrorTier - 1));
+        const revealCount = Math.min(party.length, 2 + (mirrorTier - 1) + raidMods.scoutRevealBonus);
         scoutQueue = party.slice(0, revealCount).map((h) => ({ ...h }));
       }
       let ns = {
@@ -2297,8 +2797,9 @@ function defaultState() {
         partyQueue: party.map((h) => ({ ...h })),
         scoutQueue,
       };
-      const raidLabel = raidType ? ` (${raidType.toUpperCase()} RAID)` : "";
-      ns = addLog(ns, `Day ${s.day} battle begins. Party size ${party.length}.${raidLabel}`);
+      const meta = raidTypeMeta(raidType, s.pendingCouncilRaid);
+      ns = addLog(ns, `Day ${s.day} battle begins. ${meta.label}. Party size ${party.length}.`);
+      ns = addLog(ns, meta.desc);
       if (scoutQueue.length > 0) {
         const previews = scoutQueue
           .map((h) => `${h.name} (${formatStars(safeEntityStars(h))}, ATK ${h.atk}, HP ${h.hp})`)
@@ -2362,7 +2863,7 @@ function defaultState() {
             t.trapStars = trapStar;
             t.trapRank = Math.max(1, t.trapRank ?? t.roomTier ?? 1);
             if (t.trap && !t.trapBroken) {
-              t.trapChargesRemaining = trapChargesForStar(trapStar);
+              t.trapChargesRemaining = trapChargesForStar(trapStar, getDoctrineEffects(s.doctrines));
               t.trapCooldownRemaining = 0;
             } else {
               t.trapChargesRemaining = 0;
@@ -2379,15 +2880,22 @@ function defaultState() {
         s.currentParty &&
         s.currentParty.length &&
         (s.currentPartyRaidType || null) === (raidType || null);
-      const party = reuseParty ? s.currentParty : generateHeroParty(s.turnsSurvived, raidType, s.day);
+      const party = reuseParty
+        ? s.currentParty
+        : generateRaidParty(s.turnsSurvived, raidType, s.day, {
+            councilRaid: s.pendingCouncilRaid,
+            raidBoons: s.nextRaidBoons,
+          });
       let partyQueue = [...party];
       let raidRemaining = partyQueue.length;
       let raidKills = 0;
       let scoutQueue = [];
 
-      const mirrorTier = maxUtilityTier(s.grid, "scout-mirror");
+      const doctrineEffects = getDoctrineEffects(s.doctrines);
+      const raidMods = buildRaidModifiers(s.nextRaidBoons);
+      const mirrorTier = maxUtilityTier(s.grid, "scout-mirror") + doctrineEffects.utilityScoutBonus;
       if (mirrorTier > 0) {
-        const revealCount = Math.min(partyQueue.length, 2 + (mirrorTier - 1));
+        const revealCount = Math.min(partyQueue.length, 2 + (mirrorTier - 1) + raidMods.scoutRevealBonus);
         scoutQueue = partyQueue.slice(0, revealCount).map((h) => ({ ...h }));
       }
 
@@ -2415,9 +2923,12 @@ function defaultState() {
           raidType: raidType || null,
           nextRaidType: null,
           pendingPunitiveRaid: false,
+          pendingCouncilRaid: null,
+          nextRaidBoons: [],
+          activeRaidBoons: [...(s.nextRaidBoons || [])],
         };
-        const raidLabel = raidType ? ` (${raidType.toUpperCase()} RAID)` : "";
-        ns = addLog(ns, `Raid started. Party size ${party.length}. A hero enters.${raidLabel}`);
+        const meta = raidTypeMeta(raidType, s.pendingCouncilRaid);
+        ns = addLog(ns, `Raid started. ${meta.label}. Party size ${party.length}. An invader enters.`);
         if (scoutQueue.length > 0) {
           const previews = scoutQueue
             .map((h) => `${h.name} (${formatStars(safeEntityStars(h))}, ATK ${h.atk}, HP ${h.hp})`)
@@ -2446,9 +2957,12 @@ function defaultState() {
         raidType: raidType || null,
         nextRaidType: null,
         pendingPunitiveRaid: false,
+        pendingCouncilRaid: null,
+        nextRaidBoons: [],
+        activeRaidBoons: [...(s.nextRaidBoons || [])],
       };
-      const raidLabel = raidType ? ` (${raidType.toUpperCase()} RAID)` : "";
-      ns = addLog(ns, `Raid started. Party size ${party.length}. (Hero cap reached; no spawn yet.)${raidLabel}`);
+      const meta = raidTypeMeta(raidType, s.pendingCouncilRaid);
+      ns = addLog(ns, `Raid started. ${meta.label}. Party size ${party.length}. (Cap reached; no spawn yet.)`);
       if (scoutQueue.length > 0) {
         const previews = scoutQueue
           .slice(0, 2)
@@ -2491,6 +3005,8 @@ function defaultState() {
       const eventMods = s.dailyEvent?.mods || {};
       const artifactMods = calcArtifactMods(s.artifacts, s.day);
       const dominionEffects = s.dominionEffects || {};
+      const doctrineEffectsLocal = getDoctrineEffects(s.doctrines || {});
+      const raidBoons = s.activeRaidBoons || [];
       const raidMult = s.raidType === "council" ? 1.6 : s.raidType === "elite" ? 1.3 : 1;
 
       let turnsSurvived = s.turnsSurvived;
@@ -2502,6 +3018,11 @@ function defaultState() {
       const push = (msg) => logLines.push(msg);
 
       const dist = (ax, ay, bx, by) => Math.abs(ax - bx) + Math.abs(ay - by);
+      const effectiveUtilityTier = (x, y, key) => {
+        const baseTier = utilityTier(grid, x, y, key);
+        if (baseTier <= 0) return 0;
+        return baseTier + doctrineEffectsLocal.utilityPotencyBonus + doctrineEffectsLocal.utilityPotencyBonusExtra;
+      };
 
       const getStatus = (h, key) => h.statuses?.[key] || { turns: 0, value: 0 };
       const setStatus = (h, key, turns, value) => {
@@ -2530,7 +3051,12 @@ function defaultState() {
         return false;
       };
 
-      const heroHasPassive = (h, name) => h.passive === name;
+      const heroHasPassive = (h, name) => normalizeHeroPassiveKey(h.heroPassiveKey || h.passive) === normalizeHeroPassiveKey(name);
+      const rememberDanger = (h, x, y, amount = 1) => {
+        h.memory = h.memory || { danger: {}, lastIntent: null };
+        const key = keyOf(x, y);
+        h.memory.danger[key] = Math.min(12, (h.memory.danger[key] || 0) + Math.max(1, Math.round(amount)));
+      };
 
       const tryApplyDebuff = (h, key, turns, value, label) => {
         h.counters = h.counters || {};
@@ -2561,17 +3087,17 @@ function defaultState() {
         if (h.counters?.cursedMark) {
           const curseGain = Math.round(h.counters.cursedMark * (eventMods.essenceMult || 1));
           essence += curseGain;
-          push(`Cursed Brand triggers on Hero#${h.id}. +${curseGain} Essence`);
+          push(`Cursed Brand triggers on ${invaderLabel(h)}. +${curseGain} Essence`);
         }
-        const altarTier = utilityTier(grid, h.x, h.y, "soul-altar");
+        const altarTier = effectiveUtilityTier(h.x, h.y, "soul-altar");
         if (altarTier > 0) {
           const altarGain = 15 + (altarTier - 1) * 5;
           essence += Math.round(altarGain * (eventMods.essenceMult || 1));
-          push(`Soul Altar feeds on Hero#${h.id}. +${altarGain} Essence`);
+          push(`Soul Altar feeds on ${invaderLabel(h)}. +${altarGain} Essence`);
         }
         const totalEssence = essenceGain + extraEssence;
         const totalShards = shardGain + extraShards;
-        push(`Hero#${h.id} dies (${why}). +${totalEssence} Essence, +${totalShards} Soulshards`);
+        push(`${invaderLabel(h)} dies (${why}). +${totalEssence} Essence, +${totalShards} Soulshards`);
       }
 
       turnsSurvived += 1;
@@ -2598,7 +3124,7 @@ function defaultState() {
       const heroDefValue = (h) => (h.def || 0) + (getStatus(h, "weaken").turns > 0 ? -1 : 0);
 
       function applySiphon(h, x, y) {
-        const tier = utilityTier(grid, x, y, "siphon-pylon");
+        const tier = effectiveUtilityTier(x, y, "siphon-pylon");
         if (tier <= 0) return;
         h.counters = h.counters || { stunnedOnce: false, siphonGained: 0, tookDamageThisRaid: false, cursedMark: 0 };
         const cap = 10 + (tier - 1) * 5;
@@ -2625,6 +3151,7 @@ function defaultState() {
           h.hp -= final;
           h.counters = h.counters || { stunnedOnce: false, siphonGained: 0, tookDamageThisRaid: false, cursedMark: 0 };
           h.counters.tookDamageThisRaid = true;
+          rememberDanger(h, x, y, Math.max(1, Math.round(final / 4)));
           applySiphon(h, x, y);
         }
         return final;
@@ -2632,7 +3159,7 @@ function defaultState() {
 
       function monsterAtkBonus(room, x, y) {
         let bonus = 0;
-        const warTier = utilityTier(grid, x, y, "war-drum");
+        const warTier = effectiveUtilityTier(x, y, "war-drum");
         if (warTier > 0) bonus += warTier;
         const roomTierBonus = Math.max(0, (room.roomTier || 1) - 1);
         bonus += roomTierBonus;
@@ -2643,15 +3170,17 @@ function defaultState() {
         bonus += eventMods.monsterAtk || 0;
         bonus += artifactMods.monsterAtk || 0;
         bonus += dominionEffects.monsterAtk || 0;
+        bonus += doctrineEffectsLocal.monsterAtkBonus || 0;
         return bonus;
       }
 
       function monsterMaxHp(m) {
-        return m.stats && Number.isFinite(m.stats.maxHp) ? m.stats.maxHp : m.hp;
+        const baseMax = m.stats && Number.isFinite(m.stats.maxHp) ? m.stats.maxHp : m.hp;
+        return baseMax + (doctrineEffectsLocal.monsterHpBonus || 0);
       }
 
       function monsterDefBonus(x, y) {
-        const tier = utilityTier(grid, x, y, "reinforced-keystone");
+        const tier = effectiveUtilityTier(x, y, "reinforced-keystone");
         const base = tier > 0 ? 2 + (tier - 1) : 0;
         let bonus = base + (eventMods.monsterDef || 0);
         const room = grid[y][x];
@@ -2665,9 +3194,9 @@ function defaultState() {
         if (!base && !extraFlat) return 0;
         const trapStar = clampMonsterStar(tile.trapStar ?? tile.trapStars ?? 1);
         const trapRank = Math.max(1, tile.trapRank ?? tile.roomTier ?? 1);
-        let dmg = base * (1 + 0.25 * (trapStar - 1)) + (trapRank - 1) * 2 + extraFlat;
+        let dmg = base * (1 + 0.25 * (trapStar - 1)) + (trapRank - 1) * 2 + extraFlat + (doctrineEffectsLocal.trapFlatDamage || 0);
         let mult = 1;
-        const wardTier = utilityTier(grid, x, y, "ward-lantern");
+        const wardTier = effectiveUtilityTier(x, y, "ward-lantern");
         if (wardTier > 0) mult += 0.25 + 0.05 * (wardTier - 1);
         if (artifactMods.trapMult) mult += artifactMods.trapMult;
         return Math.max(0, Math.round(dmg * mult));
@@ -2680,7 +3209,7 @@ function defaultState() {
           h.statuses = h.statuses || {};
           h.counters = h.counters || { stunnedOnce: false, siphonGained: 0, tookDamageThisRaid: false, cursedMark: 0 };
           const dmg = applyHeroDamage(h, 5, h.x, h.y, false);
-          push(`Dominion Pulse hits Hero#${h.id} for ${dmg}. Hero HP ${Math.max(0, h.hp)}`);
+          push(`Dominion Pulse hits ${invaderLabel(h)} for ${dmg}. HP ${Math.max(0, h.hp)}`);
           if (h.hp <= 0) {
             heroDies(h, "dominion pulse");
             continue;
@@ -2726,9 +3255,7 @@ function defaultState() {
           }
           coreHp -= heroAtk;
           const coreDmg = applyHeroDamage(h, DUNGEON_LORD_ATK, h.x, h.y, true);
-          push(
-            `Hero#${h.id} hits Core for ${heroAtk}. Core HP ${Math.max(0, coreHp)}. Core hits Hero for ${coreDmg}. Hero HP ${Math.max(0, h.hp)}`
-          );
+          push(`${invaderLabel(h)} hits Core for ${heroAtk}. Core HP ${Math.max(0, coreHp)}. Core retaliates for ${coreDmg}. ${invaderLabel(h)} HP ${Math.max(0, h.hp)}`);
 
           if (h.hp <= 0) {
             heroDies(h, "slain at the Core");
@@ -2745,7 +3272,7 @@ function defaultState() {
           const atkBonus = monsterAtkBonus(t, h.x, h.y);
           let monsterAtk = m.atk + atkBonus;
           const hasteFirst =
-            hasUtilityAura(grid, h.x, h.y, "haste-glyph") ||
+            effectiveUtilityTier(h.x, h.y, "haste-glyph") > 0 ||
             dominionEffects.monsterFirstStrike ||
             roomHasPassive(t, "swift");
           let tempDefBonus = 0;
@@ -2762,7 +3289,9 @@ function defaultState() {
           const heroStrike = () => {
             const def = (m.def || 0) + monsterDefBonus(h.x, h.y) + tempDefBonus;
             let dmg = Math.max(1, heroAtk - def);
+            let mitigation = heroAtk - dmg;
             if (t.roomType === "brawlers-ring" && !m.shieldedThisTurn) {
+              mitigation += 2;
               dmg = Math.max(0, dmg - 2);
               m.shieldedThisTurn = true;
             }
@@ -2770,17 +3299,20 @@ function defaultState() {
               applyHeroDamage(h, monsterPassiveRank(m, "thorns"), h.x, h.y, false);
             }
             if (monsterHasPassive(m, "bulwark") && !m.shieldedThisTurn) {
+              mitigation += monsterPassiveRank(m, "bulwark");
               dmg = Math.max(0, dmg - monsterPassiveRank(m, "bulwark"));
               m.shieldedThisTurn = true;
             }
             m.hp -= dmg;
-            return dmg;
+            return { dmg, base: heroAtk, defense: def, mitigation };
           };
 
           const monsterStrike = () => {
             let bonus = 0;
             if (monsterHasPassive(m, "savage")) bonus += 2 * monsterPassiveRank(m, "savage");
-            const dmg = applyHeroDamage(h, monsterAtk + bonus, h.x, h.y, true);
+            const totalBase = monsterAtk + bonus;
+            const defense = heroDefValue(h);
+            const dmg = applyHeroDamage(h, totalBase, h.x, h.y, true);
             if (dmg > 0 && t.roomType === "savage-kennels") {
               m.hp = Math.min(monsterMaxHp(m), m.hp + 2);
             }
@@ -2793,7 +3325,7 @@ function defaultState() {
             if (dmg > 0 && monsterHasPassive(m, "leech")) {
               m.hp = Math.min(monsterMaxHp(m), m.hp + 2 * monsterPassiveRank(m, "leech"));
             }
-            return dmg;
+            return { dmg, base: totalBase, defense };
           };
 
           for (const roomMonster of t.monsters) {
@@ -2801,9 +3333,9 @@ function defaultState() {
           }
 
           if (t.roomType === "ambush-alcove" && !t.ambushUsed) {
-            const ambushDmg = monsterStrike();
+            const ambush = monsterStrike();
             t.ambushUsed = true;
-            push(`Ambush! ${m.name} strikes for ${ambushDmg}. Hero HP ${Math.max(0, h.hp)}`);
+            push(`Ambush! ${m.name} -> ${invaderLabel(h)}: base ${ambush.base}, DEF ${ambush.defense}, final ${ambush.dmg}. HP ${Math.max(0, h.hp)}`);
             if (h.hp <= 0) {
               heroDies(h, "ambushed");
               continue;
@@ -2811,23 +3343,23 @@ function defaultState() {
           }
 
           if (hasteFirst) {
-            const dmgToHero = monsterStrike();
-            if (dmgToHero > 0) {
-              push(`Hero#${h.id} takes ${dmgToHero} from ${m.name}. Hero HP ${Math.max(0, h.hp)}`);
+            const hitOnInvader = monsterStrike();
+            if (hitOnInvader.dmg > 0) {
+              push(`${m.name} -> ${invaderLabel(h)}: base ${hitOnInvader.base}, DEF ${hitOnInvader.defense}, final ${hitOnInvader.dmg}. HP ${Math.max(0, h.hp)}`);
             }
             if (h.hp <= 0) {
               heroDies(h, "killed in battle");
               continue;
             }
-            const dmgToMonster = heroStrike();
-            push(`Hero#${h.id} hits ${m.name} for ${dmgToMonster}. ${m.name} HP ${Math.max(0, m.hp)}`);
+            const hitOnMonster = heroStrike();
+            push(`${invaderLabel(h)} -> ${m.name}: base ${hitOnMonster.base}, DEF ${hitOnMonster.defense}, mitigation ${hitOnMonster.mitigation}, final ${hitOnMonster.dmg}. ${m.name} HP ${Math.max(0, m.hp)}`);
           } else {
-            const dmgToMonster = heroStrike();
-            push(`Hero#${h.id} hits ${m.name} for ${dmgToMonster}. ${m.name} HP ${Math.max(0, m.hp)}`);
+            const hitOnMonster = heroStrike();
+            push(`${invaderLabel(h)} -> ${m.name}: base ${hitOnMonster.base}, DEF ${hitOnMonster.defense}, mitigation ${hitOnMonster.mitigation}, final ${hitOnMonster.dmg}. ${m.name} HP ${Math.max(0, m.hp)}`);
             if (m.hp > 0) {
-              const dmgToHero = monsterStrike();
-              if (dmgToHero > 0) {
-                push(`Hero#${h.id} takes ${dmgToHero} from ${m.name}. Hero HP ${Math.max(0, h.hp)}`);
+              const hitOnInvader = monsterStrike();
+              if (hitOnInvader.dmg > 0) {
+                push(`${m.name} -> ${invaderLabel(h)}: base ${hitOnInvader.base}, DEF ${hitOnInvader.defense}, final ${hitOnInvader.dmg}. HP ${Math.max(0, h.hp)}`);
               }
             }
           }
@@ -2855,8 +3387,8 @@ function defaultState() {
           continue;
         }
 
-          const applyFearAura = () => {
-          const fearTier = utilityTier(grid, h.x, h.y, "fear-idol");
+        const applyFearAura = () => {
+          const fearTier = effectiveUtilityTier(h.x, h.y, "fear-idol");
           if (fearTier > 0) tryApplyDebuff(h, "fear", 2 + (fearTier - 1), 1);
         };
 
@@ -2865,34 +3397,32 @@ function defaultState() {
         let skipped = false;
         if (consumeStatus(h, "stun")) {
           skipped = true;
-          push(`Hero#${h.id} is stunned.`);
+          push(`${invaderLabel(h)} is stunned.`);
         }
         if (consumeStatus(h, "root")) {
           skipped = true;
-          push(`Hero#${h.id} is rooted.`);
+          push(`${invaderLabel(h)} is rooted.`);
         }
         if (consumeStatus(h, "slow")) {
           if (!heroHasPassive(h, "Quick")) {
             skipped = true;
-            push(`Hero#${h.id} is slowed.`);
+            push(`${invaderLabel(h)} is slowed.`);
           }
         }
 
         if (!skipped) {
-          const path = aStarPath(grid, { x: h.x, y: h.y }, corePos);
-          if (path && path.length > 1) {
-            let next = path[1];
-            // Avoid going back if possible
-            if (h.prev && next.x === h.prev.x && next.y === h.prev.y && path.length > 2) {
-              next = path[2];
-            }
+          const moveChoice = chooseInvaderMove(h, grid, corePos, raidBoons, doctrineEffectsLocal);
+          if (moveChoice.next) {
+            const next = moveChoice.next;
             h.prev = { x: h.x, y: h.y };
             h.x = next.x;
             h.y = next.y;
+            h.memory = h.memory || { danger: {}, lastIntent: null };
+            h.memory.lastIntent = moveChoice.intent;
             moved = true;
-            push(`Hero#${h.id} moves to (${h.x + 1},${h.y + 1})`);
+            push(`${invaderLabel(h)} moves to (${h.x + 1},${h.y + 1}) - ${moveChoice.intent}`);
           } else {
-            push(`Hero#${h.id} waits (no path).`);
+            push(`${invaderLabel(h)} waits (no path).`);
           }
         }
 
@@ -2905,18 +3435,18 @@ function defaultState() {
         if (moved && t2.room === "monster" && t2.monsters.length > 0) {
           if (roomHasPassive(t2, "venom-aura")) {
             if (tryApplyDebuff(h, "poison", 2 + Math.max(0, roomPassiveRank(t2, "venom-aura") - 1), 2 + roomPassiveRank(t2, "venom-aura"))) {
-              push(`Hero#${h.id} is poisoned by Venom Aura.`);
+              push(`${invaderLabel(h)} is poisoned by Venom Aura.`);
             }
           }
           if (roomHasPassive(t2, "dread-howl")) {
             if (tryApplyDebuff(h, "fear", 2 + Math.max(0, roomPassiveRank(t2, "dread-howl") - 1), 1)) {
-              push(`Hero#${h.id} is terrified by Dread Howl.`);
+              push(`${invaderLabel(h)} is terrified by Dread Howl.`);
             }
           }
           if (roomHasPassive(t2, "rot-cloud")) {
             const rotDmg = applyHeroDamage(h, roomPassiveRank(t2, "rot-cloud"), h.x, h.y, false);
             if (rotDmg > 0) {
-              push(`Hero#${h.id} is seared by Rot Cloud for ${rotDmg}.`);
+              push(`${invaderLabel(h)} is seared by Rot Cloud for ${rotDmg}.`);
             }
             if (h.hp <= 0) {
               heroDies(h, "rot cloud");
@@ -2951,28 +3481,28 @@ function defaultState() {
                 const poisonTurns = 3 + Math.floor((trapStar - 1) / 2);
                 const poisonValue = 2 + Math.floor((trapStar - 1) / 2);
                 if (tryApplyDebuff(h, "poison", poisonTurns, poisonValue)) {
-                  push(`Hero#${h.id} is poisoned.`);
+                  push(`${invaderLabel(h)} is poisoned.`);
                 }
               } else if (trapKey === "frost-rune") {
                 const slowTurns = 2 + Math.floor((trapStar - 1) / 2);
                 if (tryApplyDebuff(h, "slow", slowTurns, 1)) {
-                  push(`Hero#${h.id} is slowed.`);
+                  push(`${invaderLabel(h)} is slowed.`);
                 }
               } else if (trapKey === "shock-coil") {
                 if (!h.counters.stunnedOnce) {
                   if (tryApplyDebuff(h, "stun", 1, 1)) {
                     h.counters.stunnedOnce = true;
-                    push(`Hero#${h.id} is stunned.`);
+                    push(`${invaderLabel(h)} is stunned.`);
                   }
                 }
               } else if (trapKey === "snare-net") {
                 const rootTurns = 1 + Math.floor((trapStar - 1) / 2);
                 if (tryApplyDebuff(h, "root", rootTurns, 1)) {
-                  push(`Hero#${h.id} is rooted.`);
+                  push(`${invaderLabel(h)} is rooted.`);
                 }
               } else if (trapKey === "cursed-brand") {
                 h.counters.cursedMark = 10 + (trapRank - 1) * 2 + (trapStar - 1) * 2;
-                push(`Hero#${h.id} is cursed.`);
+                push(`${invaderLabel(h)} is cursed.`);
               } else if (trapKey === "blink-trap") {
                 const back = h.prev ? { ...h.prev } : ent;
                 if (back) {
@@ -2980,19 +3510,19 @@ function defaultState() {
                   h.x = back.x;
                   h.y = back.y;
                   h.prev = from;
-                  push(`Hero#${h.id} blinks back to (${h.x + 1},${h.y + 1}).`);
+                  push(`${invaderLabel(h)} blinks back to (${h.x + 1},${h.y + 1}).`);
                   applyFearAura();
                 }
               } else if (trapKey === "arrow-gallery") {
                 const arrowDamage = trapDamage(t2, trapBase, h.x, h.y, 0);
                 setStatus(h, "arrow", 1, arrowDamage);
-                push(`Hero#${h.id} is targeted by arrows.`);
+                push(`${invaderLabel(h)} is targeted by arrows.`);
               }
 
               t2.trapChargesRemaining = Math.max(0, charges - 1);
               t2.trapCooldownRemaining = trapCooldownAfterTrigger(trapKey, trapStar);
               push(
-                `${TRAP_MAP[trapKey]?.name || "Trap"} (${formatStars(trapStar)}) triggers for ${dealt} dmg, charges ${t2.trapChargesRemaining} left, cd ${t2.trapCooldownRemaining}.`
+                `${TRAP_MAP[trapKey]?.name || "Trap"} (${formatStars(trapStar)}) -> ${invaderLabel(h)}: base ${trapBase}, star x${(1 + 0.25 * (trapStar - 1)).toFixed(2)}, rank +${(trapRank - 1) * 2}, final ${dealt}, charges ${t2.trapChargesRemaining}, cd ${t2.trapCooldownRemaining}.`
               );
 
               if (trapKey === "shatter-floor") {
@@ -3013,7 +3543,7 @@ function defaultState() {
           const poisonVal = getStatus(h, "poison").value || 2;
           const poisonDmg = applyHeroDamage(h, poisonVal, h.x, h.y, false);
           consumeStatus(h, "poison");
-          push(`Hero#${h.id} takes ${poisonDmg} poison damage. Hero HP ${Math.max(0, h.hp)}`);
+          push(`${invaderLabel(h)} takes ${poisonDmg} poison damage. HP ${Math.max(0, h.hp)}`);
           if (h.hp <= 0) {
             heroDies(h, "poison");
             continue;
@@ -3023,7 +3553,7 @@ function defaultState() {
         if (getStatus(h, "arrow").turns > 0) {
           const arrowDmg = applyHeroDamage(h, getStatus(h, "arrow").value || 3, h.x, h.y, false);
           consumeStatus(h, "arrow");
-          push(`Hero#${h.id} is hit by arrows for ${arrowDmg}. Hero HP ${Math.max(0, h.hp)}`);
+          push(`${invaderLabel(h)} is hit by arrows for ${arrowDmg}. HP ${Math.max(0, h.hp)}`);
           if (h.hp <= 0) {
             heroDies(h, "arrows");
             continue;
@@ -3047,7 +3577,7 @@ function defaultState() {
           if (t.room === "trap" && t.trapCooldownRemaining > 0) {
             t.trapCooldownRemaining = Math.max(0, t.trapCooldownRemaining - 1);
           }
-          const sigilTier = utilityTier(grid, x, y, "blood-sigil");
+          const sigilTier = effectiveUtilityTier(x, y, "blood-sigil");
           if (t.room === "monster" && t.monsters.length > 0) {
             if (sigilTier > 0) {
               const heal = 2 + (sigilTier - 1);
@@ -3093,6 +3623,7 @@ function defaultState() {
           turnsSurvived,
           raidKills,
           scoutQueue: [],
+          activeRaidBoons: [],
         };
         nextState = addLog(nextState, "CORE DESTROYED - Defeat.");
         for (let i = logLines.length - 1; i >= 0; i--) nextState = addLog(nextState, logLines[i]);
@@ -3119,7 +3650,7 @@ function defaultState() {
         const turnsSpent = Math.max(0, turnsSurvived - (s.raidStartTurn || 0));
         const essenceGained = Math.max(0, essence - (s.raidStartEssence || 0));
         const soulshardsGained = Math.max(0, soulshards - (s.raidStartShards || 0));
-        const coreDamage = Math.max(0, (s.raidStartCoreHp || CORE_MAX_HP) - coreHp);
+        const coreDamage = Math.max(0, (s.raidStartCoreHp || getCoreMaxHp(s)) - coreHp);
         push(`Raid ended. Build phase.`);
         push(`Raid report: ${turnsSpent} turns, ${raidKills} kills, +${essenceGained} Essence, +${soulshardsGained} Soulshards, ${coreDamage} core damage.`);
         scoutQueue = [];
@@ -3144,6 +3675,7 @@ function defaultState() {
         scoutQueue,
         partyQueue,
         dpRegenCounter,
+        activeRaidBoons: raidActive ? raidBoons : [],
       };
       nextState.dominionEffects = { monsterAtk: 0, monsterFirstStrike: false, pulsePending: false };
 
@@ -3200,6 +3732,7 @@ function defaultState() {
         if (councilDue) {
           const council = nextState.council || { active: false, day: null, roster: [], lastRoster: [], declinedStreak: 0 };
           const roster = buildCouncilRoster(council.lastRoster || []);
+          const councilFavor = nextState.councilFavor || {};
           nextState.council = {
             ...council,
             active: true,
@@ -3210,13 +3743,18 @@ function defaultState() {
           const punitive = council.declinedStreak >= 2;
           nextState.nextRaidType = punitive ? "council" : "elite";
           nextState.pendingPunitiveRaid = punitive;
+          nextState.pendingCouncilRaid = punitive ? buildCouncilRaidFromRoster(roster, nextState.day, councilFavor) : null;
           nextState.councilSession = buildCouncilSession(roster, nextState.day);
           nextState = addLog(nextState, "Council of the Dungeonlords convenes. Attend or decline.");
         }
         if (nextState.councilSession && nextState.councilSession.day !== nextState.day) {
           nextState.councilSession = null;
         }
+        if (!councilDue) {
+          nextState.pendingCouncilRaid = nextState.pendingPunitiveRaid ? nextState.pendingCouncilRaid : null;
+        }
         nextState.raidType = null;
+        nextState.activeRaidBoons = [];
         nextState = addLog(nextState, `Day ${nextState.day} begins. Build phase.`);
         if (nextState.dailyEvent?.key && nextState.dailyEvent.key !== "none") {
           nextState = addLog(nextState, `Daily Event: ${nextState.dailyEvent.name} - ${nextState.dailyEvent.desc}`);
@@ -3227,7 +3765,7 @@ function defaultState() {
         const turnsSpent = Math.max(0, turnsSurvived - (s.raidStartTurn || 0));
         const essenceGained = Math.max(0, essence - (s.raidStartEssence || 0));
         const soulshardsGained = Math.max(0, soulshards - (s.raidStartShards || 0));
-        const coreDamage = Math.max(0, (s.raidStartCoreHp || CORE_MAX_HP) - coreHp);
+        const coreDamage = Math.max(0, (s.raidStartCoreHp || getCoreMaxHp(s)) - coreHp);
         nextState.lastRaidReport = {
           turns: turnsSpent,
           kills: raidKills,
@@ -3259,7 +3797,7 @@ function defaultState() {
   function resetRun() {
     setState((s) => {
       const grid = resetLayoutKeepStructure(s.grid);
-      const startingParty = generateHeroParty(0, null, 1);
+      const startingParty = generateRaidParty(0, null, 1);
       const dailyEvent = rollDailyEvent();
       const traderStock = generateTraderStock(0, 1);
       const shadyStock = generateArtifactStock();
@@ -3274,9 +3812,15 @@ function defaultState() {
           dominion: 0,
           darkcrystals: 0,
         },
+        doctrines: {
+          trap: 0,
+          monster: 0,
+          utility: 0,
+          core: 0,
+        },
         artifacts: [],
         shadyStock,
-        coreHp: CORE_MAX_HP,
+        coreHp: getCoreMaxHp({ doctrines: { trap: 0, monster: 0, utility: 0, core: 0 } }),
         coreShield: 0,
         heroes: [],
         nextHeroId: 1,
@@ -3287,7 +3831,7 @@ function defaultState() {
         raidStartTurn: 0,
         raidStartEssence: 0,
         raidStartShards: 30,
-        raidStartCoreHp: CORE_MAX_HP,
+        raidStartCoreHp: getCoreMaxHp({ doctrines: { trap: 0, monster: 0, utility: 0, core: 0 } }),
         raidKills: 0,
         raidType: null,
         lastRaidReport: null,
@@ -3313,10 +3857,14 @@ function defaultState() {
           lastRoster: [],
           declinedStreak: 0,
         },
+        councilFavor: {},
         councilSession: null,
         councilQuest: null,
         nextRaidType: null,
         pendingPunitiveRaid: false,
+        pendingCouncilRaid: null,
+        nextRaidBoons: [],
+        activeRaidBoons: [],
         fleshMarketUntilDay: 0,
         evolutionOffer: null,
       };
@@ -3358,18 +3906,35 @@ function defaultState() {
       const council = { ...s.council, active: false, declinedStreak: 0 };
       const nextRaidType = "elite";
       const councilSession = s.councilSession ? { ...s.councilSession, status: "attended" } : s.councilSession;
-      let ns = { ...s, council, nextRaidType, pendingPunitiveRaid: false, councilSession };
+      let councilFavor = { ...(s.councilFavor || {}) };
+      for (const member of council.roster || []) {
+        councilFavor = applyCouncilFavorShift(councilFavor, member.key, 1);
+      }
+      let ns = {
+        ...s,
+        council,
+        councilFavor,
+        nextRaidType,
+        pendingPunitiveRaid: false,
+        pendingCouncilRaid: null,
+        councilSession,
+      };
       ns = addLog(ns, "You attended the Council.");
       if (council.roster?.length) {
         const names = council.roster.map((m) => m.name).join(", ");
         ns = addLog(ns, `Council attendees: ${names}.`);
       }
       if (s.phase === "battle") {
-        const party = generateHeroParty(s.turnsSurvived, nextRaidType, s.day);
+        const party = generateRaidParty(s.turnsSurvived, nextRaidType, s.day, {
+          councilRaid: null,
+          raidBoons: s.nextRaidBoons,
+        });
         let scoutQueue = [];
-        const mirrorTier = maxUtilityTier(s.grid, "scout-mirror");
+        const doctrineEffects = getDoctrineEffects(s.doctrines);
+        const raidMods = buildRaidModifiers(s.nextRaidBoons);
+        const mirrorTier = maxUtilityTier(s.grid, "scout-mirror") + doctrineEffects.utilityScoutBonus;
         if (mirrorTier > 0) {
-          const revealCount = Math.min(party.length, 2 + (mirrorTier - 1));
+          const revealCount = Math.min(party.length, 2 + (mirrorTier - 1) + raidMods.scoutRevealBonus);
           scoutQueue = party.slice(0, revealCount).map((h) => ({ ...h }));
         }
         ns = {
@@ -3394,17 +3959,35 @@ function defaultState() {
       const council = { ...s.council, active: false, declinedStreak };
       const nextRaidType = declinedStreak >= 2 ? "council" : "elite";
       const councilSession = s.councilSession ? { ...s.councilSession, status: "declined" } : s.councilSession;
-      let ns = { ...s, council, nextRaidType, pendingPunitiveRaid: declinedStreak >= 2, councilSession };
+      let councilFavor = { ...(s.councilFavor || {}) };
+      for (const member of council.roster || []) {
+        councilFavor = applyCouncilFavorShift(councilFavor, member.key, -1);
+      }
+      const pendingCouncilRaid = declinedStreak >= 2 ? buildCouncilRaidFromRoster(council.roster, s.day, councilFavor) : null;
+      let ns = {
+        ...s,
+        council,
+        councilFavor,
+        nextRaidType,
+        pendingPunitiveRaid: declinedStreak >= 2,
+        pendingCouncilRaid,
+        councilSession,
+      };
       ns = addLog(ns, "You declined the Council.");
       if (declinedStreak >= 2) {
-        ns = addLog(ns, "The Council prepares a punitive raid.");
+        ns = addLog(ns, `The Council prepares a punitive raid. ${pendingCouncilRaid?.label || ""}`.trim());
       }
       if (s.phase === "battle") {
-        const party = generateHeroParty(s.turnsSurvived, nextRaidType, s.day);
+        const party = generateRaidParty(s.turnsSurvived, nextRaidType, s.day, {
+          councilRaid: pendingCouncilRaid,
+          raidBoons: s.nextRaidBoons,
+        });
         let scoutQueue = [];
-        const mirrorTier = maxUtilityTier(s.grid, "scout-mirror");
+        const doctrineEffects = getDoctrineEffects(s.doctrines);
+        const raidMods = buildRaidModifiers(s.nextRaidBoons);
+        const mirrorTier = maxUtilityTier(s.grid, "scout-mirror") + doctrineEffects.utilityScoutBonus;
         if (mirrorTier > 0) {
-          const revealCount = Math.min(party.length, 2 + (mirrorTier - 1));
+          const revealCount = Math.min(party.length, 2 + (mirrorTier - 1) + raidMods.scoutRevealBonus);
           scoutQueue = party.slice(0, revealCount).map((h) => ({ ...h }));
         }
         ns = {
@@ -3440,12 +4023,14 @@ function defaultState() {
       } else {
         currency.essence += offer.amount;
       }
+      ns.councilFavor = applyCouncilFavorShift(s.councilFavor || {}, offer.sponsorKey, 2);
+      ns.nextRaidBoons = [...(s.nextRaidBoons || []), offer.raidEffect].filter(Boolean);
       ns.currency = currency;
       ns.councilSession = {
         ...s.councilSession,
         offers: (s.councilSession.offers || []).filter((o) => o.id !== offerId),
       };
-      return addLog(ns, `Council boon received: ${offer.title}.`);
+      return addLog(ns, `Council boon received: ${offer.title} from ${offer.sponsorName}. ${offer.raidEffect?.desc || ""}`.trim());
     });
   }
 
@@ -3593,12 +4178,14 @@ function defaultState() {
   function tileClass(t, x, y) {
     const sel = state.selected.x === x && state.selected.y === y ? " selected" : "";
     const tier = t.room ? " tier-" + (t.roomTier || 1) : "";
-    if (t.entrance) return "tile entrance" + sel;
-    if (t.core) return "tile core" + sel;
-    if (t.room === "trap") return "tile trap" + tier + sel;
-    if (t.room === "monster") return "tile monster" + tier + sel;
-    if (t.room === "utility") return "tile utility" + tier + sel;
-    return "tile" + sel;
+    const path = previewPathKeys.has(keyOf(x, y)) ? " path-preview" : "";
+    const lure = lureCandidateKeys.has(keyOf(x, y)) ? " lure-candidate" : "";
+    if (t.entrance) return "tile entrance" + sel + path + lure;
+    if (t.core) return "tile core" + sel + path + lure;
+    if (t.room === "trap") return "tile trap" + tier + sel + path + lure;
+    if (t.room === "monster") return "tile monster" + tier + sel + path + lure;
+    if (t.room === "utility") return "tile utility" + tier + sel + path + lure;
+    return "tile" + sel + path + lure;
   }
 
   function roomTypeName(tile) {
@@ -3625,7 +4212,7 @@ function defaultState() {
     }
     if (tile.room === "monster") {
       const tier = tile.roomTier || 1;
-      const cap = monsterRoomCap(tier);
+      const cap = monsterRoomCap(tier) + doctrineEffects.monsterRoomCapBonus;
       if (tile.roomType === "training-den") {
         return `Tier ${tier}: Monsters placed here gain +${1 + (tier - 1)} ATK permanently. Cap ${cap}.`;
       }
@@ -3635,7 +4222,7 @@ function defaultState() {
       return `${MONSTER_ROOM_MAP[tile.roomType]?.desc || "Monster Room"} Cap ${cap}.`;
     }
     if (tile.room === "utility") {
-      const tier = tile.roomTier || 1;
+      const tier = (tile.roomTier || 1) + doctrineEffects.utilityPotencyBonus + doctrineEffects.utilityPotencyBonusExtra;
       if (tile.roomType === "soul-altar") {
         return `Tier ${tier}: Hero dies within 1 tile: +${15 + (tier - 1) * 5} Essence.`;
       }
@@ -3720,6 +4307,84 @@ function defaultState() {
   function safeEntityLabel(entity, fallback) {
     return entity ? entity : fallback;
   }
+
+  function effectiveMonsterRoomCap(tile) {
+    if (!tile || tile.room !== "monster") return "n/a";
+    return monsterRoomCap(tile.roomTier || 1) + doctrineEffects.monsterRoomCapBonus;
+  }
+
+  function effectiveUtilityTierAt(x, y, key) {
+    const baseTier = utilityTier(state.grid, x, y, key);
+    if (baseTier <= 0) return 0;
+    return baseTier + doctrineEffects.utilityPotencyBonus + doctrineEffects.utilityPotencyBonusExtra;
+  }
+
+  function describeTileAuras(x, y) {
+    return UTILITY_ROOMS.map((room) => ({ room, tier: effectiveUtilityTierAt(x, y, room.key) }))
+      .filter((entry) => entry.tier > 0)
+      .map((entry) => `${entry.room.name} T${entry.tier}`);
+  }
+
+  function projectedTrapDamage(tile, x, y) {
+    if (!tile || tile.room !== "trap") return 0;
+    const trap = TRAP_MAP[tile.trapType];
+    if (!trap) return 0;
+    const star = clampMonsterStar(tile.trapStar ?? tile.trapStars ?? 1);
+    const rank = Math.max(1, tile.trapRank ?? tile.roomTier ?? 1);
+    const wardTier = effectiveUtilityTierAt(x, y, "ward-lantern");
+    let mult = 1 + (wardTier > 0 ? 0.25 + 0.05 * (wardTier - 1) : 0);
+    if (state.artifacts.some((artifact) => artifact.key === "wicked-gears")) mult += 0.15;
+    return Math.max(
+      0,
+      Math.round((trap.baseDmg * (1 + 0.25 * (star - 1)) + (rank - 1) * 2 + doctrineEffects.trapFlatDamage) * mult)
+    );
+  }
+
+  function tileStateChip(tile, x, y) {
+    if (tile.room === "trap") {
+      if (tile.trapBroken) return "BRK";
+      if (!tile.trap) return "OFF";
+      const cooldown = Math.max(0, tile.trapCooldownRemaining ?? 0);
+      if (cooldown > 0) return `CD${cooldown}`;
+      return `R${Math.max(0, tile.trapChargesRemaining ?? 0)}`;
+    }
+    if (tile.room === "monster") {
+      if ((tile.monsters || []).some((monster) => monster.hp < safeEntityMaxHp(monster))) return "W";
+      if ((tile.monsters || []).length > 0) return `M${tile.monsters.length}`;
+    }
+    return "";
+  }
+
+  function tileAuraChip(x, y) {
+    return describeTileAuras(x, y).length > 0 ? "+" : "";
+  }
+
+  const selectedTileAuras = describeTileAuras(state.selected.x, state.selected.y);
+  const selectedHeroIntent = selectedHeroes[0] && core ? chooseInvaderMove(selectedHeroes[0], state.grid, core, state.activeRaidBoons, doctrineEffects) : null;
+
+  const previewPathKeys = useMemo(() => {
+    if (selectedHeroes[0] && core) {
+      const path = aStarPath(state.grid, { x: selectedHeroes[0].x, y: selectedHeroes[0].y }, core);
+      return new Set((path || []).map((pos) => keyOf(pos.x, pos.y)));
+    }
+    if (entrance && core) {
+      const path = aStarPath(state.grid, entrance, core);
+      return new Set((path || []).map((pos) => keyOf(pos.x, pos.y)));
+    }
+    return new Set();
+  }, [selectedHeroes, state.grid, core, entrance]);
+
+  const lureCandidateKeys = useMemo(() => {
+    if (!selectedHeroes[0] || !core) return new Set();
+    const choice = chooseInvaderMove(selectedHeroes[0], state.grid, core, state.activeRaidBoons, doctrineEffects);
+    return new Set(
+      (choice.options || [])
+        .filter((option) => option.lure >= 4 && !option.tile.core)
+        .map((option) => keyOf(option.next.x, option.next.y))
+    );
+  }, [selectedHeroes, state.grid, core, state.activeRaidBoons, doctrineEffects]);
+
+  const pendingRaidMeta = raidTypeMeta(state.pendingPunitiveRaid ? "council" : state.nextRaidType, state.pendingCouncilRaid);
 
   const invPreview = state.invMonsters.slice(0, 3);
 
@@ -3809,7 +4474,7 @@ function defaultState() {
           <span className="pill">Room Cap: {maxRooms}</span>
           <span className="pill">Next Upgrade: {25 + dungeonLevel * 15} Essence</span>
           <span className="pill">
-            Core HP: {Math.max(0, state.coreHp)} / {CORE_MAX_HP}
+            Core HP: {Math.max(0, state.coreHp)} / {coreMaxHp}
           </span>
           <span className="pill">Core Shield: {state.coreShield}</span>
           <span className="pill">Turns: {state.turnsSurvived}</span>
@@ -4043,9 +4708,13 @@ function defaultState() {
                       const heroesHere = heroesByTile.get(keyOf(x, y)) || [];
                       const monstersHere = t.room === "monster" ? t.monsters.length : 0;
                       const glyph = getTileGlyph(t, heroesHere.length, monstersHere);
+                      const stateChip = tileStateChip(t, x, y);
+                      const auraChip = tileAuraChip(x, y);
                       if (!glyph.text && !glyph.subtext) return null;
                       return (
                         <>
+                          {stateChip ? <span className="tileChip tileChipState">{stateChip}</span> : null}
+                          {auraChip ? <span className="tileChip tileChipAura">{auraChip}</span> : null}
                           {glyph.text ? <span className={`tileGlyph ${glyph.tone || ""}`}>{glyph.text}</span> : null}
                           {glyph.subtext ? <span className="tileGlyphSub">{glyph.subtext}</span> : null}
                         </>
@@ -4109,6 +4778,35 @@ function defaultState() {
             </div>
 
             <div className="card">
+              <div className="cardTitle">Raid Forecast</div>
+              <div className="entityName">{pendingRaidMeta.label}</div>
+              <div className="muted">{pendingRaidMeta.desc}</div>
+              {state.pendingCouncilRaid?.attackers?.length ? (
+                <div className="entityList">
+                  {state.pendingCouncilRaid.attackers.map((attacker) => (
+                    <div className="entityItem" key={`raid-attacker-${attacker.key}`}>
+                      <div className="entityName">{attacker.memberName}</div>
+                      <div className="entityMeta">{attacker.raidName}</div>
+                      <div className="muted">{attacker.raidModifier}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {state.nextRaidBoons?.length ? (
+                <div className="entityList">
+                  {state.nextRaidBoons.map((boon, idx) => (
+                    <div className="entityItem" key={`raid-boon-${idx}`}>
+                      <div className="entityName">{boon.label || "Raid Influence"}</div>
+                      <div className="entityMeta">{boon.desc}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="muted small">No stored council leverage for the next raid.</div>
+              )}
+            </div>
+
+            <div className="card">
               <div className="cardTitle">Currencies</div>
               <div className="kv">
                 <div>Soulshards</div>
@@ -4121,6 +4819,30 @@ function defaultState() {
                 <div>{state.currency.evolution}</div>
                 <div>Darkcrystals</div>
                 <div>{state.currency.darkcrystals}</div>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="cardTitle">Doctrine Tree</div>
+              <div className="entityList">
+                {Object.values(DOCTRINE_RULES).map((rule) => {
+                  const currentLevel = state.doctrines?.[rule.key] || 0;
+                  const nextLevel = rule.levels[currentLevel] || null;
+                  return (
+                    <div className="entityItem" key={`doctrine-${rule.key}`}>
+                      <div className="entityName">
+                        {rule.name} ({currentLevel}/{rule.levels.length})
+                      </div>
+                      <div className="entityMeta">Uses {rule.currency}. Current: {rule.levels.slice(0, currentLevel).map((level) => level.desc).join(" ") || "No doctrine bonus yet."}</div>
+                      <div className="row">
+                        <button className="btn" onClick={() => upgradeDoctrine(rule.key)} disabled={!nextLevel || locked || !isBuildPhase}>
+                          {nextLevel ? `Upgrade (${nextLevel.cost} ${rule.currency})` : "Maxed"}
+                        </button>
+                        <div className="muted">{nextLevel ? nextLevel.desc : "Mastered."}</div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -4238,9 +4960,11 @@ function defaultState() {
                 <div>Room Tier</div>
                 <div>{selectedTile.room ? selectedTile.roomTier || 1 : "n/a"}</div>
                 <div>Monster Cap</div>
-                <div>{selectedTile.room === "monster" ? monsterRoomCap(selectedTile.roomTier || 1) : "n/a"}</div>
+                <div>{effectiveMonsterRoomCap(selectedTile)}</div>
                 <div>Room Effect</div>
                 <div>{roomTypeDesc(selectedTile) || "n/a"}</div>
+                <div>Readiness</div>
+                <div>{tileStateChip(selectedTile, state.selected.x, state.selected.y) || "n/a"}</div>
                 <div>Trap Armed</div>
                 <div>{selectedTile.room === "trap" ? (selectedTile.trap ? "YES" : "no") : "n/a"}</div>
                 <div>Trap Star</div>
@@ -4253,6 +4977,10 @@ function defaultState() {
                 <div>{selectedTile.room === "trap" ? Math.max(0, selectedTile.trapCooldownRemaining ?? 0) : "n/a"}</div>
                 <div>Trap Broken</div>
                 <div>{selectedTile.room === "trap" ? (selectedTile.trapBroken ? "YES" : "no") : "n/a"}</div>
+                <div>Projected Trap</div>
+                <div>{selectedTile.room === "trap" ? projectedTrapDamage(selectedTile, state.selected.x, state.selected.y) : "n/a"}</div>
+                <div>Nearby Auras</div>
+                <div>{selectedTileAuras.length ? selectedTileAuras.join(", ") : "none"}</div>
                 <div>Heroes Here</div>
                 <div>
                   {selectedHeroes.length ? (
@@ -4260,13 +4988,16 @@ function defaultState() {
                       {selectedHeroes.map((h) => (
                         <div className="entityItem" key={h.id}>
                           <div className="entityName">
-                            {h.name} (#{h.id})
+                            {h.name} ({invaderLabel(h)})
                           </div>
                           <div className="entityMeta">
-                            {safeEntityLabel(h.race, "Unknown")} {safeEntityLabel(h.class, "Hero")} | {formatStars(safeEntityStars(h))} | {safeEntityLabel(h.passive, "None")}
+                            {safeEntityLabel(h.race, "Unknown")} {safeEntityLabel(h.class, "Hero")} | {formatStars(safeEntityStars(h))} | {invaderPassiveSummary(h)}
                           </div>
                           <div className="entityStats">
                             HP {h.hp}/{safeEntityMaxHp(h)} | ATK {h.atk} | DEF {h.def || 0} | SHD {h.shd || 0} | SPD {h.spd || 0}
+                          </div>
+                          <div className="muted">
+                            Behavior {h.archetypeLabel || "Zealot"}{h.memory?.lastIntent ? ` | Intent ${h.memory.lastIntent}` : ""}
                           </div>
                         </div>
                       ))}
@@ -4301,6 +5032,25 @@ function defaultState() {
                   )}
                 </div>
               </div>
+            </div>
+
+            <div className="card">
+              <div className="cardTitle">Path Preview</div>
+              {selectedHeroes[0] && selectedHeroIntent ? (
+                <>
+                  <div className="entityName">{invaderLabel(selectedHeroes[0])}</div>
+                  <div className="entityMeta">
+                    {selectedHeroes[0].archetypeLabel || "Zealot"} | {selectedHeroIntent.intent}
+                  </div>
+                  <div className="muted">
+                    Path tiles glow cyan. Likely lure candidates glow amber.
+                  </div>
+                </>
+              ) : entrance && core ? (
+                <div className="muted">Default entrance-to-core route is highlighted while no invader is selected.</div>
+              ) : (
+                <div className="muted">Place Entrance and Core to preview the main route.</div>
+              )}
             </div>
 
             <div className="card">
@@ -4620,7 +5370,7 @@ function defaultState() {
                 <button className="btn" onClick={beginBattle} disabled={locked || state.movePayload || isBattlePhase}>
                   Begin Battle
                 </button>
-                <div className="muted">Ends build phase and generates the invading party.</div>
+                <div className="muted">Ends build phase and generates the next raid: {pendingRaidMeta.label}.</div>
               </div>
               <div className="row">
                 <button className="btn primary" onClick={startRaid} disabled={!canStartRaid || state.movePayload}>
@@ -4656,11 +5406,12 @@ function defaultState() {
                       <div className="entityItem" key={`party-${h.id}`}>
                         <div className="entityName">{h.name}</div>
                         <div className="entityMeta">
-                          {safeEntityLabel(h.race, "Unknown")} {safeEntityLabel(h.class, "Hero")} | {formatStars(safeEntityStars(h))}
+                          {safeEntityLabel(h.race, "Unknown")} {safeEntityLabel(h.class, "Hero")} | {formatStars(safeEntityStars(h))} | {h.archetypeLabel || "Zealot"}
                         </div>
                         <div className="entityStats">
                           HP {h.hp}/{safeEntityMaxHp(h)} | ATK {h.atk} | DEF {h.def || 0} | SHD {h.shd || 0} | SPD {h.spd || 0}
                         </div>
+                        <div className="muted small">{invaderPassiveSummary(h)}</div>
                       </div>
                     ))}
                 </div>
@@ -4692,11 +5443,12 @@ function defaultState() {
                     <div className="entityItem" key={`scout-${h.id}-${idx}`}>
                       <div className="entityName">{h.name}</div>
                       <div className="entityMeta">
-                        {safeEntityLabel(h.race, "Unknown")} {safeEntityLabel(h.class, "Hero")} | {formatStars(safeEntityStars(h))}
+                        {safeEntityLabel(h.race, "Unknown")} {safeEntityLabel(h.class, "Hero")} | {formatStars(safeEntityStars(h))} | {h.archetypeLabel || "Zealot"}
                       </div>
                       <div className="entityStats">
                         HP {h.hp}/{safeEntityMaxHp(h)} | ATK {h.atk}
                       </div>
+                      <div className="muted small">{invaderPassiveSummary(h)}</div>
                     </div>
                   ))}
                 </div>
