@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import "./App.css";
-import { COUNCIL_RAID_FACTIONS, DOCTRINE_RULES, HERO_ARCHETYPE_RULES, RAID_TYPE_META } from "./gameContent";
+import { COUNCIL_RAID_FACTIONS, DOCTRINE_RULES, HERO_ARCHETYPE_RULES, RAID_TYPE_META, validateGameContent } from "./gameContent";
 
 const W = 8;
 const H = 8;
@@ -27,6 +27,13 @@ const BASE_MONSTER_ROOM_CAP = 3;
 const COUNCIL_INTERVAL = 10;
 const FLESH_MARKET_COST = 100;
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+const ECONOMY_ROLES = [
+  ["Essence", "Build tempo: rooms, upgrades, and trap infrastructure."],
+  ["Soulshards", "Roster growth: trader purchases and monster recruitment pressure."],
+  ["Evolution", "Branch power: doctrine utility and monster evolution choices."],
+  ["Dominion", "Tactical tempo: battle powers that rescue a shaky raid."],
+  ["Darkcrystals", "High-risk investment: core doctrine and Flesh Market leverage."],
+];
 const STAR_MULTIPLIERS = {
   1: 1.0,
   2: 1.35,
@@ -1624,7 +1631,9 @@ function invaderLabel(entity) {
 function invaderPassiveSummary(entity) {
   if (!entity) return "None";
   if (entity.unitKind === "council-raider" && entity.traitPassiveName) {
-    return `${entity.passive} | Trait ${entity.traitPassiveName}`;
+    return String(entity.passive || "").includes(entity.traitPassiveName)
+      ? entity.passive
+      : `${entity.passive || "None"} | Faction Trait ${entity.traitPassiveName}`;
   }
   return entity.passive || "None";
 }
@@ -2003,10 +2012,18 @@ function defaultState() {
   const councilRoster = councilSessionActive ? state.council?.roster || [] : [];
   const focusedCouncilMember = councilRoster.find((m) => m.key === focusedCouncilKey) || councilRoster[0] || null;
 
+  useEffect(() => {
+    if (!councilRoster.length) return;
+    if (!focusedCouncilKey || !councilRoster.some((member) => member.key === focusedCouncilKey)) {
+      setFocusedCouncilKey(councilRoster[0].key);
+    }
+  }, [councilRoster, focusedCouncilKey]);
+
   const { entrance, core } = useMemo(() => findEntranceAndCore(state.grid), [state.grid]);
   const validation = useMemo(() => validateDungeon(state.grid), [state.grid]);
   const roomsPlaced = useMemo(() => countRooms(state.grid), [state.grid]);
   const doctrineEffects = useMemo(() => getDoctrineEffects(state.doctrines || {}), [state.doctrines]);
+  const contentWarnings = useMemo(() => validateGameContent(), []);
   const coreMaxHp = useMemo(() => getCoreMaxHp(state), [state.doctrines]);
   const dungeonLevel = Number.isFinite(state.dungeonLevel) ? state.dungeonLevel : 1;
   const maxRooms = MAX_ROOMS_BASE + (dungeonLevel - 1) * ROOMS_PER_LEVEL;
@@ -2826,7 +2843,7 @@ function defaultState() {
     }
     heroes.push(hero);
     const nextHeroId = Math.max(nextId, hero.id + 1);
-    return { nextHeroId, scoutQueue: queue };
+    return { nextHeroId, scoutQueue: queue, spawned: hero };
   }
 
   function startRaid() {
@@ -2894,6 +2911,8 @@ function defaultState() {
       const doctrineEffects = getDoctrineEffects(s.doctrines);
       const raidMods = buildRaidModifiers(s.nextRaidBoons);
       const mirrorTier = maxUtilityTier(s.grid, "scout-mirror") + doctrineEffects.utilityScoutBonus;
+      const doctrineShield = doctrineEffects.coreShieldBonus || 0;
+      const fortifiedCoreShield = (s.coreShield || 0) + doctrineShield;
       if (mirrorTier > 0) {
         const revealCount = Math.min(partyQueue.length, 2 + (mirrorTier - 1) + raidMods.scoutRevealBonus);
         scoutQueue = partyQueue.slice(0, revealCount).map((h) => ({ ...h }));
@@ -2915,6 +2934,7 @@ function defaultState() {
           raidStartEssence: s.currency.essence,
           raidStartShards: s.currency.soulshards,
           raidStartCoreHp: s.coreHp,
+          coreShield: fortifiedCoreShield,
           raidKills,
           scoutQueue,
           currentParty: party,
@@ -2928,7 +2948,10 @@ function defaultState() {
           activeRaidBoons: [...(s.nextRaidBoons || [])],
         };
         const meta = raidTypeMeta(raidType, s.pendingCouncilRaid);
-        ns = addLog(ns, `Raid started. ${meta.label}. Party size ${party.length}. An invader enters.`);
+        if (doctrineShield > 0) {
+          ns = addLog(ns, `Core Doctrine fortifies the Core with +${doctrineShield} Shield.`);
+        }
+        ns = addLog(ns, `Raid started. ${meta.label}. Party size ${party.length}. ${invaderLabel(spawnResult.spawned)} breaches the Entrance.`);
         if (scoutQueue.length > 0) {
           const previews = scoutQueue
             .map((h) => `${h.name} (${formatStars(safeEntityStars(h))}, ATK ${h.atk}, HP ${h.hp})`)
@@ -2949,6 +2972,7 @@ function defaultState() {
         raidStartEssence: s.currency.essence,
         raidStartShards: s.currency.soulshards,
         raidStartCoreHp: s.coreHp,
+        coreShield: fortifiedCoreShield,
         raidKills,
         scoutQueue,
         currentParty: party,
@@ -2962,6 +2986,9 @@ function defaultState() {
         activeRaidBoons: [...(s.nextRaidBoons || [])],
       };
       const meta = raidTypeMeta(raidType, s.pendingCouncilRaid);
+      if (doctrineShield > 0) {
+        ns = addLog(ns, `Core Doctrine fortifies the Core with +${doctrineShield} Shield.`);
+      }
       ns = addLog(ns, `Raid started. ${meta.label}. Party size ${party.length}. (Cap reached; no spawn yet.)`);
       if (scoutQueue.length > 0) {
         const previews = scoutQueue
@@ -3254,8 +3281,11 @@ function defaultState() {
             }
           }
           coreHp -= heroAtk;
-          const coreDmg = applyHeroDamage(h, DUNGEON_LORD_ATK, h.x, h.y, true);
-          push(`${invaderLabel(h)} hits Core for ${heroAtk}. Core HP ${Math.max(0, coreHp)}. Core retaliates for ${coreDmg}. ${invaderLabel(h)} HP ${Math.max(0, h.hp)}`);
+          const coreCounter = DUNGEON_LORD_ATK + (doctrineEffectsLocal.dungeonlordAtkBonus || 0);
+          const coreDmg = applyHeroDamage(h, coreCounter, h.x, h.y, true);
+          push(
+            `${invaderLabel(h)} hits Core for ${heroAtk}. Core HP ${Math.max(0, coreHp)}. Core retaliates for ${coreDmg} (${DUNGEON_LORD_ATK}${doctrineEffectsLocal.dungeonlordAtkBonus ? `+${doctrineEffectsLocal.dungeonlordAtkBonus}` : ""}). ${invaderLabel(h)} HP ${Math.max(0, h.hp)}`
+          );
 
           if (h.hp <= 0) {
             heroDies(h, "slain at the Core");
@@ -3638,10 +3668,10 @@ function defaultState() {
         nextHeroId = spawnResult.nextHeroId;
         partyQueue = spawnResult.scoutQueue;
         raidRemaining = partyQueue.length;
-        push(`A hero enters. (${raidRemaining} left in this raid)`);
+        push(`${invaderLabel(spawnResult.spawned)} enters. (${raidRemaining} left in this raid)`);
       } else if (raidActive && partyQueue.length > 0 && heroesOut.length >= HERO_CAP) {
         raidRemaining = partyQueue.length;
-        push(`Hero cap reached (${HERO_CAP}). (${raidRemaining} still pending)`);
+        push(`Invader cap reached (${HERO_CAP}). (${raidRemaining} still pending)`);
       }
 
       // AUTO-STOP (finite raid ends only when none left to spawn AND none alive)
@@ -4024,7 +4054,7 @@ function defaultState() {
         currency.essence += offer.amount;
       }
       ns.councilFavor = applyCouncilFavorShift(s.councilFavor || {}, offer.sponsorKey, 2);
-      ns.nextRaidBoons = [...(s.nextRaidBoons || []), offer.raidEffect].filter(Boolean);
+      ns.nextRaidBoons = [...(s.nextRaidBoons || []), { ...(offer.raidEffect || {}), sponsorKey: offer.sponsorKey, sponsorName: offer.sponsorName }].filter(Boolean);
       ns.currency = currency;
       ns.councilSession = {
         ...s.councilSession,
@@ -4042,7 +4072,8 @@ function defaultState() {
       if (!quest) return s;
       const councilQuest = { ...quest, active: true };
       const councilSession = { ...s.councilSession, quest: null };
-      return addLog({ ...s, councilQuest, councilSession }, `Council quest accepted: ${quest.title}.`);
+      const councilFavor = applyCouncilFavorShift(s.councilFavor || {}, quest.sponsorKey, 1);
+      return addLog({ ...s, councilQuest, councilSession, councilFavor }, `Council quest accepted: ${quest.title} (${quest.sponsorName}).`);
     });
   }
 
@@ -4205,9 +4236,9 @@ function defaultState() {
       const base = trap.baseDmg || 0;
       const star = clampMonsterStar(tile.trapStar ?? tile.trapStars ?? 1);
       const rank = Math.max(1, tile.trapRank ?? tier);
-      const scaled = Math.max(0, Math.round(base * (1 + 0.25 * (star - 1)) + (rank - 1) * 2));
-      const charges = trapChargesForStar(star);
-      const cooldown = trapCooldownAfterTrigger(tile.trapType, star);
+      const scaled = Math.max(0, Math.round(base * (1 + 0.25 * (star - 1)) + (rank - 1) * 2 + doctrineEffects.trapFlatDamage));
+      const charges = trapChargesForStar(star, doctrineEffects);
+      const cooldown = trapCooldownAfterTrigger(tile.trapType, star, doctrineEffects);
       return `${trap.desc} Tier ${tier}. ${formatStars(star)} / Rank ${rank}. Trigger ${scaled} dmg, ${charges} charge(s), cooldown ${cooldown}.`;
     }
     if (tile.room === "monster") {
@@ -4361,18 +4392,24 @@ function defaultState() {
 
   const selectedTileAuras = describeTileAuras(state.selected.x, state.selected.y);
   const selectedHeroIntent = selectedHeroes[0] && core ? chooseInvaderMove(selectedHeroes[0], state.grid, core, state.activeRaidBoons, doctrineEffects) : null;
+  const focusedCouncilFavor = focusedCouncilMember ? state.councilFavor?.[focusedCouncilMember.key] || 0 : 0;
+  const focusedCouncilBoons = focusedCouncilMember
+    ? (state.nextRaidBoons || []).filter((boon) => boon.sponsorKey === focusedCouncilMember.key)
+    : [];
 
   const previewPathKeys = useMemo(() => {
     if (selectedHeroes[0] && core) {
-      const path = aStarPath(state.grid, { x: selectedHeroes[0].x, y: selectedHeroes[0].y }, core);
-      return new Set((path || []).map((pos) => keyOf(pos.x, pos.y)));
+      const choice = chooseInvaderMove(selectedHeroes[0], state.grid, core, state.activeRaidBoons, doctrineEffects);
+      const current = keyOf(selectedHeroes[0].x, selectedHeroes[0].y);
+      const routed = choice?.next ? aStarPath(state.grid, choice.next, core) || [choice.next] : aStarPath(state.grid, { x: selectedHeroes[0].x, y: selectedHeroes[0].y }, core);
+      return new Set([current, ...(routed || []).map((pos) => keyOf(pos.x, pos.y))]);
     }
     if (entrance && core) {
       const path = aStarPath(state.grid, entrance, core);
       return new Set((path || []).map((pos) => keyOf(pos.x, pos.y)));
     }
     return new Set();
-  }, [selectedHeroes, state.grid, core, entrance]);
+  }, [selectedHeroes, state.grid, core, entrance, state.activeRaidBoons, doctrineEffects]);
 
   const lureCandidateKeys = useMemo(() => {
     if (!selectedHeroes[0] || !core) return new Set();
@@ -4597,13 +4634,22 @@ function defaultState() {
                     <div className="entityMeta">
                       {focusedCouncilMember.title} - {focusedCouncilMember.theme}
                     </div>
+                    <div className="row">
+                      <span className={`badge ${focusedCouncilFavor > 0 ? "favorGood" : focusedCouncilFavor < 0 ? "favorBad" : "favorNeutral"}`}>
+                        Favor {focusedCouncilFavor >= 0 ? `+${focusedCouncilFavor}` : focusedCouncilFavor}
+                      </span>
+                      <div className="muted">{focusedCouncilMember.role}</div>
+                    </div>
                     <div className="muted">Personality: {focusedCouncilMember.personality}</div>
                     <div className="muted">Current Deal: {focusedCouncilMember.deal}</div>
                     <div className="muted">
                       Rivalries:{" "}
-                      {focusedCouncilMember.rivalries
+                      {(focusedCouncilMember.rivalries || [])
                         .map((r) => COUNCIL_MEMBERS.find((m) => m.key === r)?.name || r)
                         .join(", ")}
+                    </div>
+                    <div className="muted">
+                      Leverage in next raid: {focusedCouncilBoons.length ? focusedCouncilBoons.map((boon) => boon.label).join(", ") : "none"}
                     </div>
                   </>
                 ) : (
@@ -4637,9 +4683,11 @@ function defaultState() {
                     {state.councilSession.offers.map((o) => (
                       <div className="entityItem" key={o.id}>
                         <div className="entityName">{o.title}</div>
+                        <div className="entityMeta">{o.sponsorName}</div>
                         <div className="entityMeta">
                           {o.desc} ({o.type === "monster" ? "Recruit" : `+${o.amount}`})
                         </div>
+                        <div className="muted small">{o.raidEffect?.desc || "No raid leverage."}</div>
                         <div className="row">
                           <button className="btn" onClick={() => acceptCouncilOffer(o.id)}>
                             Accept
@@ -4666,6 +4714,7 @@ function defaultState() {
                   <>
                     <div className="entityName">{state.councilSession.quest.title}</div>
                     <div className="entityMeta">{state.councilSession.quest.desc}</div>
+                    <div className="muted">{state.councilSession.quest.sponsorName}</div>
                     <div className="muted">
                       Reward: +{state.councilSession.quest.reward.amount} {state.councilSession.quest.reward.type}
                     </div>
@@ -4710,7 +4759,7 @@ function defaultState() {
                       const glyph = getTileGlyph(t, heroesHere.length, monstersHere);
                       const stateChip = tileStateChip(t, x, y);
                       const auraChip = tileAuraChip(x, y);
-                      if (!glyph.text && !glyph.subtext) return null;
+                      if (!glyph.text && !glyph.subtext && !stateChip && !auraChip) return null;
                       return (
                         <>
                           {stateChip ? <span className="tileChip tileChipState">{stateChip}</span> : null}
@@ -4797,6 +4846,7 @@ function defaultState() {
                   {state.nextRaidBoons.map((boon, idx) => (
                     <div className="entityItem" key={`raid-boon-${idx}`}>
                       <div className="entityName">{boon.label || "Raid Influence"}</div>
+                      <div className="entityMeta">{boon.sponsorName || "Council leverage"}</div>
                       <div className="entityMeta">{boon.desc}</div>
                     </div>
                   ))}
@@ -4819,6 +4869,18 @@ function defaultState() {
                 <div>{state.currency.evolution}</div>
                 <div>Darkcrystals</div>
                 <div>{state.currency.darkcrystals}</div>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="cardTitle">Economy Roles</div>
+              <div className="entityList">
+                {ECONOMY_ROLES.map(([name, desc]) => (
+                  <div className="entityItem" key={`economy-${name}`}>
+                    <div className="entityName">{name}</div>
+                    <div className="entityMeta">{desc}</div>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -4858,7 +4920,9 @@ function defaultState() {
                           {m.name} - {m.title}
                         </div>
                         <div className="entityMeta">{m.theme}</div>
-                        <div className="muted">{m.role}</div>
+                        <div className="muted">
+                          Favor {(state.councilFavor?.[m.key] || 0) >= 0 ? `+${state.councilFavor?.[m.key] || 0}` : state.councilFavor?.[m.key] || 0} | {m.role}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -4997,7 +5061,7 @@ function defaultState() {
                             HP {h.hp}/{safeEntityMaxHp(h)} | ATK {h.atk} | DEF {h.def || 0} | SHD {h.shd || 0} | SPD {h.spd || 0}
                           </div>
                           <div className="muted">
-                            Behavior {h.archetypeLabel || "Zealot"}{h.memory?.lastIntent ? ` | Intent ${h.memory.lastIntent}` : ""}
+                            Origin {h.raidOriginLabel || "Hero Raid"}{h.factionName ? ` | ${h.factionName}` : ""} | Behavior {h.archetypeLabel || "Zealot"}{h.memory?.lastIntent ? ` | Intent ${h.memory.lastIntent}` : ""}
                           </div>
                         </div>
                       ))}
@@ -5138,11 +5202,11 @@ function defaultState() {
     setActiveTab("dungeon");
   }}
   disabled={locked || state.movePayload || !isBuildPhase}
->
+                >
   Build Monster Room
 </button>
 
-                <div className="muted">Up to {monsterRoomCap(1)} monsters inside.</div>
+                <div className="muted">Up to {monsterRoomCap(1) + doctrineEffects.monsterRoomCapBonus} monsters inside.</div>
               </div>
               <div className="row">
                 <select
@@ -5412,6 +5476,7 @@ function defaultState() {
                           HP {h.hp}/{safeEntityMaxHp(h)} | ATK {h.atk} | DEF {h.def || 0} | SHD {h.shd || 0} | SPD {h.spd || 0}
                         </div>
                         <div className="muted small">{invaderPassiveSummary(h)}</div>
+                        <div className="muted small">{h.raidOriginLabel || "Hero Raid"}{h.factionName ? ` | ${h.factionName}` : ""}</div>
                       </div>
                     ))}
                 </div>
@@ -5449,6 +5514,7 @@ function defaultState() {
                         HP {h.hp}/{safeEntityMaxHp(h)} | ATK {h.atk}
                       </div>
                       <div className="muted small">{invaderPassiveSummary(h)}</div>
+                      <div className="muted small">{h.raidOriginLabel || "Hero Raid"}{h.factionName ? ` | ${h.factionName}` : ""}</div>
                     </div>
                   ))}
                 </div>
@@ -5708,9 +5774,11 @@ function defaultState() {
                         {state.councilSession.offers.map((o) => (
                           <div className="entityItem" key={o.id}>
                             <div className="entityName">{o.title}</div>
+                            <div className="entityMeta">{o.sponsorName}</div>
                             <div className="entityMeta">
                               {o.desc} ({o.type === "monster" ? "Recruit" : `+${o.amount}`})
                             </div>
+                            <div className="muted small">{o.raidEffect?.desc || "No raid leverage."}</div>
                             <div className="row">
                               <button className="btn" onClick={() => acceptCouncilOffer(o.id)}>
                                 Accept
@@ -5741,6 +5809,7 @@ function defaultState() {
                     <>
                       <div className="entityName">{state.councilSession.quest.title}</div>
                       <div className="entityMeta">{state.councilSession.quest.desc}</div>
+                      <div className="muted">{state.councilSession.quest.sponsorName}</div>
                       <div className="muted">
                         Reward: +{state.councilSession.quest.reward.amount} {state.councilSession.quest.reward.type}
                       </div>
@@ -5760,6 +5829,18 @@ function defaultState() {
                 <div className="muted">The Council is not in session.</div>
               </div>
             )}
+            {contentWarnings.length ? (
+              <div className="card">
+                <div className="cardTitle">Content Validation</div>
+                <div className="entityList">
+                  {contentWarnings.map((warning, idx) => (
+                    <div className="entityItem" key={`content-warning-${idx}`}>
+                      <div className="entityMeta">{warning}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         </section>
 

@@ -231,3 +231,42 @@ export const DOCTRINE_RULES = {
     ],
   },
 };
+
+export function validateGameContent() {
+  const warnings = [];
+
+  for (const [key, rule] of Object.entries(HERO_ARCHETYPE_RULES)) {
+    if (!rule.weights || typeof rule.weights.core !== "number") {
+      warnings.push(`Hero archetype "${key}" is missing score weights.`);
+    }
+  }
+
+  for (const [key, rule] of Object.entries(DOCTRINE_RULES)) {
+    if (!Array.isArray(rule.levels) || rule.levels.length === 0) {
+      warnings.push(`Doctrine "${key}" has no levels configured.`);
+      continue;
+    }
+    rule.levels.forEach((level, idx) => {
+      if (!Number.isFinite(level.cost)) {
+        warnings.push(`Doctrine "${key}" level ${idx + 1} has no numeric cost.`);
+      }
+      if (!level.desc) {
+        warnings.push(`Doctrine "${key}" level ${idx + 1} is missing a description.`);
+      }
+    });
+  }
+
+  for (const [key, faction] of Object.entries(COUNCIL_RAID_FACTIONS)) {
+    if (!Array.isArray(faction.monsterPool) || faction.monsterPool.length === 0) {
+      warnings.push(`Council faction "${key}" has no monster pool.`);
+    }
+    if (!Array.isArray(faction.classPool) || faction.classPool.length === 0) {
+      warnings.push(`Council faction "${key}" has no class pool.`);
+    }
+    if (!Array.isArray(faction.passiveBias) || faction.passiveBias.length === 0) {
+      warnings.push(`Council faction "${key}" has no passive bias list.`);
+    }
+  }
+
+  return warnings;
+}
