@@ -1644,6 +1644,8 @@ function chooseInvaderMove(entity, grid, corePos, raidBoons = [], doctrineEffect
   const current = { x: entity.x, y: entity.y };
   const currentCoreDist = pathDistance(grid, current, corePos);
   const raidMods = buildRaidModifiers(raidBoons);
+  const isBacktrack = (option) =>
+    !!(entity.prev && option && entity.prev.x === option.next.x && entity.prev.y === option.next.y);
   const options = neighbors(entity.x, entity.y)
     .filter((next) => tileWalkable(grid[next.y][next.x]))
     .map((next) => {
@@ -1673,7 +1675,13 @@ function chooseInvaderMove(entity, grid, corePos, raidBoons = [], doctrineEffect
     })
     .filter(Boolean)
     .sort((a, b) => b.score - a.score || a.coreDist - b.coreDist);
-  const best = options[0] || null;
+  let best = options[0] || null;
+  if (best && isBacktrack(best)) {
+    const forwardAlternatives = options.filter((option) => option.coreDist < currentCoreDist && !isBacktrack(option));
+    if (forwardAlternatives.length > 0) {
+      best = forwardAlternatives[0];
+    }
+  }
   return {
     next: best?.next || null,
     options,
