@@ -396,9 +396,14 @@ body::before {
 .tileChipAura {
   left: 6px;
   bottom: 6px;
-  background: rgba(6, 95, 70, 0.92);
-  border: 1px solid rgba(52, 211, 153, 0.45);
+  min-width: 12px;
+  height: 12px;
+  padding: 0;
+  font-size: 8px;
+  background: rgba(6, 95, 70, 0.78);
+  border: 1px solid rgba(52, 211, 153, 0.32);
   color: #d1fae5;
+  box-shadow: 0 0 10px rgba(52, 211, 153, 0.18);
 }
 
 .hint {

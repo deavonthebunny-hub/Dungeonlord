@@ -4387,7 +4387,7 @@ function defaultState() {
   }
 
   function tileAuraChip(x, y) {
-    return describeTileAuras(x, y).length > 0 ? "+" : "";
+    return describeTileAuras(x, y).length > 0 ? "•" : "";
   }
 
   const selectedTileAuras = describeTileAuras(state.selected.x, state.selected.y);
