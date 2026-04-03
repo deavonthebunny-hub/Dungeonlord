@@ -5855,6 +5855,74 @@ function defaultState() {
           <div className="panelTitle">Glossary</div>
           <div className="toolboxScroll">
             <div className="card">
+              <div className="cardTitle">Room Rules</div>
+              <div className="entityList">
+                <div className="entityItem">
+                  <div className="entityName">Utility Rooms</div>
+                  <div className="entityMeta">Support-only tiles. They affect adjacent tiles within 1 square and are not meant to be traversed.</div>
+                </div>
+                <div className="entityItem">
+                  <div className="entityName">Monster Rooms</div>
+                  <div className="entityMeta">House your monsters and add a room passive. Base cap is 3 monsters, increased by room tier and doctrine.</div>
+                </div>
+                <div className="entityItem">
+                  <div className="entityName">Trap Rooms</div>
+                  <div className="entityMeta">Trigger when invaders enter. Trap stars and ranks increase damage, charges, and cooldown efficiency.</div>
+                </div>
+                <div className="entityItem">
+                  <div className="entityName">Room Upgrades</div>
+                  <div className="entityMeta">Most room effects scale with tier. Check the Selected Tile panel for the current exact values.</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="cardTitle">Utility Rooms</div>
+              <div className="entityList">
+                {UTILITY_ROOMS.map((room) => (
+                  <div className="entityItem" key={room.key}>
+                    <div className="entityName">
+                      <span className="iconBadge">{UTILITY_ICONS[room.key] || "UR"}</span>
+                      {room.name}
+                    </div>
+                    <div className="entityMeta">{room.desc}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="cardTitle">Monster Rooms</div>
+              <div className="entityList">
+                {MONSTER_ROOMS.map((room) => (
+                  <div className="entityItem" key={room.key}>
+                    <div className="entityName">
+                      <span className="iconBadge">{MONSTER_ROOM_ICONS[room.key] || "MR"}</span>
+                      {room.name}
+                    </div>
+                    <div className="entityMeta">{room.desc}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="cardTitle">Trap Rooms</div>
+              <div className="entityList">
+                {TRAP_TYPES.map((trap) => (
+                  <div className="entityItem" key={trap.key}>
+                    <div className="entityName">
+                      <span className="iconBadge">{TRAP_ICONS[trap.key] || "TR"}</span>
+                      {trap.name}
+                    </div>
+                    <div className="entityMeta">{trap.desc}</div>
+                    <div className="muted small">Base damage {trap.baseDmg} | Base cooldown {trap.baseCooldown}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="card">
               <div className="cardTitle">Monster Passives</div>
               <div className="entityList">
                 {MONSTER_PASSIVE_RULES.map((p) => (
@@ -5872,6 +5940,19 @@ function defaultState() {
                   <div className="entityItem" key={p.key}>
                     <div className="entityName">{p.name}</div>
                     <div className="entityMeta">{p.desc}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="cardTitle">Artifacts</div>
+              <div className="entityList">
+                {ARTIFACTS.map((artifact) => (
+                  <div className="entityItem" key={artifact.key}>
+                    <div className="entityName">{artifact.name}</div>
+                    <div className="entityMeta">{artifact.desc}</div>
+                    <div className="muted small">Cost: {artifact.cost.amount} {artifact.cost.currency}</div>
                   </div>
                 ))}
               </div>
