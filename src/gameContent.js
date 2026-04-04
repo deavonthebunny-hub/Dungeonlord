@@ -387,31 +387,30 @@ export const COUNCIL_SPONSOR_CONTENT = {
     },
   },
   maltheron: {
-    locked: true,
-    lockedReason: "Unlocks once the Flesh Market is fully implemented.",
     boon: {
       key: "flesh-market-license",
       title: "Flesh Market License",
-      desc: "Future boon: unlock the Flesh Market until the next Council.",
+      desc: "Maltheron opens the Flesh Market until the next Council.",
       reward: null,
+      marketAccess: true,
       raidEffect: null,
     },
     quests: {
       standard: {
         id: "fresh-stock-standard",
         title: "Fresh Stock",
-        desc: "Future quest: feed Maltheron fresh material once the Flesh Market is live.",
-        metricKey: "monsterEvolutionCount",
-        goalBands: [1, 1, 1],
-        reward: { type: "darkcrystals", bands: [3, 5, 7] },
+        desc: "Sacrifice monsters before the next Council.",
+        metricKey: "monsterSacrificeCount",
+        goalBands: [2, 3, 4],
+        reward: { type: "darkcrystals", bands: [4, 6, 8] },
       },
       hard: {
-        id: "fresh-stock-hard",
-        title: "Fresh Stock",
-        desc: "Future quest: complete a larger Flesh Market order.",
-        metricKey: "monsterEvolutionCount",
-        goalBands: [2, 2, 2],
-        reward: { type: "darkcrystals", bands: [5, 8, 11] },
+        id: "vault-of-meat-hard",
+        title: "Vault of Meat",
+        desc: "Earn Darkcrystals before the next Council.",
+        metricKey: "darkcrystalsEarnedSinceCouncil",
+        goalBands: [12, 18, 24],
+        reward: { type: "darkcrystals", bands: [7, 10, 14] },
       },
     },
   },
@@ -571,6 +570,125 @@ export const COUNCIL_SPONSOR_CONTENT = {
   },
 };
 
+export const FLESH_MARKET_UNIQUE_MONSTERS = [
+  {
+    key: "patchmaw-chimera",
+    name: "Patchmaw Chimera",
+    race: "Beast",
+    class: "Brute",
+    icon: "PC",
+    passiveKeys: ["savage", "leech"],
+    passiveRanks: { savage: 1, leech: 1 },
+    starByEra: [3, 4, 5],
+    costByEra: [16, 24, 34],
+    baseStats: { hp: 14, atk: 6, def: 2 },
+    desc: "A stitched predator that mauls and feeds on the weak.",
+  },
+  {
+    key: "stitchwitch-huldra",
+    name: "Stitchwitch Huldra",
+    race: "Abomination",
+    class: "Hexer",
+    icon: "SH",
+    passiveKeys: ["hex", "mender"],
+    passiveRanks: { hex: 1, mender: 1 },
+    starByEra: [3, 4, 5],
+    costByEra: [18, 26, 36],
+    baseStats: { hp: 12, atk: 6, def: 2 },
+    desc: "A fleshweaver who curses intruders and tends her creations.",
+  },
+  {
+    key: "graft-knight",
+    name: "Graft Knight",
+    race: "Abomination",
+    class: "Warden",
+    icon: "GK",
+    passiveKeys: ["bulwark", "warding"],
+    passiveRanks: { bulwark: 1, warding: 1 },
+    starByEra: [3, 4, 5],
+    costByEra: [18, 28, 38],
+    baseStats: { hp: 16, atk: 5, def: 3 },
+    desc: "A plated horror built to anchor the front line.",
+  },
+  {
+    key: "carrion-saint",
+    name: "Carrion Saint",
+    race: "Undead",
+    class: "Warlock",
+    icon: "CS",
+    passiveKeys: ["rot-cloud", "bloodcall"],
+    passiveRanks: { "rot-cloud": 1, bloodcall: 1 },
+    starByEra: [3, 4, 5],
+    costByEra: [17, 25, 35],
+    baseStats: { hp: 13, atk: 6, def: 2 },
+    desc: "A grave-born preacher who rots the living and restores the damned.",
+  },
+  {
+    key: "razorwing-matron",
+    name: "Razorwing Matron",
+    race: "Beast",
+    class: "Stalker",
+    icon: "RM",
+    passiveKeys: ["swift", "cruelty"],
+    passiveRanks: { swift: 1, cruelty: 1 },
+    starByEra: [3, 4, 5],
+    costByEra: [16, 24, 34],
+    baseStats: { hp: 12, atk: 7, def: 1 },
+    desc: "A circling huntress that finishes off wounded prey.",
+  },
+  {
+    key: "vatborn-alpha",
+    name: "Vatborn Alpha",
+    race: "Abomination",
+    class: "Packlord",
+    icon: "VA",
+    passiveKeys: ["packleader", "ironhide"],
+    passiveRanks: { packleader: 1, ironhide: 1 },
+    starByEra: [3, 4, 5],
+    costByEra: [19, 28, 40],
+    baseStats: { hp: 15, atk: 6, def: 2 },
+    desc: "An engineered packmaster grown for coordinated slaughter.",
+  },
+];
+
+export const FLESH_MARKET_UNIQUE_ARTIFACTS = [
+  {
+    key: "cadaver-ledger",
+    name: "Cadaver Ledger",
+    desc: "Sacrifices grant +2 bonus Darkcrystals.",
+    costByEra: [12, 18, 24],
+    mods: { sacrificeBonusDarkcrystals: 2 },
+  },
+  {
+    key: "grafted-standard",
+    name: "Grafted Standard",
+    desc: "Monsters with 2+ passives gain +1 ATK.",
+    costByEra: [14, 20, 28],
+    mods: { multiPassiveAtkBonus: 1 },
+  },
+  {
+    key: "preserved-heart",
+    name: "Preserved Heart",
+    desc: "Core starts each raid with +8 Shield.",
+    costByEra: [14, 22, 30],
+    mods: { coreStartShield: 8 },
+  },
+  {
+    key: "vivisection-tools",
+    name: "Vivisection Tools",
+    desc: "Trap-damaged heroes take +1 extra damage from monsters.",
+    costByEra: [13, 19, 27],
+    mods: { trapDamageVulnerability: 1 },
+  },
+  {
+    key: "vatglass-lantern",
+    name: "Vatglass Lantern",
+    desc: "Newly bought Unique monsters gain +4 Max HP.",
+    costByEra: [12, 18, 24],
+    mods: { uniqueMonsterHpOnBuy: 4 },
+  },
+];
+
 export const DOCTRINE_RULES = {
   trap: {
     key: "trap",
@@ -653,6 +771,18 @@ export function validateGameContent() {
   for (const [key, sponsor] of Object.entries(COUNCIL_SPONSOR_CONTENT)) {
     if (!sponsor.boon || !sponsor.quests?.standard || !sponsor.quests?.hard) {
       warnings.push(`Council sponsor "${key}" is missing boon or quest definitions.`);
+    }
+  }
+
+  for (const monster of FLESH_MARKET_UNIQUE_MONSTERS) {
+    if (!monster.key || !monster.name || !Array.isArray(monster.starByEra) || !Array.isArray(monster.costByEra)) {
+      warnings.push(`Unique Flesh Market monster "${monster.key || "unknown"}" is missing key fields.`);
+    }
+  }
+
+  for (const artifact of FLESH_MARKET_UNIQUE_ARTIFACTS) {
+    if (!artifact.key || !artifact.name || !Array.isArray(artifact.costByEra) || !artifact.mods) {
+      warnings.push(`Unique Flesh Market artifact "${artifact.key || "unknown"}" is missing key fields.`);
     }
   }
 

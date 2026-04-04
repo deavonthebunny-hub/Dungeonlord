@@ -4,6 +4,8 @@ import {
   COUNCIL_RAID_FACTIONS,
   COUNCIL_SPONSOR_CONTENT,
   DOCTRINE_RULES,
+  FLESH_MARKET_UNIQUE_ARTIFACTS,
+  FLESH_MARKET_UNIQUE_MONSTERS,
   HERO_ARCHETYPE_RULES,
   RAID_TYPE_META,
   validateGameContent,
@@ -32,7 +34,6 @@ const SAVE_KEY = "dungeonlord.save.v1";
 const DOMINION_CAP = 4;
 const BASE_MONSTER_ROOM_CAP = 3;
 const COUNCIL_INTERVAL = 10;
-const FLESH_MARKET_COST = 100;
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const ECONOMY_ROLES = [
   ["Essence", "Build tempo: rooms, upgrades, and trap infrastructure."],
@@ -108,6 +109,9 @@ const MONSTERS = {
   dullahan: { key: "dullahan", name: "Dullahan", icon: "Du", hp: 22, atk: 7, cost: 34 },
 };
 const MONSTER_KEYS = Object.keys(MONSTERS);
+const UNIQUE_MONSTER_MAP = Object.fromEntries(FLESH_MARKET_UNIQUE_MONSTERS.map((monster) => [monster.key, monster]));
+const UNIQUE_ARTIFACT_MAP = Object.fromEntries(FLESH_MARKET_UNIQUE_ARTIFACTS.map((artifact) => [artifact.key, artifact]));
+const KNOW_MONSTER_KEY = (key) => !!(MONSTERS[key] || UNIQUE_MONSTER_MAP[key]);
 
 const HERO_RACES = ["Human", "Elf", "Dwarf", "Orc", "Tiefling", "Halfling"];
 const HERO_CLASSES = ["Warrior", "Rogue", "Mage", "Ranger", "Cleric", "Monk"];
@@ -527,6 +531,10 @@ function nextCouncilDay(day) {
   return Math.ceil(d / COUNCIL_INTERVAL) * COUNCIL_INTERVAL;
 }
 
+function nextCouncilDayAfter(day) {
+  return nextCouncilDay(Math.max(1, day || 1) + 1);
+}
+
 function buildCouncilRoster(lastRoster = []) {
   const keep = pickUnique(lastRoster, Math.min(2, lastRoster.length));
   const remainingPool = COUNCIL_MEMBERS.filter((m) => !keep.some((k) => k.key === m.key));
@@ -567,6 +575,8 @@ const COUNCIL_QUEST_COUNTER_KEYS = [
   "soulshardsEarnedSinceCouncil",
   "evolutionSpentSinceCouncil",
   "monsterEvolutionCount",
+  "monsterSacrificeCount",
+  "darkcrystalsEarnedSinceCouncil",
 ];
 
 function createEmptyCouncilQuestCounters() {
@@ -709,7 +719,13 @@ function applyCouncilRewardToState(stateLike, reward, sponsorName = "", day = 1)
   }
   if (reward.type === "darkcrystals") {
     currency.darkcrystals = (currency.darkcrystals || 0) + (reward.amount || 0);
+    const counters = {
+      ...createEmptyCouncilQuestCounters(),
+      ...(stateLike.councilQuestCounters || {}),
+    };
+    counters.darkcrystalsEarnedSinceCouncil += reward.amount || 0;
     nextState.currency = currency;
+    nextState.councilQuestCounters = counters;
     return { nextState, rewardText: `+${reward.amount || 0} Darkcrystals` };
   }
   if (reward.type === "monster") {
@@ -1009,7 +1025,7 @@ function monsterEvolutionStageValue(monster) {
 }
 
 function monsterEvolutionCost(monster) {
-  if (!monster || !MONSTERS[monster.key]) return null;
+  if (!monster || !KNOW_MONSTER_KEY(monster.key)) return null;
   const stage = monsterEvolutionStageValue(monster);
   if (stage >= MAX_EVOLUTION_STAGE) return null;
   return EVOLUTION_COSTS[stage] || null;
@@ -1036,8 +1052,22 @@ function monsterBaseDef(base) {
   return Math.max(0, Math.round(base.hp / 12 + base.atk / 6 - 1));
 }
 
+function getMonsterBaseData(kind) {
+  if (MONSTERS[kind]) return MONSTERS[kind];
+  const unique = UNIQUE_MONSTER_MAP[kind];
+  if (!unique) return null;
+  return {
+    key: unique.key,
+    name: unique.race,
+    icon: unique.icon,
+    hp: unique.baseStats?.hp || 1,
+    atk: unique.baseStats?.atk || 1,
+    def: unique.baseStats?.def || 0,
+  };
+}
+
 function buildMonsterStats(kind, stars, evolutionStage = 0) {
-  const base = MONSTERS[kind];
+  const base = getMonsterBaseData(kind);
   if (!base) {
     return { maxHp: 1, atk: 1, def: 0 };
   }
@@ -1242,7 +1272,7 @@ function generateCouncilRaider(id, entrancePos, turnsSurvived, day = 1, councilR
   const faction = COUNCIL_RAID_FACTIONS[attacker.key] || COUNCIL_RAID_FACTIONS.malachar;
   const raidMods = buildRaidModifiers(raidBoons);
   const monsterKey = pick(faction.monsterPool);
-  const monsterBase = MONSTERS[monsterKey] || MONSTERS.goblin;
+  const monsterBase = getMonsterBaseData(monsterKey) || getMonsterBaseData("goblin");
   const className = pick(faction.classPool.filter(Boolean).length ? faction.classPool : MONSTER_CLASS_RULES[monsterKey] || MONSTER_ARCHETYPES);
   const traitPassiveKey = pick(faction.passiveBias.filter(Boolean).length ? faction.passiveBias : MONSTER_PASSIVES);
   const passiveRule = pickHeroPassiveRule(HERO_PASSIVE_RULES);
@@ -1299,7 +1329,7 @@ function generateCouncilRaider(id, entrancePos, turnsSurvived, day = 1, councilR
 }
 
 function generateMonster(kind, turnsSurvived, starCap, day = 1) {
-  const base = MONSTERS[kind];
+  const base = getMonsterBaseData(kind);
   const stars = rollAuthoritativeStar(day, starCap);
   const passiveKeys = pickUnique(MONSTER_PASSIVES, rollPassiveCount(stars));
   const passiveRanks = createPassiveRanks(passiveKeys);
@@ -1429,6 +1459,88 @@ function generateArtifactStock() {
   return pickUnique(ARTIFACTS, 3).map((a) => ({ ...a }));
 }
 
+function fleshMarketEraIndex(day = 1) {
+  return councilEraIndex(day);
+}
+
+function buildUniqueMonsterEntity(def, day = 1, artifactMods = {}) {
+  const eraIdx = Math.max(0, Math.min(fleshMarketEraIndex(day), 2));
+  const stars = clampMonsterStar(def.starByEra?.[eraIdx] || 3);
+  const passiveKeys = [...(def.passiveKeys || [])];
+  const passiveRanks = createPassiveRanks(passiveKeys, def.passiveRanks || {});
+  let entity = rebuildMonsterEntity(
+    {
+      key: def.key,
+      name: def.name,
+      icon: def.icon,
+      hp: 1,
+      atk: 1,
+      def: def.baseStats?.def || 0,
+      race: def.race,
+      class: def.class,
+      stars,
+      passiveKey: passiveKeys[0] || null,
+      passiveKeys,
+      passiveRanks,
+      passive: formatMonsterPassiveList(passiveKeys, passiveRanks),
+      affinity: null,
+      evoPoints: 0,
+      evolutionStage: 0,
+      evolution: 0,
+      branchClass: null,
+      foughtThisRaid: false,
+      shieldedThisTurn: false,
+      isUnique: true,
+    },
+    {},
+    { healToFull: true }
+  );
+  const bonusHp = artifactMods.uniqueMonsterHpOnBuy || 0;
+  if (bonusHp > 0) {
+    entity = {
+      ...entity,
+      hp: entity.hp + bonusHp,
+      stats: {
+        ...entity.stats,
+        maxHp: entity.stats.maxHp + bonusHp,
+      },
+    };
+  }
+  return entity;
+}
+
+function normalizeBoughtUniqueKeys(raw) {
+  return Array.isArray(raw) ? Array.from(new Set(raw.filter(Boolean))) : [];
+}
+
+function generateFleshMarketStock(day = 1, boughtUniqueKeys = []) {
+  const owned = new Set(normalizeBoughtUniqueKeys(boughtUniqueKeys));
+  const eraIdx = Math.max(0, Math.min(fleshMarketEraIndex(day), 2));
+  const monsterOffers = pickUnique(
+    FLESH_MARKET_UNIQUE_MONSTERS.filter((monster) => !owned.has(monster.key)),
+    2
+  ).map((monster) => ({
+    type: "monster",
+    key: monster.key,
+    name: monster.name,
+    desc: monster.desc,
+    cost: monster.costByEra?.[eraIdx] || monster.costByEra?.[0] || 0,
+    stars: clampMonsterStar(monster.starByEra?.[eraIdx] || 3),
+    passiveKeys: [...(monster.passiveKeys || [])],
+  }));
+  const artifactOffers = pickUnique(
+    FLESH_MARKET_UNIQUE_ARTIFACTS.filter((artifact) => !owned.has(artifact.key)),
+    1
+  ).map((artifact) => ({
+    type: "artifact",
+    key: artifact.key,
+    name: artifact.name,
+    desc: artifact.desc,
+    cost: artifact.costByEra?.[eraIdx] || artifact.costByEra?.[0] || 0,
+  }));
+  return [...monsterOffers, ...artifactOffers];
+}
+
 function monsterRoomCap(tier) {
   return BASE_MONSTER_ROOM_CAP + Math.max(0, (tier || 1) - 1);
 }
@@ -1458,7 +1570,7 @@ function applyMonsterRoomPlacementStatic(monster, roomType, roomTier = 1) {
 }
 
 function normalizeMonsterEntity(monster, roomType, roomTier = 1) {
-  if (!monster || !MONSTERS[monster.key]) return monster;
+  if (!monster || !KNOW_MONSTER_KEY(monster.key)) return monster;
   const stage = monsterEvolutionStageValue(monster);
   const branchClass = stage > 0 ? defaultBranchClass(monster) : monster.branchClass || null;
   let normalized = rebuildMonsterEntity(
@@ -1479,6 +1591,7 @@ function normalizeMonsterEntity(monster, roomType, roomTier = 1) {
   normalized.foughtThisRaid = !!monster.foughtThisRaid;
   normalized.shieldedThisTurn = !!monster.shieldedThisTurn;
   normalized.evoPoints = Math.max(0, monster.evoPoints || 0);
+  normalized.isUnique = !!monster.isUnique || !!UNIQUE_MONSTER_MAP[monster.key];
   return normalized;
 }
 
@@ -1489,13 +1602,26 @@ function calcArtifactMods(artifacts, day = 1) {
     monsterAtk: 0,
     trapMult: 0,
     coreDamageReduction: 0,
+    sacrificeBonusDarkcrystals: 0,
+    multiPassiveAtkBonus: 0,
+    coreStartShield: 0,
+    trapDamageVulnerability: 0,
+    uniqueMonsterHpOnBuy: 0,
   };
   const effectMult = dayMultiplier(day, 0.015, 1.6);
+  const unscaledKeys = new Set([
+    "trapMult",
+    "sacrificeBonusDarkcrystals",
+    "multiPassiveAtkBonus",
+    "coreStartShield",
+    "trapDamageVulnerability",
+    "uniqueMonsterHpOnBuy",
+  ]);
   for (const art of artifacts || []) {
     if (!art || !art.mods) continue;
     for (const [key, val] of Object.entries(art.mods)) {
       if (typeof val === "number") {
-        mods[key] = (mods[key] || 0) + (key === "trapMult" ? val * effectMult : Math.round(val * effectMult));
+        mods[key] = (mods[key] || 0) + (unscaledKeys.has(key) ? val : Math.round(val * effectMult));
       } else {
         mods[key] = (mods[key] || 0) + val;
       }
@@ -1989,6 +2115,8 @@ function defaultState() {
       scoutQueue: [],
       evolutionOffer: null,
       movePayload: null,
+      fleshMarketStock: [],
+      boughtUniqueKeys: [],
     };
   }
 
@@ -2011,7 +2139,7 @@ function defaultState() {
             const roomTier = rawCell.roomTier ?? cell.roomTier ?? 1;
             const monsters = Array.isArray(rawCell.monsters)
               ? rawCell.monsters
-                  .filter((monster) => monster && MONSTERS[monster.key])
+                  .filter((monster) => monster && KNOW_MONSTER_KEY(monster.key))
                   .map((monster) =>
                     normalizeMonsterEntity(monster, rawCell.room === "monster" ? roomType : null, roomTier)
                   )
@@ -2070,7 +2198,6 @@ function defaultState() {
         declinedStreak: Number.isFinite(councilRaw.declinedStreak) ? councilRaw.declinedStreak : 0,
       };
       const councilFavor = parsed.councilFavor && typeof parsed.councilFavor === "object" ? parsed.councilFavor : {};
-      const fleshMarketUntilDay = parsed.fleshMarketUntilDay || base.fleshMarketUntilDay;
       const nextRaidType = parsed.nextRaidType || base.nextRaidType;
       const pendingPunitiveRaid =
         !!parsed.pendingPunitiveRaid || (council.declinedStreak >= 2 && nextRaidType === "council");
@@ -2105,10 +2232,18 @@ function defaultState() {
               progress: Math.max(0, councilQuestCounters[parsed.councilQuest.metricKey] || parsed.councilQuest.progress || 0),
             }
           : base.councilQuest;
+      const boughtUniqueKeys = normalizeBoughtUniqueKeys(parsed.boughtUniqueKeys);
       const nextRaidBoons = Array.isArray(parsed.nextRaidBoons) ? parsed.nextRaidBoons.filter(Boolean) : [];
       const activeRaidBoons = Array.isArray(parsed.activeRaidBoons) ? parsed.activeRaidBoons.filter(Boolean) : [];
       const normalizeHeroList = (list, raidType = null) =>
         Array.isArray(list) ? list.filter(Boolean).map((hero) => normalizeHeroEntity(hero, savedDay, raidType)) : [];
+      const fleshMarketUntilDay = parsed.fleshMarketUntilDay || base.fleshMarketUntilDay;
+      const fleshMarketStock =
+        fleshMarketUntilDay >= savedDay && fleshMarketUntilDay > 0
+          ? Array.isArray(parsed.fleshMarketStock) && parsed.fleshMarketStock.length
+            ? parsed.fleshMarketStock.filter(Boolean)
+            : generateFleshMarketStock(savedDay, boughtUniqueKeys)
+          : [];
       return {
         ...base,
         ...parsed,
@@ -2129,6 +2264,8 @@ function defaultState() {
         councilQuest,
         councilQuestCounters,
         fleshMarketUntilDay,
+        fleshMarketStock,
+        boughtUniqueKeys,
         nextRaidType,
         pendingPunitiveRaid,
         pendingCouncilRaid,
@@ -2141,7 +2278,7 @@ function defaultState() {
         scoutQueue: normalizeHeroList(parsed.scoutQueue, currentPartyRaidType),
         invMonsters: Array.isArray(parsed.invMonsters)
           ? parsed.invMonsters
-              .filter((monster) => monster && MONSTERS[monster.key])
+              .filter((monster) => monster && KNOW_MONSTER_KEY(monster.key))
               .map((monster) => normalizeMonsterEntity(monster))
           : base.invMonsters,
       };
@@ -2552,7 +2689,7 @@ function defaultState() {
 
   function buildEvolutionOptions(monster) {
     const stage = monsterEvolutionStageValue(monster);
-    const baseRace = monster.race || MONSTERS[monster.key]?.name || "Monster";
+    const baseRace = monster.race || getMonsterBaseData(monster.key)?.name || "Monster";
     if (stage >= MAX_EVOLUTION_STAGE) return [];
     if (stage === 0) {
       return pickUnique(MONSTER_EVOLUTION_BRANCHES, 3).map((branch) => {
@@ -3106,10 +3243,11 @@ function defaultState() {
       let scoutQueue = [];
 
       const doctrineEffects = getDoctrineEffects(s.doctrines);
+      const artifactModsStart = calcArtifactMods(s.artifacts, s.day);
       const raidMods = buildRaidModifiers(s.nextRaidBoons);
       const mirrorTier = maxUtilityTier(s.grid, "scout-mirror") + doctrineEffects.utilityScoutBonus;
       const doctrineShield = doctrineEffects.coreShieldBonus || 0;
-      const fortifiedCoreShield = (s.coreShield || 0) + doctrineShield + (raidMods.coreShieldBonus || 0);
+      const fortifiedCoreShield = (s.coreShield || 0) + doctrineShield + (raidMods.coreShieldBonus || 0) + (artifactModsStart.coreStartShield || 0);
       if (mirrorTier > 0) {
         const revealCount = Math.min(partyQueue.length, 2 + (mirrorTier - 1) + raidMods.scoutRevealBonus);
         scoutQueue = partyQueue.slice(0, revealCount).map((h) => ({ ...h }));
@@ -3150,6 +3288,9 @@ function defaultState() {
         const meta = raidTypeMeta(raidType, s.pendingCouncilRaid);
         if (doctrineShield > 0) {
           ns = addLog(ns, `Core Doctrine fortifies the Core with +${doctrineShield} Shield.`);
+        }
+        if (artifactModsStart.coreStartShield > 0) {
+          ns = addLog(ns, `${UNIQUE_ARTIFACT_MAP["preserved-heart"]?.name || "Preserved Heart"} adds +${artifactModsStart.coreStartShield} Shield.`);
         }
         if (raidMods.coreShieldBonus > 0) {
           ns = addLog(ns, `Council leverage fortifies the Core with +${raidMods.coreShieldBonus} Shield.`);
@@ -3194,6 +3335,9 @@ function defaultState() {
       const meta = raidTypeMeta(raidType, s.pendingCouncilRaid);
       if (doctrineShield > 0) {
         ns = addLog(ns, `Core Doctrine fortifies the Core with +${doctrineShield} Shield.`);
+      }
+      if (artifactModsStart.coreStartShield > 0) {
+        ns = addLog(ns, `${UNIQUE_ARTIFACT_MAP["preserved-heart"]?.name || "Preserved Heart"} adds +${artifactModsStart.coreStartShield} Shield.`);
       }
       if (raidMods.coreShieldBonus > 0) {
         ns = addLog(ns, `Council leverage fortifies the Core with +${raidMods.coreShieldBonus} Shield.`);
@@ -3591,6 +3735,12 @@ function defaultState() {
           const monsterStrike = () => {
             let bonus = 0;
             if (monsterHasPassive(m, "savage")) bonus += 2 * monsterPassiveRank(m, "savage");
+            if ((normalizePassiveKeysForMonster(m).length || 0) >= 2) {
+              bonus += artifactMods.multiPassiveAtkBonus || 0;
+            }
+            if (h.counters?.trapDamaged) {
+              bonus += artifactMods.trapDamageVulnerability || 0;
+            }
             const totalBase = monsterAtk + bonus;
             const defense = heroDefValue(h);
             const dmg = applyHeroDamage(h, totalBase, h.x, h.y, true);
@@ -3975,6 +4125,10 @@ function defaultState() {
         nextState.dailyEvent = rollDailyEvent();
         nextState.traderStock = generateTraderStock(nextState.turnsSurvived, nextState.day);
         nextState.shadyStock = generateArtifactStock();
+        nextState.fleshMarketStock =
+          nextState.fleshMarketUntilDay >= nextState.day && nextState.fleshMarketUntilDay > 0
+            ? generateFleshMarketStock(nextState.day, nextState.boughtUniqueKeys || [])
+            : [];
         nextState.dpRegenCounter = 0;
         let evoAwards = 0;
         for (let y = 0; y < H; y++) {
@@ -4167,6 +4321,8 @@ function defaultState() {
         nextRaidBoons: [],
         activeRaidBoons: [],
         fleshMarketUntilDay: 0,
+        fleshMarketStock: [],
+        boughtUniqueKeys: [],
         evolutionOffer: null,
       };
       ns = addLog(ns, "Run reset (layout kept).");
@@ -4324,6 +4480,13 @@ function defaultState() {
       let ns = { ...s };
       const rewardResult = applyCouncilRewardToState(ns, boon.reward, boon.sponsorName, s.day);
       ns = rewardResult.nextState;
+      let rewardText = rewardResult.rewardText ? ` ${rewardResult.rewardText}.` : "";
+      if (boon.marketAccess) {
+        const untilDay = nextCouncilDayAfter(s.day);
+        ns.fleshMarketUntilDay = untilDay;
+        ns.fleshMarketStock = generateFleshMarketStock(s.day, ns.boughtUniqueKeys || []);
+        rewardText += ` Flesh Market open until Day ${untilDay}.`;
+      }
       ns.councilFavor = applyCouncilFavorShift(s.councilFavor || {}, sponsorKey, 2);
       if (boon.raidEffect) {
         ns.nextRaidBoons = [
@@ -4336,7 +4499,6 @@ function defaultState() {
         courtedSponsorKey: s.councilSession.courtedSponsorKey || sponsorKey,
         acceptedCouncilBoonKey: sponsorKey,
       };
-      const rewardText = rewardResult.rewardText ? ` ${rewardResult.rewardText}.` : "";
       const leverageText = boon.raidEffect?.desc ? ` ${boon.raidEffect.desc}` : "";
       return addLog(ns, `Council boon received: ${boon.title} from ${boon.sponsorName}.${rewardText}${leverageText}`.trim());
     });
@@ -4369,12 +4531,41 @@ function defaultState() {
     });
   }
 
-  function buyFleshMarket() {
+  function buyFromFleshMarket(index) {
     setState((s) => {
-      if (s.currency.essence < FLESH_MARKET_COST) return addLog(s, "Not enough Essence for the Flesh Market.");
-      const untilDay = nextCouncilDay(s.day);
-      const currency = { ...s.currency, essence: s.currency.essence - FLESH_MARKET_COST };
-      return addLog({ ...s, currency, fleshMarketUntilDay: untilDay }, `Flesh Market open until Day ${untilDay}.`);
+      if (!(s.fleshMarketUntilDay >= s.day && s.fleshMarketUntilDay > 0)) {
+        return addLog(s, "The Flesh Market is closed.");
+      }
+      const stock = Array.isArray(s.fleshMarketStock) ? [...s.fleshMarketStock] : [];
+      const offer = stock[index];
+      if (!offer || offer.soldOut) return addLog(s, "That Flesh Market offer is no longer available.");
+      if (s.currency.darkcrystals < offer.cost) return addLog(s, "Not enough Darkcrystals.");
+      const boughtUniqueKeys = Array.from(new Set([...(s.boughtUniqueKeys || []), offer.key]));
+      const currency = { ...s.currency, darkcrystals: s.currency.darkcrystals - offer.cost };
+      let ns = { ...s, currency, boughtUniqueKeys };
+      if (offer.type === "monster") {
+        const uniqueDef = UNIQUE_MONSTER_MAP[offer.key];
+        if (!uniqueDef) return addLog(s, "That unique monster could not be found.");
+        const artifactMods = calcArtifactMods(s.artifacts, s.day);
+        const monster = buildUniqueMonsterEntity(uniqueDef, s.day, artifactMods);
+        ns.invMonsters = [...s.invMonsters, monster];
+        ns = addLog(ns, `${monster.name} joins your inventory for ${offer.cost} Darkcrystals.`);
+      } else if (offer.type === "artifact") {
+        const artifactDef = UNIQUE_ARTIFACT_MAP[offer.key];
+        if (!artifactDef) return addLog(s, "That unique artifact could not be found.");
+        ns.artifacts = [
+          ...s.artifacts,
+          {
+            ...artifactDef,
+            isUnique: true,
+            cost: { currency: "darkcrystals", amount: offer.cost },
+          },
+        ];
+        ns = addLog(ns, `Bought ${artifactDef.name} for ${offer.cost} Darkcrystals.`);
+      }
+      stock[index] = { ...offer, soldOut: true };
+      ns.fleshMarketStock = stock;
+      return ns;
     });
   }
 
@@ -4431,15 +4622,25 @@ function defaultState() {
       const inv = [...s.invMonsters];
       const target = inv[idx];
       if (!target) return s;
+      if (target.isUnique) return addLog(s, `${target.name} is too valuable to sacrifice in the Flesh Market.`);
       inv.splice(idx, 1);
-      const gain = 5 + safeEntityStars(target) * 2;
+      const artifactMods = calcArtifactMods(s.artifacts, s.day);
+      const gain =
+        4 +
+        safeEntityStars(target) * 3 +
+        monsterEvolutionStageValue(target) * 4 +
+        (artifactMods.sacrificeBonusDarkcrystals || 0);
       const currency = { ...s.currency, darkcrystals: (s.currency.darkcrystals || 0) + gain };
-      return addLog({ ...s, invMonsters: inv, currency }, `Sacrificed ${target.name}. +${gain} Dark Crystals.`);
+      let ns = { ...s, invMonsters: inv, currency };
+      ns = addCouncilQuestCounter(ns, "monsterSacrificeCount", 1);
+      ns = addCouncilQuestCounter(ns, "darkcrystalsEarnedSinceCouncil", gain);
+      return addLog(ns, `Sacrificed ${target.name}. +${gain} Darkcrystals.`);
     });
   }
   function traderPrice(monster, dayOverride = state.day) {
     const stars = safeEntityStars(monster);
-    const baseCost = MONSTERS[monster.key]?.cost || 20;
+    const uniqueCost = UNIQUE_MONSTER_MAP[monster.key]?.costByEra?.[Math.max(0, Math.min(fleshMarketEraIndex(dayOverride), 2))];
+    const baseCost = UNIQUE_MONSTER_MAP[monster.key] ? uniqueCost || 20 : MONSTERS[monster.key]?.cost || 20;
     const dayCost = scaleByDay(baseCost, dayOverride, 0.05, 3.0);
     return Math.round(dayCost * monsterStarMultiplier(stars));
   }
@@ -5306,72 +5507,60 @@ function defaultState() {
               )}
             </div>
 
-            {state.council?.active && (state.council?.roster || []).some((m) => m.key === "maltheron") && (
-              <div className="card">
-                <div className="cardTitle">Flesh Market (Maltheron)</div>
-                <div className="muted">Cost {FLESH_MARKET_COST} Essence. Access until next Council.</div>
-                <div className="row">
-                  <button className="btn" onClick={buyFleshMarket} disabled={state.currency.essence < FLESH_MARKET_COST}>
-                    Unlock Flesh Market
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {state.fleshMarketUntilDay >= state.day && state.fleshMarketUntilDay > 0 && (
-              <div className="card">
-                <div className="cardTitle">Flesh Market</div>
-                <div className="muted">Open until Day {state.fleshMarketUntilDay}.</div>
-                <div className="row">
-                  <select className="select" value={fuseA} onChange={(e) => setFuseA(e.target.value)}>
-                    <option value="">Fuse: pick first</option>
-                    {state.invMonsters.map((m, idx) => (
-                      <option key={`fuseA-${idx}`} value={idx}>
-                        {m.name} ({formatStars(safeEntityStars(m))})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="row">
-                  <select className="select" value={fuseB} onChange={(e) => setFuseB(e.target.value)}>
-                    <option value="">Fuse: pick second</option>
-                    {state.invMonsters.map((m, idx) => (
-                      <option key={`fuseB-${idx}`} value={idx}>
-                        {m.name} ({formatStars(safeEntityStars(m))})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="row">
-                  <button
-                    className="btn"
-                    onClick={() => fuseMonsters(Number(fuseA), Number(fuseB))}
-                    disabled={fuseA === "" || fuseB === "" || state.invMonsters.length < 2}
-                  >
-                    Fuse Monsters
-                  </button>
-                </div>
-                <div className="row">
-                  <select className="select" value={sacrificeIdx} onChange={(e) => setSacrificeIdx(e.target.value)}>
-                    <option value="">Sacrifice: pick monster</option>
-                    {state.invMonsters.map((m, idx) => (
-                      <option key={`sac-${idx}`} value={idx}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="row">
-                  <button
-                    className="btn danger"
-                    onClick={() => sacrificeMonster(Number(sacrificeIdx))}
-                    disabled={sacrificeIdx === ""}
-                  >
-                    Sacrifice
-                  </button>
-                </div>
-              </div>
-            )}
+            <div className="card">
+              <div className="cardTitle">Flesh Market (Maltheron)</div>
+              {state.fleshMarketUntilDay >= state.day && state.fleshMarketUntilDay > 0 ? (
+                <>
+                  <div className="muted">Open until Day {state.fleshMarketUntilDay}. Darkcrystals compete with Core Doctrine.</div>
+                  <div className="row">
+                    <select className="select" value={sacrificeIdx} onChange={(e) => setSacrificeIdx(e.target.value)}>
+                      <option value="">Sacrifice: pick monster</option>
+                      {state.invMonsters.map((m, idx) => (
+                        <option key={`sac-${idx}`} value={idx} disabled={!!m.isUnique}>
+                          {m.name}{m.isUnique ? " (Unique)" : ""} ({formatStars(safeEntityStars(m))})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="row">
+                    <button className="btn danger" onClick={() => sacrificeMonster(Number(sacrificeIdx))} disabled={sacrificeIdx === ""}>
+                      Sacrifice
+                    </button>
+                    <div className="muted">Inventory only. Unique monsters cannot be sacrificed.</div>
+                  </div>
+                  <div className="entityList">
+                    {state.fleshMarketStock?.length ? (
+                      state.fleshMarketStock.map((offer, idx) => (
+                        <div className="entityItem" key={`flesh-offer-${offer.key}-${idx}`}>
+                          <div className="entityName">{offer.name}</div>
+                          <div className="entityMeta">
+                            {offer.type === "monster" ? "Unique Monster" : "Unique Artifact"}
+                            {offer.type === "monster" ? ` | ${formatStars(offer.stars)}` : ""}
+                          </div>
+                          <div className="entityMeta">{offer.desc}</div>
+                          {offer.type === "monster" ? (
+                            <div className="muted small">
+                              Passives: {(offer.passiveKeys || []).map((key) => MONSTER_PASSIVE_MAP[key]?.name || key).join(", ")}
+                            </div>
+                          ) : null}
+                          <div className="muted">Cost: {offer.cost} Darkcrystals</div>
+                          <div className="row">
+                            <button className="btn" onClick={() => buyFromFleshMarket(idx)} disabled={!!offer.soldOut || state.currency.darkcrystals < offer.cost}>
+                              {offer.soldOut ? "Owned" : "Buy"}
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="entityEmpty">No stock remains in the market today.</div>
+                    )}
+                  </div>
+                  <div className="muted small">Fusion coming later.</div>
+                </>
+              ) : (
+                <div className="muted">Closed. Gain access by accepting Maltheron's Council boon.</div>
+              )}
+            </div>
 
             <div className="card">
               <div className="cardTitle">Selected Tile</div>
