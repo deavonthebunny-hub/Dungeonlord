@@ -535,6 +535,56 @@ function nextCouncilDayAfter(day) {
   return nextCouncilDay(Math.max(1, day || 1) + 1);
 }
 
+function createEmptyAshTrial() {
+  return {
+    active: false,
+    difficulty: null,
+    breaches: [],
+    raidsCompleted: 0,
+    requiredRaids: 0,
+    expiresDay: 0,
+  };
+}
+
+function normalizeAshTrial(raw, day = 1) {
+  if (!raw || !raw.active || !Array.isArray(raw.breaches)) return createEmptyAshTrial();
+  const breaches = raw.breaches
+    .filter((breach) => Number.isFinite(breach?.x) && Number.isFinite(breach?.y))
+    .map((breach) => ({
+      x: clamp(breach.x, 0, W - 1),
+      y: clamp(breach.y, 0, H - 1),
+      openedDay: Number.isFinite(breach.openedDay) ? breach.openedDay : day,
+    }));
+  const expiresDay = Number.isFinite(raw.expiresDay) ? raw.expiresDay : nextCouncilDayAfter(day);
+  const requiredRaids = Math.max(1, raw.requiredRaids || 2);
+  if (!breaches.length || expiresDay <= day) return createEmptyAshTrial();
+  return {
+    active: true,
+    difficulty: raw.difficulty || "standard",
+    breaches,
+    raidsCompleted: clamp(raw.raidsCompleted || 0, 0, requiredRaids),
+    requiredRaids,
+    expiresDay,
+  };
+}
+
+function isTimedBlessingActive(untilDay, day) {
+  return Number.isFinite(untilDay) && untilDay > day;
+}
+
+function isAshTrialActive(ashTrial) {
+  return !!(ashTrial?.active && Array.isArray(ashTrial.breaches) && ashTrial.breaches.length > 0);
+}
+
+function isAshBreachAt(ashTrial, x, y) {
+  if (!isAshTrialActive(ashTrial)) return false;
+  return ashTrial.breaches.some((breach) => breach.x === x && breach.y === y);
+}
+
+function formatGridPos(pos) {
+  return `(${pos.x + 1},${pos.y + 1})`;
+}
+
 function buildCouncilRoster(lastRoster = []) {
   const keep = pickUnique(lastRoster, Math.min(2, lastRoster.length));
   const remainingPool = COUNCIL_MEMBERS.filter((m) => !keep.some((k) => k.key === m.key));
@@ -607,6 +657,9 @@ function buildCouncilReward(reward, day) {
 function councilRewardLabel(reward) {
   if (!reward) return "No direct reward";
   if (reward.type === "monster") return `${reward.count || 1} themed monster`;
+  if (reward.type === "ash-tribute") return `+${reward.amount || 3} Essence on hero death until next Council`;
+  if (reward.type === "monster-room-cap-bonus") return `Monster rooms +${reward.amount || 1} capacity until next Council`;
+  if (reward.type === "room-cap-bonus") return `+${reward.amount || 1} permanent room cap`;
   return `+${reward.amount} ${reward.type}`;
 }
 
@@ -680,7 +733,28 @@ function buildCouncilSession(roster, day) {
 
 function councilQuestProgressValue(stateLike, quest) {
   if (!quest) return 0;
+  if (quest.questType === "ash-breach-trial") {
+    return Math.max(0, stateLike?.ashTrial?.raidsCompleted || 0);
+  }
   return Math.max(0, stateLike?.councilQuestCounters?.[quest.metricKey] || 0);
+}
+
+function councilQuestGoalLabel(quest) {
+  if (!quest) return "";
+  if (quest.questType === "ash-breach-trial") {
+    const breaches = Math.max(1, quest.breachCount || 1);
+    return `${breaches} Ash Breach${breaches > 1 ? "es" : ""}; survive ${quest.goal || 2} connected raids.`;
+  }
+  return `Goal: ${quest.goal}`;
+}
+
+function councilQuestProgressLabel(stateLike, quest) {
+  if (!quest) return "";
+  const progress = councilQuestProgressValue(stateLike, quest);
+  if (quest.questType === "ash-breach-trial") {
+    return `${progress}/${quest.goal || 2} connected raids`;
+  }
+  return `${progress}/${quest.goal || 0}`;
 }
 
 function canAcceptCouncilSponsorAction(session, sponsorKey) {
@@ -727,6 +801,21 @@ function applyCouncilRewardToState(stateLike, reward, sponsorName = "", day = 1)
     nextState.currency = currency;
     nextState.councilQuestCounters = counters;
     return { nextState, rewardText: `+${reward.amount || 0} Darkcrystals` };
+  }
+  if (reward.type === "ash-tribute") {
+    const untilDay = nextCouncilDayAfter(day);
+    nextState.ashTributeUntilDay = untilDay;
+    return { nextState, rewardText: `+${reward.amount || 3} Essence on hero death until Day ${untilDay}` };
+  }
+  if (reward.type === "monster-room-cap-bonus") {
+    const untilDay = stateLike?.ashTrial?.expiresDay || nextCouncilDayAfter(day);
+    nextState.ashMonsterRoomCapUntilDay = Math.max(stateLike?.ashMonsterRoomCapUntilDay || 0, untilDay);
+    return { nextState, rewardText: `Monster rooms gain +${reward.amount || 1} capacity until Day ${untilDay}` };
+  }
+  if (reward.type === "room-cap-bonus") {
+    const gain = Math.max(1, reward.amount || 1);
+    nextState.bonusRoomCapPermanent = Math.max(0, stateLike?.bonusRoomCapPermanent || 0) + gain;
+    return { nextState, rewardText: `+${gain} permanent room cap` };
   }
   if (reward.type === "monster") {
     const count = Math.max(1, reward.count || 1);
@@ -963,7 +1052,14 @@ function raidTypeMeta(raidType, councilRaid = null) {
 
 function getCoreMaxHp(stateLike) {
   const doctrineEffects = getDoctrineEffects(stateLike?.doctrines || {});
-  return CORE_MAX_HP + doctrineEffects.coreMaxHpBonus;
+  const cursePenalty = isTimedBlessingActive(stateLike?.nihazaCurseUntilDay, stateLike?.day || 1) ? 25 : 0;
+  return Math.max(1, CORE_MAX_HP + doctrineEffects.coreMaxHpBonus - cursePenalty);
+}
+
+function getDungeonRoomCap(stateLike) {
+  const level = Math.max(1, Number.isFinite(stateLike?.dungeonLevel) ? stateLike.dungeonLevel : 1);
+  const bonus = Math.max(0, stateLike?.bonusRoomCapPermanent || 0);
+  return MAX_ROOMS_BASE + (level - 1) * ROOMS_PER_LEVEL + bonus;
 }
 
 function rollPassiveCount(stars) {
@@ -1545,6 +1641,12 @@ function monsterRoomCap(tier) {
   return BASE_MONSTER_ROOM_CAP + Math.max(0, (tier || 1) - 1);
 }
 
+function effectiveMonsterRoomCapValue(stateLike, tier) {
+  const doctrineEffects = getDoctrineEffects(stateLike?.doctrines || {});
+  const ashBonus = isTimedBlessingActive(stateLike?.ashMonsterRoomCapUntilDay, stateLike?.day || 1) ? 1 : 0;
+  return monsterRoomCap(tier) + doctrineEffects.monsterRoomCapBonus + ashBonus;
+}
+
 function applyMonsterRoomPlacementStatic(monster, roomType, roomTier = 1) {
   const m = {
     ...monster,
@@ -1741,6 +1843,73 @@ function findEntranceAndCore(grid) {
   return { entrance, core };
 }
 
+function getActiveEntrances(grid, ashTrial) {
+  const { entrance } = findEntranceAndCore(grid);
+  const entries = [];
+  if (entrance) entries.push({ ...entrance, kind: "main" });
+  if (isAshTrialActive(ashTrial)) {
+    for (const breach of ashTrial.breaches) {
+      entries.push({ x: breach.x, y: breach.y, kind: "ash-breach" });
+    }
+  }
+  return entries;
+}
+
+function hasPathToCore(grid, start, core) {
+  const q = [start];
+  const seen = new Set([keyOf(start.x, start.y)]);
+  while (q.length) {
+    const cur = q.shift();
+    if (cur.x === core.x && cur.y === core.y) return true;
+    for (const p of neighbors(cur.x, cur.y)) {
+      if (seen.has(keyOf(p.x, p.y))) continue;
+      if (!tileWalkable(grid[p.y][p.x])) continue;
+      seen.add(keyOf(p.x, p.y));
+      q.push(p);
+    }
+  }
+  return false;
+}
+
+function rollAshBreachPositions(grid, count, day) {
+  const activeEntrances = getActiveEntrances(grid, null);
+  const blocked = [...activeEntrances];
+  const breaches = [];
+  const edgeCells = [];
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (x !== 0 && x !== W - 1 && y !== 0 && y !== H - 1) continue;
+      edgeCells.push({ x, y });
+    }
+  }
+  for (let i = 0; i < count; i++) {
+    const candidates = edgeCells.filter((pos) => {
+      const tile = grid[pos.y][pos.x];
+      if (tile.core || tile.entrance || tile.room) return false;
+      if (blocked.some((entry) => inAuraRange(entry.x, entry.y, pos.x, pos.y))) return false;
+      if (breaches.some((entry) => entry.x === pos.x && entry.y === pos.y)) return false;
+      return true;
+    });
+    if (!candidates.length) return [];
+    const pickPos = pick(candidates);
+    breaches.push({ x: pickPos.x, y: pickPos.y, openedDay: day });
+    blocked.push(pickPos);
+  }
+  return breaches;
+}
+
+function pickSpawnEntrance(grid, ashTrial) {
+  const entries = getActiveEntrances(grid, ashTrial);
+  if (!entries.length) return null;
+  const totalWeight = entries.reduce((sum, entry) => sum + (entry.kind === "ash-breach" ? 3 : 2), 0);
+  let roll = Math.random() * totalWeight;
+  for (const entry of entries) {
+    roll -= entry.kind === "ash-breach" ? 3 : 2;
+    if (roll <= 0) return entry;
+  }
+  return entries[entries.length - 1];
+}
+
 function countRooms(grid) {
   let n = 0;
   for (let y = 0; y < H; y++) {
@@ -1751,25 +1920,20 @@ function countRooms(grid) {
   return n;
 }
 
-function validateDungeon(grid) {
+function validateDungeon(grid, ashTrial = null) {
   const { entrance, core } = findEntranceAndCore(grid);
+  const entrances = getActiveEntrances(grid, ashTrial);
   if (!entrance) return { ok: false, reason: "Entrance not placed." };
   if (!core) return { ok: false, reason: "Core not placed." };
-
-  const q = [entrance];
-  const seen = new Set([keyOf(entrance.x, entrance.y)]);
-  while (q.length) {
-    const cur = q.shift();
-    if (cur.x === core.x && cur.y === core.y) return { ok: true, reason: "" };
-
-    for (const p of neighbors(cur.x, cur.y)) {
-      if (seen.has(keyOf(p.x, p.y))) continue;
-      if (!tileWalkable(grid[p.y][p.x])) continue;
-      seen.add(keyOf(p.x, p.y));
-      q.push(p);
+  for (const entry of entrances) {
+    if (!hasPathToCore(grid, entry, core)) {
+      if (entry.kind === "ash-breach") {
+        return { ok: false, reason: `Ash Breach ${formatGridPos(entry)} is disconnected from the Core.` };
+      }
+      return { ok: false, reason: "No valid path from Entrance to Core." };
     }
   }
-  return { ok: false, reason: "No valid path from Entrance to Core." };
+  return { ok: true, reason: "" };
 }
 
 function aStarPath(grid, start, goal) {
@@ -2064,6 +2228,11 @@ function defaultState() {
       shadyStock,
       coreHp: getCoreMaxHp({ doctrines: { trap: 0, monster: 0, utility: 0, core: 0 } }),
       coreShield: 0,
+      ashTrial: createEmptyAshTrial(),
+      ashTributeUntilDay: 0,
+      ashMonsterRoomCapUntilDay: 0,
+      nihazaCurseUntilDay: 0,
+      bonusRoomCapPermanent: 0,
       fleshMarketUntilDay: 0,
       heroes: [],
       nextHeroId: 1,
@@ -2198,6 +2367,16 @@ function defaultState() {
         declinedStreak: Number.isFinite(councilRaw.declinedStreak) ? councilRaw.declinedStreak : 0,
       };
       const councilFavor = parsed.councilFavor && typeof parsed.councilFavor === "object" ? parsed.councilFavor : {};
+      const savedDay = Math.max(1, parsed.day || base.day || 1);
+      const ashTrial = normalizeAshTrial(parsed.ashTrial, savedDay);
+      const ashTributeUntilDay = Number.isFinite(parsed.ashTributeUntilDay) ? parsed.ashTributeUntilDay : 0;
+      const ashMonsterRoomCapUntilDay = Number.isFinite(parsed.ashMonsterRoomCapUntilDay) ? parsed.ashMonsterRoomCapUntilDay : 0;
+      const nihazaCurseUntilDay = Number.isFinite(parsed.nihazaCurseUntilDay) ? parsed.nihazaCurseUntilDay : 0;
+      const bonusRoomCapPermanent = Math.max(0, parsed.bonusRoomCapPermanent || 0);
+      const coreHp = Math.min(
+        Number.isFinite(parsed.coreHp) ? parsed.coreHp : base.coreHp,
+        getCoreMaxHp({ doctrines, day: savedDay, nihazaCurseUntilDay })
+      );
       const nextRaidType = parsed.nextRaidType || base.nextRaidType;
       const pendingPunitiveRaid =
         !!parsed.pendingPunitiveRaid || (council.declinedStreak >= 2 && nextRaidType === "council");
@@ -2205,7 +2384,6 @@ function defaultState() {
         parsed.pendingCouncilRaid ||
         (pendingPunitiveRaid && council.roster?.length ? buildCouncilRaidFromRoster(council.roster, parsed.day || base.day, councilFavor) : null);
       const currentPartyRaidType = parsed.currentPartyRaidType || null;
-      const savedDay = Math.max(1, parsed.day || base.day || 1);
       const councilQuestCounters = createEmptyCouncilQuestCounters();
       for (const key of COUNCIL_QUEST_COUNTER_KEYS) {
         const value = parsed.councilQuestCounters?.[key];
@@ -2226,10 +2404,13 @@ function defaultState() {
         councilSession = null;
       }
       const councilQuest =
-        parsed.councilQuest && parsed.councilQuest.metricKey
+        parsed.councilQuest && (parsed.councilQuest.metricKey || parsed.councilQuest.questType === "ash-breach-trial")
           ? {
               ...parsed.councilQuest,
-              progress: Math.max(0, councilQuestCounters[parsed.councilQuest.metricKey] || parsed.councilQuest.progress || 0),
+              progress:
+                parsed.councilQuest.questType === "ash-breach-trial"
+                  ? Math.max(0, ashTrial.raidsCompleted || parsed.councilQuest.progress || 0)
+                  : Math.max(0, councilQuestCounters[parsed.councilQuest.metricKey] || parsed.councilQuest.progress || 0),
             }
           : base.councilQuest;
       const boughtUniqueKeys = normalizeBoughtUniqueKeys(parsed.boughtUniqueKeys);
@@ -2255,8 +2436,14 @@ function defaultState() {
         traderStock,
         shadyStock,
         artifacts,
+        ashTrial,
+        ashTributeUntilDay,
+        ashMonsterRoomCapUntilDay,
+        nihazaCurseUntilDay,
+        bonusRoomCapPermanent,
         dominionEffects,
         evolutionOffer,
+        coreHp,
         coreShield,
         council,
         councilFavor,
@@ -2348,13 +2535,14 @@ function defaultState() {
   }, [councilRoster, focusedCouncilKey]);
 
   const { entrance, core } = useMemo(() => findEntranceAndCore(state.grid), [state.grid]);
-  const validation = useMemo(() => validateDungeon(state.grid), [state.grid]);
+  const activeEntrances = useMemo(() => getActiveEntrances(state.grid, state.ashTrial), [state.grid, state.ashTrial]);
+  const validation = useMemo(() => validateDungeon(state.grid, state.ashTrial), [state.grid, state.ashTrial]);
   const roomsPlaced = useMemo(() => countRooms(state.grid), [state.grid]);
   const doctrineEffects = useMemo(() => getDoctrineEffects(state.doctrines || {}), [state.doctrines]);
   const contentWarnings = useMemo(() => validateGameContent(), []);
-  const coreMaxHp = useMemo(() => getCoreMaxHp(state), [state.doctrines]);
+  const coreMaxHp = useMemo(() => getCoreMaxHp(state), [state.doctrines, state.nihazaCurseUntilDay, state.day]);
   const dungeonLevel = Number.isFinite(state.dungeonLevel) ? state.dungeonLevel : 1;
-  const maxRooms = MAX_ROOMS_BASE + (dungeonLevel - 1) * ROOMS_PER_LEVEL;
+  const maxRooms = getDungeonRoomCap(state);
 
   const heroesByTile = useMemo(() => {
     const map = new Map();
@@ -2378,6 +2566,7 @@ function defaultState() {
         const grid = cloneGrid(s.grid);
         const t = grid[y][x];
         if (t.entrance) return addLog(s, "Cannot move onto the Entrance.");
+        if (isAshBreachAt(s.ashTrial, x, y)) return addLog(s, "Cannot move onto an Ash Breach.");
         if (t.core || t.room) return addLog(s, "That tile is already occupied.");
 
         const payload = s.movePayload;
@@ -2420,6 +2609,7 @@ function defaultState() {
       const grid = cloneGrid(s.grid);
       const t = grid[s.selected.y][s.selected.x];
       if (t.entrance) return addLog(s, "Entrance cannot be cleared once placed.");
+      if (isAshBreachAt(s.ashTrial, s.selected.x, s.selected.y)) return addLog(s, "Ash Breaches cannot be cleared while the trial is active.");
 
       const invMonsters = [...s.invMonsters, ...t.monsters.map((m) => ({ ...m }))];
 
@@ -2456,6 +2646,7 @@ function defaultState() {
     setState((s) => {
       const { entrance: ent } = findEntranceAndCore(s.grid);
       if (ent) return addLog(s, "Entrance is fixed and cannot be moved.");
+      if (isAshBreachAt(s.ashTrial, s.selected.x, s.selected.y)) return addLog(s, "Cannot place the Entrance on an Ash Breach.");
       const grid = cloneGrid(s.grid);
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) grid[y][x].entrance = false;
 
@@ -2496,6 +2687,7 @@ function defaultState() {
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) grid[y][x].core = false;
 
       const t = grid[s.selected.y][s.selected.x];
+      if (isAshBreachAt(s.ashTrial, s.selected.x, s.selected.y)) return addLog(s, "Cannot place the Core on an Ash Breach.");
       t.core = true;
 
       t.room = null;
@@ -2531,10 +2723,10 @@ function defaultState() {
       const grid = cloneGrid(s.grid);
       const t = grid[s.selected.y][s.selected.x];
 
+      if (isAshBreachAt(s.ashTrial, s.selected.x, s.selected.y)) return addLog(s, "Ash Breach tiles cannot hold rooms.");
       if (t.entrance || t.core) return addLog(s, "Cannot build on Entrance/Core.");
       if (t.room) return addLog(s, "That tile already has a room.");
-      const level = Number.isFinite(s.dungeonLevel) ? s.dungeonLevel : 1;
-      const cap = MAX_ROOMS_BASE + (level - 1) * ROOMS_PER_LEVEL;
+      const cap = getDungeonRoomCap(s);
       if (countRooms(grid) >= cap) return addLog(s, `Room limit reached (${cap}).`);
 
       const trapStar = rollAuthoritativeStar(s.day);
@@ -2572,10 +2764,10 @@ function defaultState() {
       const grid = cloneGrid(s.grid);
       const t = grid[s.selected.y][s.selected.x];
 
+      if (isAshBreachAt(s.ashTrial, s.selected.x, s.selected.y)) return addLog(s, "Ash Breach tiles cannot hold rooms.");
       if (t.entrance || t.core) return addLog(s, "Cannot build on Entrance/Core.");
       if (t.room) return addLog(s, "That tile already has a room.");
-      const level = Number.isFinite(s.dungeonLevel) ? s.dungeonLevel : 1;
-      const cap = MAX_ROOMS_BASE + (level - 1) * ROOMS_PER_LEVEL;
+      const cap = getDungeonRoomCap(s);
       if (countRooms(grid) >= cap) return addLog(s, `Room limit reached (${cap}).`);
 
       t.room = "monster";
@@ -2609,10 +2801,10 @@ function defaultState() {
       const grid = cloneGrid(s.grid);
       const t = grid[s.selected.y][s.selected.x];
 
+      if (isAshBreachAt(s.ashTrial, s.selected.x, s.selected.y)) return addLog(s, "Ash Breach tiles cannot hold rooms.");
       if (t.entrance || t.core) return addLog(s, "Cannot build on Entrance/Core.");
       if (t.room) return addLog(s, "That tile already has a room.");
-      const level = Number.isFinite(s.dungeonLevel) ? s.dungeonLevel : 1;
-      const cap = MAX_ROOMS_BASE + (level - 1) * ROOMS_PER_LEVEL;
+      const cap = getDungeonRoomCap(s);
       if (countRooms(grid) >= cap) return addLog(s, `Room limit reached (${cap}).`);
 
       t.room = "utility";
@@ -2850,7 +3042,7 @@ function defaultState() {
       const grid = cloneGrid(s.grid);
       const t = grid[s.selected.y][s.selected.x];
       if (t.room !== "monster") return addLog(s, "Select a monster room first.");
-      const cap = monsterRoomCap(t.roomTier || 1) + getDoctrineEffects(s.doctrines).monsterRoomCapBonus;
+      const cap = effectiveMonsterRoomCapValue(s, t.roomTier || 1);
       if (t.monsters.length >= cap) return addLog(s, `Monster room is full (max ${cap}).`);
       if (s.invMonsters.length <= 0) return addLog(s, "No monsters in inventory.");
 
@@ -2987,7 +3179,7 @@ function defaultState() {
       let coreHp = s.coreHp;
       if (kind === "core") {
         const previousMax = getCoreMaxHp(s);
-        const nextMax = getCoreMaxHp({ doctrines });
+        const nextMax = getCoreMaxHp({ ...s, doctrines });
         coreHp = Math.min(nextMax, Math.max(1, coreHp + (nextMax - previousMax)));
       }
       return addLog(
@@ -3161,15 +3353,17 @@ function defaultState() {
     });
   }
 
-  function spawnOneHero(heroes, nextId, entrancePos, turnsSurvived, queueIn, grid, raidType, day = 1) {
+  function spawnOneHero(heroes, nextId, entranceOptions, turnsSurvived, queueIn, grid, raidType, day = 1) {
     let queue = queueIn ? [...queueIn] : [];
+    const spawnFrom = Array.isArray(entranceOptions) ? pickSpawnEntrance(grid, { active: true, breaches: entranceOptions.filter((entry) => entry.kind === "ash-breach") }) : entranceOptions;
+    if (!spawnFrom) return { nextHeroId: nextId, scoutQueue: queue, spawned: null, entrance: null };
     let hero;
     if (queue.length > 0) {
       hero = { ...queue.shift() };
-      hero.x = entrancePos.x;
-      hero.y = entrancePos.y;
+      hero.x = spawnFrom.x;
+      hero.y = spawnFrom.y;
     } else {
-      hero = generateHero(nextId, entrancePos, turnsSurvived, raidType, day);
+      hero = generateHero(nextId, spawnFrom, turnsSurvived, raidType, day);
     }
     if (grid && hasUtilityAura(grid, hero.x, hero.y, "fear-idol")) {
       hero.statuses = hero.statuses || {};
@@ -3177,7 +3371,7 @@ function defaultState() {
     }
     heroes.push(hero);
     const nextHeroId = Math.max(nextId, hero.id + 1);
-    return { nextHeroId, scoutQueue: queue, spawned: hero };
+    return { nextHeroId, scoutQueue: queue, spawned: hero, entrance: spawnFrom };
   }
 
   function startRaid() {
@@ -3199,8 +3393,8 @@ function defaultState() {
       if (s.raidActive) return addLog(s, "Raid is already active.");
       if (s.phase !== "battle") return addLog(s, "You can only start raids during battle.");
 
-      const { entrance: ent } = findEntranceAndCore(s.grid);
-      if (!ent) return addLog(s, "Place an Entrance first.");
+      const entrances = getActiveEntrances(s.grid, s.ashTrial);
+      if (!entrances.length) return addLog(s, "Place an Entrance first.");
 
       const grid = cloneGrid(s.grid);
       for (let y = 0; y < H; y++) {
@@ -3254,7 +3448,7 @@ function defaultState() {
       }
 
       if (heroes.length < HERO_CAP && partyQueue.length > 0) {
-        const spawnResult = spawnOneHero(heroes, nextId, ent, s.turnsSurvived, partyQueue, grid, raidType, s.day);
+        const spawnResult = spawnOneHero(heroes, nextId, entrances, s.turnsSurvived, partyQueue, grid, raidType, s.day);
         nextId = spawnResult.nextHeroId;
         partyQueue = spawnResult.scoutQueue;
         raidRemaining = partyQueue.length;
@@ -3295,7 +3489,8 @@ function defaultState() {
         if (raidMods.coreShieldBonus > 0) {
           ns = addLog(ns, `Council leverage fortifies the Core with +${raidMods.coreShieldBonus} Shield.`);
         }
-        ns = addLog(ns, `Raid started. ${meta.label}. Party size ${party.length}. ${invaderLabel(spawnResult.spawned)} breaches the Entrance.`);
+        const originLabel = spawnResult.entrance?.kind === "ash-breach" ? `Ash Breach ${formatGridPos(spawnResult.entrance)}` : "the Entrance";
+        ns = addLog(ns, `Raid started. ${meta.label}. Party size ${party.length}. ${invaderLabel(spawnResult.spawned)} enters from ${originLabel}.`);
         if (scoutQueue.length > 0) {
           const previews = scoutQueue
             .map((h) => `${h.name}${h.isRaidLeader ? " [Leader]" : ""} (${formatStars(safeEntityStars(h))}, ATK ${h.atk}, HP ${h.hp})`)
@@ -3362,7 +3557,7 @@ function defaultState() {
       return;
     }
 
-    const v = validateDungeon(state.grid);
+    const v = validateDungeon(state.grid, state.ashTrial);
     if (!v.ok) {
       setState((s) => addLog(s, `Dungeon not valid: ${v.reason}`));
       return;
@@ -3397,7 +3592,8 @@ function defaultState() {
       let turnsSurvived = s.turnsSurvived;
       let heroesIn = s.heroes;
 
-      const { entrance: ent, core: corePos } = findEntranceAndCore(grid);
+      const { core: corePos } = findEntranceAndCore(grid);
+      const activeEntrancesLocal = getActiveEntrances(grid, s.ashTrial);
 
       const logLines = [];
       const push = (msg) => logLines.push(msg);
@@ -3470,6 +3666,7 @@ function defaultState() {
         const shardGain = Math.round(HERO_KILL_SOULSHARDS * (eventMods.soulshardMult || 1) * raidMult);
         const extraEssence = artifactMods.essenceOnKill || 0;
         const extraShards = artifactMods.soulshardOnKill || 0;
+        const ashTributeGain = isTimedBlessingActive(s.ashTributeUntilDay, s.day) ? 3 : 0;
         essence += essenceGain + extraEssence;
         soulshards += shardGain + extraShards;
         kills += 1;
@@ -3483,6 +3680,10 @@ function defaultState() {
           const altarGain = 15 + (altarTier - 1) * 5;
           essence += Math.round(altarGain * (eventMods.essenceMult || 1));
           push(`Soul Altar feeds on ${invaderLabel(h)}. +${altarGain} Essence`);
+        }
+        if (ashTributeGain > 0) {
+          essence += ashTributeGain;
+          push(`Ash Tribute consumes ${invaderLabel(h)}. +${ashTributeGain} Essence`);
         }
         const totalEssence = essenceGain + extraEssence;
         const totalShards = shardGain + extraShards;
@@ -4070,12 +4271,15 @@ function defaultState() {
       // DRIP SPAWN (finite)
       let nextHeroId = s.nextHeroId;
       let partyQueue = s.partyQueue ? [...s.partyQueue] : [];
-      if (raidActive && partyQueue.length > 0 && ent && heroesOut.length < HERO_CAP) {
-        const spawnResult = spawnOneHero(heroesOut, nextHeroId, ent, turnsSurvived, partyQueue, grid, s.raidType, s.day);
+      if (raidActive && partyQueue.length > 0 && activeEntrancesLocal.length > 0 && heroesOut.length < HERO_CAP) {
+        const spawnResult = spawnOneHero(heroesOut, nextHeroId, activeEntrancesLocal, turnsSurvived, partyQueue, grid, s.raidType, s.day);
         nextHeroId = spawnResult.nextHeroId;
         partyQueue = spawnResult.scoutQueue;
         raidRemaining = partyQueue.length;
-        push(`${invaderLabel(spawnResult.spawned)} enters. (${raidRemaining} left in this raid)`);
+        if (spawnResult.spawned) {
+          const originLabel = spawnResult.entrance?.kind === "ash-breach" ? ` from Ash Breach ${formatGridPos(spawnResult.entrance)}` : "";
+          push(`${invaderLabel(spawnResult.spawned)} enters${originLabel}. (${raidRemaining} left in this raid)`);
+        }
       } else if (raidActive && partyQueue.length > 0 && heroesOut.length >= HERO_CAP) {
         raidRemaining = partyQueue.length;
         push(`Invader cap reached (${HERO_CAP}). (${raidRemaining} still pending)`);
@@ -4165,7 +4369,35 @@ function defaultState() {
         if (raidSoulshardsGained > 0) {
           nextState = addCouncilQuestCounter(nextState, "soulshardsEarnedSinceCouncil", raidSoulshardsGained);
         }
-        if (nextState.councilQuest?.active) {
+        if (nextState.ashTrial?.active) {
+          const progressedTrial = {
+            ...nextState.ashTrial,
+            raidsCompleted: Math.min(nextState.ashTrial.requiredRaids || 2, (nextState.ashTrial.raidsCompleted || 0) + 1),
+          };
+          nextState.ashTrial = progressedTrial;
+          nextState = addLog(
+            nextState,
+            `Ash Trial progress: ${progressedTrial.raidsCompleted}/${progressedTrial.requiredRaids} connected raid${progressedTrial.requiredRaids === 1 ? "" : "s"}.`
+          );
+          if (nextState.councilQuest?.active && nextState.councilQuest.questType === "ash-breach-trial") {
+            nextState.councilQuest = {
+              ...nextState.councilQuest,
+              progress: progressedTrial.raidsCompleted,
+            };
+          }
+          if (progressedTrial.raidsCompleted >= (progressedTrial.requiredRaids || 2) && nextState.councilQuest?.questType === "ash-breach-trial") {
+            const rewardResult = applyCouncilRewardToState(nextState, nextState.councilQuest.reward, nextState.councilQuest.sponsorName, nextState.day);
+            nextState = rewardResult.nextState;
+            nextState = addLog(nextState, `Council quest completed: ${nextState.councilQuest.title}. ${rewardResult.rewardText || "Reward claimed."}`);
+            nextState.ashTrial = createEmptyAshTrial();
+            nextState = addLog(nextState, `Ash Breach${progressedTrial.breaches?.length > 1 ? "es" : ""} collapse${progressedTrial.breaches?.length > 1 ? "" : "s"} into cinders.`);
+            nextState.councilQuest = {
+              ...nextState.councilQuest,
+              active: false,
+              progress: progressedTrial.requiredRaids || 2,
+            };
+          }
+        } else if (nextState.councilQuest?.active) {
           const progress = councilQuestProgressValue(nextState, nextState.councilQuest);
           const goal = nextState.councilQuest.goal || 0;
           if (progress >= goal) {
@@ -4189,8 +4421,18 @@ function defaultState() {
             roster,
             lastRoster: roster,
           };
+          if (nextState.ashTrial?.active) {
+            nextState.ashTrial = createEmptyAshTrial();
+            nextState.nihazaCurseUntilDay = nextCouncilDayAfter(nextState.day);
+            nextState.coreHp = Math.min(nextState.coreHp, getCoreMaxHp(nextState));
+            nextState = addLog(nextState, `Ash spreads. Nihaza's judgment stands. Core max HP -25 until Day ${nextState.nihazaCurseUntilDay}.`);
+          }
           if (nextState.councilQuest?.active) {
-            nextState = addLog(nextState, `Council quest expired: ${nextState.councilQuest.title}.`);
+            if (nextState.councilQuest.questType === "ash-breach-trial") {
+              nextState = addLog(nextState, `Council quest failed: ${nextState.councilQuest.title}.`);
+            } else {
+              nextState = addLog(nextState, `Council quest expired: ${nextState.councilQuest.title}.`);
+            }
           }
           nextState.councilQuest = null;
           nextState.councilQuestCounters = createEmptyCouncilQuestCounters();
@@ -4276,6 +4518,11 @@ function defaultState() {
         shadyStock,
         coreHp: getCoreMaxHp({ doctrines: { trap: 0, monster: 0, utility: 0, core: 0 } }),
         coreShield: 0,
+        ashTrial: createEmptyAshTrial(),
+        ashTributeUntilDay: 0,
+        ashMonsterRoomCapUntilDay: 0,
+        nihazaCurseUntilDay: 0,
+        bonusRoomCapPermanent: 0,
         heroes: [],
         nextHeroId: 1,
         invMonsters: initMonsterInventory(0, 2, 2, 1),
@@ -4515,19 +4762,38 @@ function defaultState() {
       if (!sponsor?.available || quest.available === false) {
         return addLog(s, quest.lockedReason || sponsor?.lockedReason || "That sponsor's quest is not available yet.");
       }
+      let nextState = { ...s };
+      if (quest.questType === "ash-breach-trial") {
+        const breachCount = Math.max(1, quest.breachCount || (difficulty === "hard" ? 2 : 1));
+        const breaches = rollAshBreachPositions(s.grid, breachCount, s.day);
+        if (breaches.length < breachCount) {
+          return addLog(s, "Nihaza finds no valid edge to tear open. Rebuild the perimeter and try again.");
+        }
+        nextState.ashTrial = {
+          active: true,
+          difficulty,
+          breaches,
+          raidsCompleted: 0,
+          requiredRaids: Math.max(1, quest.goal || 2),
+          expiresDay: nextCouncilDayAfter(s.day),
+        };
+        for (const breach of breaches) {
+          nextState = addLog(nextState, `Nihaza opens an Ash Breach at ${formatGridPos(breach)}. The dungeon trembles.`);
+        }
+      }
       const councilQuest = {
         ...quest,
         active: true,
-        progress: councilQuestProgressValue(s, quest),
+        progress: councilQuestProgressValue(nextState, quest),
       };
       const councilSession = {
-        ...s.councilSession,
-        courtedSponsorKey: s.councilSession.courtedSponsorKey || sponsorKey,
+        ...nextState.councilSession,
+        courtedSponsorKey: nextState.councilSession.courtedSponsorKey || sponsorKey,
         acceptedCouncilQuestId: quest.id,
         acceptedCouncilQuestDifficulty: difficulty,
       };
-      const councilFavor = applyCouncilFavorShift(s.councilFavor || {}, sponsorKey, 1);
-      return addLog({ ...s, councilQuest, councilSession, councilFavor }, `Council quest accepted: ${quest.title} (${quest.sponsorName}, ${difficulty}).`);
+      const councilFavor = applyCouncilFavorShift(nextState.councilFavor || {}, sponsorKey, 1);
+      return addLog({ ...nextState, councilQuest, councilSession, councilFavor }, `Council quest accepted: ${quest.title} (${quest.sponsorName}, ${difficulty}).`);
     });
   }
 
@@ -4678,9 +4944,12 @@ function defaultState() {
     return "";
   }
 
-  function getTileGlyph(tile, heroesOnTileCount, monstersOnTileCount) {
+  function getTileGlyph(tile, x, y, heroesOnTileCount, monstersOnTileCount) {
     if (heroesOnTileCount > 0) {
       return { text: "H", subtext: heroesOnTileCount > 1 ? `Hx${heroesOnTileCount}` : "", tone: "hero" };
+    }
+    if (isAshBreachAt(state.ashTrial, x, y)) {
+      return { text: "AE", tone: "ash-breach" };
     }
     if (tile.entrance) return { text: "E", tone: "entrance" };
     if (tile.core) return { text: "C", tone: "core" };
@@ -4705,6 +4974,7 @@ function defaultState() {
     const path = previewPathKeys.has(keyOf(x, y)) ? " path-preview" : "";
     const lure = lureCandidateKeys.has(keyOf(x, y)) ? " lure-candidate" : "";
     const aura = tileHasAura(x, y) ? " aura-affected" : "";
+    if (isAshBreachAt(state.ashTrial, x, y)) return "tile ash-breach" + sel + path + lure + aura;
     if (t.entrance) return "tile entrance" + sel + path + lure + aura;
     if (t.core) return "tile core" + sel + path + lure + aura;
     if (t.room === "trap") return "tile trap" + tier + sel + path + lure + aura;
@@ -4737,7 +5007,7 @@ function defaultState() {
     }
     if (tile.room === "monster") {
       const tier = tile.roomTier || 1;
-      const cap = monsterRoomCap(tier) + doctrineEffects.monsterRoomCapBonus;
+      const cap = effectiveMonsterRoomCapValue(state, tier);
       if (tile.roomType === "training-den") {
         return `Tier ${tier}: Monsters placed here gain +${1 + (tier - 1)} ATK permanently. Cap ${cap}.`;
       }
@@ -4835,7 +5105,7 @@ function defaultState() {
 
   function effectiveMonsterRoomCap(tile) {
     if (!tile || tile.room !== "monster") return "n/a";
-    return monsterRoomCap(tile.roomTier || 1) + doctrineEffects.monsterRoomCapBonus;
+    return effectiveMonsterRoomCapValue(state, tile.roomTier || 1);
   }
 
   function effectiveUtilityTierAt(x, y, key) {
@@ -4903,12 +5173,17 @@ function defaultState() {
       const routed = choice?.next ? aStarPath(state.grid, choice.next, core) || [choice.next] : aStarPath(state.grid, { x: selectedHeroes[0].x, y: selectedHeroes[0].y }, core);
       return new Set([current, ...(routed || []).map((pos) => keyOf(pos.x, pos.y))]);
     }
-    if (entrance && core) {
-      const path = aStarPath(state.grid, entrance, core);
-      return new Set((path || []).map((pos) => keyOf(pos.x, pos.y)));
+    if (activeEntrances.length > 0 && core) {
+      const paths = new Set();
+      for (const source of activeEntrances) {
+        paths.add(keyOf(source.x, source.y));
+        const path = aStarPath(state.grid, source, core) || [];
+        for (const pos of path) paths.add(keyOf(pos.x, pos.y));
+      }
+      return paths;
     }
     return new Set();
-  }, [selectedHeroes, state.grid, core, entrance, state.activeRaidBoons, doctrineEffects]);
+  }, [selectedHeroes, state.grid, core, activeEntrances, state.activeRaidBoons, doctrineEffects]);
 
   const lureCandidateKeys = useMemo(() => {
     if (!selectedHeroes[0] || !core) return new Set();
@@ -5233,10 +5508,9 @@ function defaultState() {
                     <div className="entityName">{state.councilQuest.title}</div>
                     <div className="entityMeta">{state.councilQuest.desc}</div>
                     <div className="muted">{state.councilQuest.sponsorName}</div>
-                    <div className="muted">
-                      Progress: {activeCouncilQuestProgress}/{state.councilQuest.goal}
-                    </div>
+                    <div className="muted">Progress: {councilQuestProgressLabel(state, state.councilQuest)}</div>
                     <div className="muted">Reward: {councilRewardLabel(state.councilQuest.reward)}</div>
+                    {state.councilQuest.failurePenalty ? <div className="muted small">Failure: {state.councilQuest.failurePenalty}</div> : null}
                   </>
                 ) : (
                   <div className="entityEmpty">No active quest.</div>
@@ -5258,9 +5532,10 @@ function defaultState() {
                             {quest.title} ({difficulty})
                           </div>
                           <div className="entityMeta">{quest.desc}</div>
-                          <div className="muted">Goal: {quest.goal}</div>
-                          <div className="muted">Current Progress: {councilQuestProgressValue(state, quest)}</div>
+                          <div className="muted">{councilQuestGoalLabel(quest)}</div>
+                          <div className="muted">Current Progress: {councilQuestProgressLabel(state, quest)}</div>
                           <div className="muted">Reward: {councilRewardLabel(quest.reward)}</div>
+                          {quest.failurePenalty ? <div className="muted small">Failure: {quest.failurePenalty}</div> : null}
                           {!quest.available ? <div className="muted small">{quest.lockedReason}</div> : null}
                           <div className="row">
                             {state.councilSession.status !== "attended" ? (
@@ -5325,7 +5600,7 @@ function defaultState() {
                     {(() => {
                       const heroesHere = heroesByTile.get(keyOf(x, y)) || [];
                       const monstersHere = t.room === "monster" ? t.monsters.length : 0;
-                      const glyph = getTileGlyph(t, heroesHere.length, monstersHere);
+                      const glyph = getTileGlyph(t, x, y, heroesHere.length, monstersHere);
                       const stateChip = tileStateChip(t, x, y);
                       if (!glyph.text && !glyph.subtext && !stateChip) return null;
                       return (
@@ -5382,7 +5657,7 @@ function defaultState() {
               </div>
               <div className="checkRow">
                 <span className={"checkDot " + (checklist.validPath ? "on" : "off")} />
-                Valid path E to C
+                {isAshTrialActive(state.ashTrial) ? "All entrances connected" : "Valid path E to C"}
               </div>
               {!validation.ok && <div className="warn">{validation.reason}</div>}
             </div>
@@ -5569,6 +5844,8 @@ function defaultState() {
                 <div>({state.selected.x + 1}, {state.selected.y + 1})</div>
                 <div>Entrance</div>
                 <div>{selectedTile.entrance ? "YES" : "no"}</div>
+                <div>Ash Breach</div>
+                <div>{isAshBreachAt(state.ashTrial, state.selected.x, state.selected.y) ? "YES" : "no"}</div>
                 <div>Core</div>
                 <div>{selectedTile.core ? "YES" : "no"}</div>
                 <div>Room</div>
@@ -5665,8 +5942,12 @@ function defaultState() {
                     Path tiles glow cyan. Likely lure candidates glow amber.
                   </div>
                 </>
-              ) : entrance && core ? (
-                <div className="muted">Default entrance-to-core route is highlighted while no invader is selected.</div>
+              ) : activeEntrances.length > 0 && core ? (
+                <div className="muted">
+                  {activeEntrances.length > 1
+                    ? "All active entrance routes are highlighted while no invader is selected."
+                    : "Default entrance-to-core route is highlighted while no invader is selected."}
+                </div>
               ) : (
                 <div className="muted">Place Entrance and Core to preview the main route.</div>
               )}
@@ -5761,7 +6042,7 @@ function defaultState() {
   Build Monster Room
 </button>
 
-                <div className="muted">Up to {monsterRoomCap(1) + doctrineEffects.monsterRoomCapBonus} monsters inside.</div>
+                <div className="muted">Up to {effectiveMonsterRoomCapValue(state, 1)} monsters inside.</div>
               </div>
               <div className="row">
                 <select
@@ -5814,7 +6095,7 @@ function defaultState() {
                 <div className="muted">Inv: {state.invMonsters.length}</div>
               </div>
               <div className="row">
-                <button className="btn danger" onClick={clearTile} disabled={locked || state.movePayload || !isBuildPhase || selectedTile.entrance}>Clear Tile</button>
+                <button className="btn danger" onClick={clearTile} disabled={locked || state.movePayload || !isBuildPhase || selectedTile.entrance || isAshBreachAt(state.ashTrial, state.selected.x, state.selected.y)}>Clear Tile</button>
                 <div className="muted">Clears room/flags. Monsters return to inventory. Entrance is fixed.</div>
               </div>
 
@@ -6377,10 +6658,9 @@ function defaultState() {
                       <div className="entityName">{state.councilQuest.title}</div>
                       <div className="entityMeta">{state.councilQuest.desc}</div>
                       <div className="muted">{state.councilQuest.sponsorName}</div>
-                      <div className="muted">
-                        Progress: {activeCouncilQuestProgress}/{state.councilQuest.goal}
-                      </div>
+                      <div className="muted">Progress: {councilQuestProgressLabel(state, state.councilQuest)}</div>
                       <div className="muted">Reward: {councilRewardLabel(state.councilQuest.reward)}</div>
+                      {state.councilQuest.failurePenalty ? <div className="muted small">Failure: {state.councilQuest.failurePenalty}</div> : null}
                     </>
                   ) : (
                     <div className="entityEmpty">No active quest.</div>
@@ -6403,9 +6683,10 @@ function defaultState() {
                               {quest.title} ({difficulty})
                             </div>
                             <div className="entityMeta">{quest.desc}</div>
-                            <div className="muted">Goal: {quest.goal}</div>
-                            <div className="muted">Progress: {councilQuestProgressValue(state, quest)}</div>
+                            <div className="muted">{councilQuestGoalLabel(quest)}</div>
+                            <div className="muted">Progress: {councilQuestProgressLabel(state, quest)}</div>
                             <div className="muted">Reward: {councilRewardLabel(quest.reward)}</div>
+                            {quest.failurePenalty ? <div className="muted small">Failure: {quest.failurePenalty}</div> : null}
                             {!quest.available ? <div className="muted small">{quest.lockedReason}</div> : null}
                             <div className="row">
                               {state.councilSession.status !== "attended" ? (

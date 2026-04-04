@@ -307,6 +307,7 @@ body::before {
 .tile.trap     { border-color: var(--trap); box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.45); }
 .tile.monster  { border-color: var(--monster); box-shadow: 0 0 0 1px rgba(225, 29, 72, 0.45); }
 .tile.utility  { border-color: #34d399; box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.45); }
+.tile.ash-breach { border-color: #f59e0b; box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.55), 0 0 18px rgba(120, 53, 15, 0.18); }
 
 .tile.tier-2 {
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
@@ -370,6 +371,15 @@ body::before {
 .tileGlyph.entrance,
 .tileGlyph.core {
   color: var(--ink-0);
+}
+
+.tileGlyph.ash-breach {
+  color: #fdba74;
+  letter-spacing: 0;
+  font-size: clamp(10px, 1.9vw, 15px);
+  text-shadow:
+    0 0 10px rgba(245, 158, 11, 0.28),
+    0 2px 6px rgba(0, 0, 0, 0.7);
 }
 
 .tileChip {
