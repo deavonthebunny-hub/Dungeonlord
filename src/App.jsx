@@ -1807,6 +1807,60 @@ function inAuraRange(ax, ay, bx, by) {
   return Math.max(Math.abs(ax - bx), Math.abs(ay - by)) <= 1;
 }
 
+function ashBreachRequirementText(count) {
+  if (count <= 1) return "Requires 1 valid edge tile within 2 steps of a trap or monster room.";
+  return `Requires ${count} valid edge tiles within 2 steps of trap/monster rooms.`;
+}
+
+function hasAshBreachAnchorNearby(grid, x, y) {
+  for (let ny = 0; ny < H; ny += 1) {
+    for (let nx = 0; nx < W; nx += 1) {
+      const tile = grid[ny][nx];
+      if (tile.room !== "trap" && tile.room !== "monster") continue;
+      if (Math.abs(nx - x) + Math.abs(ny - y) <= 2) return true;
+    }
+  }
+  return false;
+}
+
+function getAshBreachCandidates(grid) {
+  const activeEntrances = getActiveEntrances(grid, null);
+  const edgeCells = [];
+  for (let y = 0; y < H; y += 1) {
+    for (let x = 0; x < W; x += 1) {
+      if (x !== 0 && x !== W - 1 && y !== 0 && y !== H - 1) continue;
+      edgeCells.push({ x, y });
+    }
+  }
+  return edgeCells.filter((pos) => {
+    const tile = grid[pos.y][pos.x];
+    if (tile.core || tile.entrance || tile.room) return false;
+    if (activeEntrances.some((entry) => inAuraRange(entry.x, entry.y, pos.x, pos.y))) return false;
+    if (!hasAshBreachAnchorNearby(grid, pos.x, pos.y)) return false;
+    return true;
+  });
+}
+
+function canPlaceAshBreaches(grid, count) {
+  const needed = Math.max(1, count || 1);
+  const candidates = getAshBreachCandidates(grid);
+  if (candidates.length < needed) return false;
+  if (needed === 1) return true;
+  const chosen = [];
+  function search(start) {
+    if (chosen.length >= needed) return true;
+    for (let i = start; i < candidates.length; i += 1) {
+      const candidate = candidates[i];
+      if (chosen.some((entry) => inAuraRange(entry.x, entry.y, candidate.x, candidate.y))) continue;
+      chosen.push(candidate);
+      if (search(i + 1)) return true;
+      chosen.pop();
+    }
+    return false;
+  }
+  return search(0);
+}
+
 function utilityTier(grid, x, y, key) {
   let tier = 0;
   for (let dy = -1; dy <= 1; dy++) {
@@ -1872,30 +1926,28 @@ function hasPathToCore(grid, start, core) {
 }
 
 function rollAshBreachPositions(grid, count, day) {
-  const activeEntrances = getActiveEntrances(grid, null);
-  const blocked = [...activeEntrances];
-  const breaches = [];
-  const edgeCells = [];
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      if (x !== 0 && x !== W - 1 && y !== 0 && y !== H - 1) continue;
-      edgeCells.push({ x, y });
+  const needed = Math.max(1, count || 1);
+  const candidates = getAshBreachCandidates(grid);
+  const picks = [];
+  function search(remaining, pool) {
+    if (picks.length >= needed) return true;
+    if (!pool.length || pool.length < remaining) return false;
+    const shuffled = [...pool].sort(() => Math.random() - 0.5);
+    for (const candidate of shuffled) {
+      if (picks.some((entry) => inAuraRange(entry.x, entry.y, candidate.x, candidate.y))) continue;
+      picks.push(candidate);
+      const nextPool = pool.filter(
+        (entry) =>
+          !(entry.x === candidate.x && entry.y === candidate.y) &&
+          !inAuraRange(entry.x, entry.y, candidate.x, candidate.y)
+      );
+      if (search(remaining - 1, nextPool)) return true;
+      picks.pop();
     }
+    return false;
   }
-  for (let i = 0; i < count; i++) {
-    const candidates = edgeCells.filter((pos) => {
-      const tile = grid[pos.y][pos.x];
-      if (tile.core || tile.entrance || tile.room) return false;
-      if (blocked.some((entry) => inAuraRange(entry.x, entry.y, pos.x, pos.y))) return false;
-      if (breaches.some((entry) => entry.x === pos.x && entry.y === pos.y)) return false;
-      return true;
-    });
-    if (!candidates.length) return [];
-    const pickPos = pick(candidates);
-    breaches.push({ x: pickPos.x, y: pickPos.y, openedDay: day });
-    blocked.push(pickPos);
-  }
-  return breaches;
+  if (!search(needed, candidates)) return [];
+  return picks.map((pickPos) => ({ x: pickPos.x, y: pickPos.y, openedDay: day }));
 }
 
 function pickSpawnEntrance(grid, ashTrial) {
@@ -4765,9 +4817,12 @@ function defaultState() {
       let nextState = { ...s };
       if (quest.questType === "ash-breach-trial") {
         const breachCount = Math.max(1, quest.breachCount || (difficulty === "hard" ? 2 : 1));
+        if (!canPlaceAshBreaches(s.grid, breachCount)) {
+          return addLog(s, `Nihaza's trial is unavailable. ${ashBreachRequirementText(breachCount)}`);
+        }
         const breaches = rollAshBreachPositions(s.grid, breachCount, s.day);
         if (breaches.length < breachCount) {
-          return addLog(s, "Nihaza finds no valid edge to tear open. Rebuild the perimeter and try again.");
+          return addLog(s, `Nihaza finds no valid frontline breach. ${ashBreachRequirementText(breachCount)}`);
         }
         nextState.ashTrial = {
           active: true,
@@ -5165,6 +5220,11 @@ function defaultState() {
     ? (state.nextRaidBoons || []).filter((boon) => boon.sponsorKey === focusedCouncilMember.key)
     : [];
   const activeCouncilQuestProgress = state.councilQuest?.active ? councilQuestProgressValue(state, state.councilQuest) : 0;
+  const councilQuestPlacementBlock = (quest) => {
+    if (!quest || quest.questType !== "ash-breach-trial") return "";
+    const breachCount = Math.max(1, quest.breachCount || 1);
+    return canPlaceAshBreaches(state.grid, breachCount) ? "" : ashBreachRequirementText(breachCount);
+  };
 
   const previewPathKeys = useMemo(() => {
     if (selectedHeroes[0] && core) {
@@ -5526,6 +5586,7 @@ function defaultState() {
                       const taken = state.councilSession.acceptedCouncilQuestId === quest.id;
                       const blockedBySponsor =
                         !!state.councilSession.courtedSponsorKey && state.councilSession.courtedSponsorKey !== focusedCouncilSponsor.key;
+                      const placementBlockedReason = councilQuestPlacementBlock(quest);
                       return (
                         <div className="entityItem" key={quest.id}>
                           <div className="entityName">
@@ -5537,6 +5598,7 @@ function defaultState() {
                           <div className="muted">Reward: {councilRewardLabel(quest.reward)}</div>
                           {quest.failurePenalty ? <div className="muted small">Failure: {quest.failurePenalty}</div> : null}
                           {!quest.available ? <div className="muted small">{quest.lockedReason}</div> : null}
+                          {placementBlockedReason ? <div className="muted small">{placementBlockedReason}</div> : null}
                           <div className="row">
                             {state.councilSession.status !== "attended" ? (
                               <button className="btn" disabled>
@@ -5545,6 +5607,10 @@ function defaultState() {
                             ) : !quest.available ? (
                               <button className="btn" disabled>
                                 Coming Later
+                              </button>
+                            ) : placementBlockedReason ? (
+                              <button className="btn" disabled>
+                                Frontline Needed
                               </button>
                             ) : taken ? (
                               <button className="btn" disabled>
@@ -6671,37 +6737,43 @@ function defaultState() {
                   <div className="cardTitle">Sponsor Quests</div>
                   {focusedCouncilSponsor ? (
                     <div className="entityList">
-                      {["standard", "hard"].map((difficulty) => {
-                        const quest = focusedCouncilSponsor.quests?.[difficulty];
-                        if (!quest) return null;
-                        const taken = state.councilSession.acceptedCouncilQuestId === quest.id;
-                        const blockedBySponsor =
-                          !!state.councilSession.courtedSponsorKey && state.councilSession.courtedSponsorKey !== focusedCouncilSponsor.key;
-                        return (
-                          <div className="entityItem" key={quest.id}>
-                            <div className="entityName">
-                              {quest.title} ({difficulty})
-                            </div>
+                    {["standard", "hard"].map((difficulty) => {
+                      const quest = focusedCouncilSponsor.quests?.[difficulty];
+                      if (!quest) return null;
+                      const taken = state.councilSession.acceptedCouncilQuestId === quest.id;
+                      const blockedBySponsor =
+                        !!state.councilSession.courtedSponsorKey && state.councilSession.courtedSponsorKey !== focusedCouncilSponsor.key;
+                      const placementBlockedReason = councilQuestPlacementBlock(quest);
+                      return (
+                        <div className="entityItem" key={quest.id}>
+                          <div className="entityName">
+                            {quest.title} ({difficulty})
+                          </div>
                             <div className="entityMeta">{quest.desc}</div>
-                            <div className="muted">{councilQuestGoalLabel(quest)}</div>
-                            <div className="muted">Progress: {councilQuestProgressLabel(state, quest)}</div>
-                            <div className="muted">Reward: {councilRewardLabel(quest.reward)}</div>
-                            {quest.failurePenalty ? <div className="muted small">Failure: {quest.failurePenalty}</div> : null}
-                            {!quest.available ? <div className="muted small">{quest.lockedReason}</div> : null}
-                            <div className="row">
-                              {state.councilSession.status !== "attended" ? (
-                                <button className="btn" disabled>
-                                  Attend First
-                                </button>
-                              ) : !quest.available ? (
-                                <button className="btn" disabled>
-                                  Coming Later
-                                </button>
-                              ) : taken ? (
-                                <button className="btn" disabled>
-                                  Accepted
-                                </button>
-                              ) : state.councilSession.acceptedCouncilQuestId || state.councilQuest?.active ? (
+                          <div className="muted">{councilQuestGoalLabel(quest)}</div>
+                          <div className="muted">Progress: {councilQuestProgressLabel(state, quest)}</div>
+                          <div className="muted">Reward: {councilRewardLabel(quest.reward)}</div>
+                          {quest.failurePenalty ? <div className="muted small">Failure: {quest.failurePenalty}</div> : null}
+                          {!quest.available ? <div className="muted small">{quest.lockedReason}</div> : null}
+                          {placementBlockedReason ? <div className="muted small">{placementBlockedReason}</div> : null}
+                          <div className="row">
+                            {state.councilSession.status !== "attended" ? (
+                              <button className="btn" disabled>
+                                Attend First
+                              </button>
+                            ) : !quest.available ? (
+                              <button className="btn" disabled>
+                                Coming Later
+                              </button>
+                            ) : placementBlockedReason ? (
+                              <button className="btn" disabled>
+                                Frontline Needed
+                              </button>
+                            ) : taken ? (
+                              <button className="btn" disabled>
+                                Accepted
+                              </button>
+                            ) : state.councilSession.acceptedCouncilQuestId || state.councilQuest?.active ? (
                                 <button className="btn" disabled>
                                   Quest Taken
                                 </button>
