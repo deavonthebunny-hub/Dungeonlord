@@ -734,6 +734,59 @@ export const DOCTRINE_RULES = {
   },
 };
 
+export const STATUS_RULES = {
+  poison: { key: "poison", name: "Poison", short: "PSN", desc: "Takes damage at end of turn." },
+  burn: { key: "burn", name: "Burn", short: "BRN", desc: "Takes fire damage at end of turn." },
+  weaken: { key: "weaken", name: "Weaken", short: "WEK", desc: "-1 DEF while active." },
+  guard: { key: "guard", name: "Guard", short: "GRD", desc: "Reduces the next incoming hit." },
+  marked: { key: "marked", name: "Marked", short: "MRK", desc: "Death or focused hits trigger bonus effects." },
+  fear: { key: "fear", name: "Fear", short: "FER", desc: "-1 ATK while active." },
+  slow: { key: "slow", name: "Slow", short: "SLW", desc: "Can lose movement on the next turn." },
+  root: { key: "root", name: "Root", short: "ROT", desc: "Cannot move while active." },
+  stun: { key: "stun", name: "Stun", short: "STN", desc: "Skips the next action." },
+  arrow: { key: "arrow", name: "Arrow Mark", short: "ARR", desc: "Takes delayed damage from Arrow Gallery." },
+  bloodlust: { key: "bloodlust", name: "Bloodlust", short: "BLD", desc: "+1 ATK after a kill for 1 turn." },
+};
+
+export const FUSION_ARCHETYPE_RULES = {
+  vanguard: {
+    key: "vanguard",
+    name: "Stitchguard",
+    icon: "SG",
+    classTags: ["Tank", "Warrior", "Knight", "Warden"],
+    passiveBias: ["bulwark", "warding", "ironhide", "thorns"],
+    baseCost: 8,
+    secondaryWeights: { hp: 0.4, atk: 0.18, def: 0.35, spd: 0 },
+  },
+  predator: {
+    key: "predator",
+    name: "Gorebeast",
+    icon: "GB",
+    classTags: ["Brute", "Marauder", "Packlord", "Alpha", "Tyrant"],
+    passiveBias: ["savage", "leech", "cruelty", "packleader"],
+    baseCost: 8,
+    secondaryWeights: { hp: 0.28, atk: 0.42, def: 0.2, spd: 0 },
+  },
+  stalker: {
+    key: "stalker",
+    name: "Nightsplice",
+    icon: "NS",
+    classTags: ["Rogue", "Skirmisher", "Ranger", "Stalker", "Reaper"],
+    passiveBias: ["swift", "cruelty", "thorns"],
+    baseCost: 7,
+    secondaryWeights: { hp: 0.2, atk: 0.34, def: 0.12, spd: 1 },
+  },
+  hexer: {
+    key: "hexer",
+    name: "Gravecaster",
+    icon: "GC",
+    classTags: ["Hexer", "Mage", "Warlock", "Seer", "Cleric"],
+    passiveBias: ["hex", "venom-aura", "mender", "rot-cloud", "bloodcall"],
+    baseCost: 9,
+    secondaryWeights: { hp: 0.22, atk: 0.3, def: 0.16, spd: 0 },
+  },
+};
+
 export function validateGameContent() {
   const warnings = [];
 
@@ -785,6 +838,21 @@ export function validateGameContent() {
   for (const artifact of FLESH_MARKET_UNIQUE_ARTIFACTS) {
     if (!artifact.key || !artifact.name || !Array.isArray(artifact.costByEra) || !artifact.mods) {
       warnings.push(`Unique Flesh Market artifact "${artifact.key || "unknown"}" is missing key fields.`);
+    }
+  }
+
+  for (const [key, rule] of Object.entries(FUSION_ARCHETYPE_RULES)) {
+    if (!rule.name || !rule.icon || !Array.isArray(rule.classTags) || !rule.classTags.length) {
+      warnings.push(`Fusion archetype "${key}" is missing name, icon, or class tags.`);
+    }
+    if (!rule.secondaryWeights || !Number.isFinite(rule.baseCost)) {
+      warnings.push(`Fusion archetype "${key}" is missing secondary weights or base cost.`);
+    }
+  }
+
+  for (const [key, rule] of Object.entries(STATUS_RULES)) {
+    if (!rule.name || !rule.short || !rule.desc) {
+      warnings.push(`Status rule "${key}" is missing name, short label, or description.`);
     }
   }
 

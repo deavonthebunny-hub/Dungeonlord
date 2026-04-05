@@ -6,8 +6,10 @@ import {
   DOCTRINE_RULES,
   FLESH_MARKET_UNIQUE_ARTIFACTS,
   FLESH_MARKET_UNIQUE_MONSTERS,
+  FUSION_ARCHETYPE_RULES,
   HERO_ARCHETYPE_RULES,
   RAID_TYPE_META,
+  STATUS_RULES,
   validateGameContent,
 } from "./gameContent";
 
@@ -112,6 +114,7 @@ const MONSTER_KEYS = Object.keys(MONSTERS);
 const UNIQUE_MONSTER_MAP = Object.fromEntries(FLESH_MARKET_UNIQUE_MONSTERS.map((monster) => [monster.key, monster]));
 const UNIQUE_ARTIFACT_MAP = Object.fromEntries(FLESH_MARKET_UNIQUE_ARTIFACTS.map((artifact) => [artifact.key, artifact]));
 const KNOW_MONSTER_KEY = (key) => !!(MONSTERS[key] || UNIQUE_MONSTER_MAP[key]);
+const STATUS_RULE_LIST = Object.values(STATUS_RULES);
 
 const HERO_RACES = ["Human", "Elf", "Dwarf", "Orc", "Tiefling", "Halfling"];
 const HERO_CLASSES = ["Warrior", "Rogue", "Mage", "Ranger", "Cleric", "Monk"];
@@ -421,7 +424,7 @@ const TRAP_TYPES = [
   { key: "frost-rune", name: "Frost Rune", desc: "On entry: 5 damage + Slow (2 turns).", baseDmg: 5, baseCooldown: 1 },
   { key: "shock-coil", name: "Shock Coil", desc: "On entry: 6 damage + Stun (skip next move).", baseDmg: 6, baseCooldown: 2 },
   { key: "snare-net", name: "Snare Net", desc: "On entry: Rooted (skip next move).", baseDmg: 0, baseCooldown: 1 },
-  { key: "flame-jet", name: "Flame Jet", desc: "On entry: 8 damage (+4 if already damaged).", baseDmg: 8, baseCooldown: 1 },
+  { key: "flame-jet", name: "Flame Jet", desc: "On entry: 8 damage (+4 if already damaged) and Burn.", baseDmg: 8, baseCooldown: 1 },
   { key: "cursed-brand", name: "Cursed Brand", desc: "On entry: Mark hero; on death +10 Essence.", baseDmg: 0, baseCooldown: 1 },
   { key: "blink-trap", name: "Blink Trap", desc: "On entry: Teleport hero back 1 tile.", baseDmg: 0, baseCooldown: 2 },
   { key: "shatter-floor", name: "Shatter Floor", desc: "First entry: 12 damage, then breaks.", baseDmg: 12, baseCooldown: 0 },
@@ -1115,6 +1118,85 @@ function normalizePassiveKeysForMonster(monster) {
   return Array.from(new Set(keys));
 }
 
+function monsterRoleBucket(monster) {
+  const label = String(monster?.branchClass || monster?.class || "").toLowerCase();
+  const passiveKeys = normalizePassiveKeysForMonster(monster);
+  for (const rule of Object.values(FUSION_ARCHETYPE_RULES)) {
+    if (rule.classTags.some((tag) => label.includes(String(tag).toLowerCase()))) {
+      return rule.key;
+    }
+    if ((rule.passiveBias || []).some((key) => passiveKeys.includes(key))) {
+      return rule.key;
+    }
+  }
+  return "predator";
+}
+
+function fusionRecipeForMonster(monster) {
+  return FUSION_ARCHETYPE_RULES[monsterRoleBucket(monster)] || Object.values(FUSION_ARCHETYPE_RULES)[0];
+}
+
+function fusionCost(first, second) {
+  if (!first || !second) return 0;
+  const recipe = fusionRecipeForMonster(second);
+  const maxStar = Math.max(safeEntityStars(first), safeEntityStars(second));
+  const maxStage = Math.max(monsterEvolutionStageValue(first), monsterEvolutionStageValue(second));
+  return Math.max(6, (recipe?.baseCost || 8) + maxStar * 2 + maxStage * 4);
+}
+
+function fusionPassiveSelection(first, second) {
+  const chosen = [];
+  const ranks = {};
+  const firstKeys = normalizePassiveKeysForMonster(first);
+  const secondKeys = normalizePassiveKeysForMonster(second);
+  if (firstKeys[0]) {
+    chosen.push(firstKeys[0]);
+    ranks[firstKeys[0]] = Math.max(1, first?.passiveRanks?.[firstKeys[0]] || 1);
+  }
+  const fallbackSecond = secondKeys.find((key) => !chosen.includes(key));
+  if (fallbackSecond) {
+    chosen.push(fallbackSecond);
+    ranks[fallbackSecond] = Math.max(1, second?.passiveRanks?.[fallbackSecond] || 1);
+  }
+  return { passiveKeys: chosen.slice(0, 2), passiveRanks: ranks };
+}
+
+function monsterSpeedValue(monster) {
+  const label = String(monster?.branchClass || monster?.class || "").toLowerCase();
+  const passiveKeys = normalizePassiveKeysForMonster(monster);
+  let spd = 3;
+  if (["rogue", "skirmisher", "ranger", "stalker", "reaper", "alpha"].some((tag) => label.includes(tag))) spd = 5;
+  else if (["tank", "warden", "knight"].some((tag) => label.includes(tag))) spd = 2;
+  else if (["hexer", "mage", "warlock", "seer", "cleric"].some((tag) => label.includes(tag))) spd = 3;
+  else if (["brute", "warrior", "marauder", "tyrant", "packlord"].some((tag) => label.includes(tag))) spd = 4;
+  if (passiveKeys.includes("swift")) spd += 1;
+  if (monster?.isFused) spd += fusionRecipeForMonster(monster).secondaryWeights?.spd || 0;
+  return Math.max(1, spd);
+}
+
+function entityStatusSummary(entity) {
+  if (!entity) return "none";
+  const statuses = [];
+  for (const rule of STATUS_RULE_LIST) {
+    const state = entity.statuses?.[rule.key];
+    if (!state || state.turns <= 0) continue;
+    if (rule.key === "marked") {
+      statuses.push(`${rule.name}${state.value ? ` +${state.value}` : ""}`);
+      continue;
+    }
+    if (rule.key === "guard") {
+      statuses.push(`${rule.name} ${state.value || 1}`);
+      continue;
+    }
+    if (rule.key === "arrow") {
+      statuses.push(`${rule.name} ${state.value || 0}`);
+      continue;
+    }
+    statuses.push(`${rule.name} ${state.turns}t${state.value && ["poison", "burn"].includes(rule.key) ? `(${state.value})` : ""}`);
+  }
+  return statuses.length ? statuses.join(", ") : "none";
+}
+
 function monsterEvolutionStageValue(monster) {
   const raw = Number.isFinite(monster?.evolutionStage) ? monster.evolutionStage : monster?.evolution || 0;
   return clamp(raw, 0, MAX_EVOLUTION_STAGE);
@@ -1294,7 +1376,11 @@ function normalizeHeroEntity(hero, day = 1, raidType = null) {
     stats,
     name: hero?.name || `${HERO_NAMES[0]} the ${hero?.class || HERO_CLASSES[0]}`,
     statuses: hero?.statuses || {},
-    memory: hero?.memory || { danger: {}, lastIntent: null },
+    memory: {
+      danger: hero?.memory?.danger || {},
+      lastIntent: hero?.memory?.lastIntent || null,
+      recentTiles: Array.isArray(hero?.memory?.recentTiles) ? hero.memory.recentTiles.slice(-4) : [],
+    },
     counters: {
       stunnedOnce: false,
       siphonGained: 0,
@@ -1349,7 +1435,7 @@ function generateHero(id, entrancePos, turnsSurvived, raidType, day = 1, options
     stats,
     name,
     statuses: {},
-    memory: { danger: {}, lastIntent: null },
+    memory: { danger: {}, lastIntent: null, recentTiles: [] },
     counters: {
       stunnedOnce: false,
       siphonGained: 0,
@@ -1409,7 +1495,7 @@ function generateCouncilRaider(id, entrancePos, turnsSurvived, day = 1, councilR
     stats,
     name: `${attacker.memberName.split(" ")[0]} ${monsterBase.name}`,
     statuses: {},
-    memory: { danger: {}, lastIntent: null },
+    memory: { danger: {}, lastIntent: null, recentTiles: [] },
     counters: {
       stunnedOnce: false,
       siphonGained: 0,
@@ -1462,6 +1548,7 @@ function generateMonster(kind, turnsSurvived, starCap, day = 1) {
     branchClass: null,
     foughtThisRaid: false,
     shieldedThisTurn: false,
+    statuses: {},
   };
 }
 
@@ -1472,8 +1559,8 @@ function initMonsterInventory(turnsSurvived, count = 4, starCap, day = 1) {
 function generateHeroParty(turnsSurvived, raidType, day = 1, options = {}) {
   const raidMods = buildRaidModifiers(options.raidBoons || []);
   const baseSize = DAY_START_PARTY_MIN + Math.floor(Math.random() * (DAY_START_PARTY_MAX - DAY_START_PARTY_MIN + 1));
-  const eliteBonus = raidType === "elite" ? 1 : 0;
-  const size = Math.max(1, baseSize + eliteBonus + (raidMods.partySizeDelta || 0));
+  const eliteDelta = raidType === "elite" ? -1 : 0;
+  const size = Math.max(1, baseSize + eliteDelta + (raidMods.partySizeDelta || 0));
   const basePos = { x: 0, y: 0 };
   const party = [];
   let nextId = 1;
@@ -1481,8 +1568,8 @@ function generateHeroParty(turnsSurvived, raidType, day = 1, options = {}) {
     raidType === "elite"
       ? {
           classPool: ["Warrior", "Ranger", "Cleric", "Monk", "Warrior", "Ranger"],
-          passivePool: ["Brave", "Stoic", "Focused", "Warded", "Quick", "Unyielding"],
-          starBias: 0.35 + (raidMods.starBias || 0),
+          passivePool: ["Brave", "Stoic", "Focused", "Warded", "Quick", "Unyielding", "Resolute"],
+          starBias: 0.45 + (raidMods.starBias || 0),
         }
       : {
           starBias: raidMods.starBias || 0,
@@ -1587,6 +1674,7 @@ function buildUniqueMonsterEntity(def, day = 1, artifactMods = {}) {
       foughtThisRaid: false,
       shieldedThisTurn: false,
       isUnique: true,
+      statuses: {},
     },
     {},
     { healToFull: true }
@@ -1603,6 +1691,51 @@ function buildUniqueMonsterEntity(def, day = 1, artifactMods = {}) {
     };
   }
   return entity;
+}
+
+function buildFusedMonsterEntity(first, second, day = 1) {
+  const primaryStats = first?.stats || { maxHp: first?.hp || 1, atk: first?.atk || 1, def: first?.def || 0 };
+  const secondaryStats = second?.stats || { maxHp: second?.hp || 1, atk: second?.atk || 1, def: second?.def || 0 };
+  const recipe = fusionRecipeForMonster(second);
+  const weights = recipe?.secondaryWeights || { hp: 0.3, atk: 0.3, def: 0.2, spd: 0 };
+  const stars = Math.min(monsterStarCapForDay(day), Math.max(safeEntityStars(first), safeEntityStars(second)));
+  const evolutionStage = Math.max(monsterEvolutionStageValue(first), monsterEvolutionStageValue(second));
+  const { passiveKeys, passiveRanks } = fusionPassiveSelection(first, second);
+  const primaryRace = first?.race || "Monster";
+  const secondaryRace = second?.race || "Monster";
+  const stats = {
+    maxHp: Math.max(1, Math.round(primaryStats.maxHp + secondaryStats.maxHp * weights.hp)),
+    atk: Math.max(1, Math.round(primaryStats.atk + secondaryStats.atk * weights.atk)),
+    def: Math.max(0, Math.round(primaryStats.def + secondaryStats.def * weights.def)),
+  };
+  return {
+    key: "abomination",
+    name: `${primaryRace} ${recipe?.name || "Abomination"}`,
+    icon: recipe?.icon || "Ab",
+    hp: stats.maxHp,
+    atk: stats.atk,
+    def: stats.def,
+    race: "Abomination",
+    class: recipe?.name || "Abomination",
+    stars,
+    passiveKey: passiveKeys[0] || null,
+    passiveKeys,
+    passiveRanks,
+    passive: formatMonsterPassiveList(passiveKeys, passiveRanks),
+    stats,
+    affinity: null,
+    evoPoints: 0,
+    evolutionStage,
+    evolution: evolutionStage,
+    branchClass: null,
+    foughtThisRaid: false,
+    shieldedThisTurn: false,
+    isFused: true,
+    fusionRecipeKey: recipe?.key || null,
+    fusionRecipeName: recipe?.name || "Abomination",
+    fusionParents: [primaryRace, secondaryRace],
+    statuses: {},
+  };
 }
 
 function normalizeBoughtUniqueKeys(raw) {
@@ -1694,6 +1827,11 @@ function normalizeMonsterEntity(monster, roomType, roomTier = 1) {
   normalized.shieldedThisTurn = !!monster.shieldedThisTurn;
   normalized.evoPoints = Math.max(0, monster.evoPoints || 0);
   normalized.isUnique = !!monster.isUnique || !!UNIQUE_MONSTER_MAP[monster.key];
+  normalized.isFused = !!monster.isFused;
+  normalized.fusionRecipeKey = monster.fusionRecipeKey || null;
+  normalized.fusionRecipeName = monster.fusionRecipeName || null;
+  normalized.fusionParents = Array.isArray(monster.fusionParents) ? monster.fusionParents : [];
+  normalized.statuses = monster.statuses || {};
   return normalized;
 }
 
@@ -2124,6 +2262,7 @@ function chooseInvaderMove(entity, grid, corePos, raidBoons = [], doctrineEffect
   const current = { x: entity.x, y: entity.y };
   const currentCoreDist = pathDistance(grid, current, corePos);
   const raidMods = buildRaidModifiers(raidBoons);
+  const recentTiles = Array.isArray(entity.memory?.recentTiles) ? entity.memory.recentTiles : [];
   const isBacktrack = (option) =>
     !!(entity.prev && option && entity.prev.x === option.next.x && entity.prev.y === option.next.y);
   const options = neighbors(entity.x, entity.y)
@@ -2140,7 +2279,14 @@ function chooseInvaderMove(entity, grid, corePos, raidBoons = [], doctrineEffect
         (tile.room === "utility" ? archetype.weights.utility : 0);
       const progress = Number.isFinite(currentCoreDist) ? currentCoreDist - coreDist : 0;
       const backtrackPenalty = entity.prev && entity.prev.x === next.x && entity.prev.y === next.y ? archetype.weights.backtrack : 0;
-      const score = progress * archetype.weights.core + lure * archetype.weights.lure + roomBias - threat * archetype.weights.danger - backtrackPenalty;
+      const revisitPenalty = recentTiles.filter((key) => key === keyOf(next.x, next.y)).length * (1.25 + archetype.weights.backtrack * 0.2);
+      const score =
+        progress * archetype.weights.core +
+        lure * archetype.weights.lure +
+        roomBias -
+        threat * archetype.weights.danger -
+        backtrackPenalty -
+        revisitPenalty;
       const intent =
         tile.core
           ? "Press Core"
@@ -2151,7 +2297,7 @@ function chooseInvaderMove(entity, grid, corePos, raidBoons = [], doctrineEffect
           : tile.room === "utility"
           ? "Disrupt support"
           : "Advance";
-      return { next, tile, score, threat, lure, coreDist, intent };
+      return { next, tile, score, threat, lure, coreDist, intent, revisitPenalty };
     })
     .filter(Boolean)
     .sort((a, b) => b.score - a.score || a.coreDist - b.coreDist);
@@ -2610,6 +2756,16 @@ function defaultState() {
   const selectedTile = state.grid[state.selected.y][state.selected.x];
   const selectedHeroes = heroesByTile.get(keyOf(state.selected.x, state.selected.y)) || [];
   const roomUpgradePrice = selectedTile.room ? roomUpgradeCost(selectedTile.roomTier || 1) : null;
+  const fusionFirst = fuseA === "" ? null : state.invMonsters[Number(fuseA)] || null;
+  const fusionSecond = fuseB === "" ? null : state.invMonsters[Number(fuseB)] || null;
+  const fusionPreview =
+    fusionFirst && fusionSecond && fusionFirst !== fusionSecond
+      ? {
+          recipe: fusionRecipeForMonster(fusionSecond),
+          cost: fusionCost(fusionFirst, fusionSecond),
+          result: buildFusedMonsterEntity(fusionFirst, fusionSecond, state.day),
+        }
+      : null;
 
   function setSelected(x, y) {
     if (locked) return;
@@ -3686,7 +3842,7 @@ function defaultState() {
 
       const heroHasPassive = (h, name) => normalizeHeroPassiveKey(h.heroPassiveKey || h.passive) === normalizeHeroPassiveKey(name);
       const rememberDanger = (h, x, y, amount = 1) => {
-        h.memory = h.memory || { danger: {}, lastIntent: null };
+        h.memory = h.memory || { danger: {}, lastIntent: null, recentTiles: [] };
         const key = keyOf(x, y);
         h.memory.danger[key] = Math.min(12, (h.memory.danger[key] || 0) + Math.max(1, Math.round(amount)));
       };
@@ -3712,6 +3868,37 @@ function defaultState() {
         return true;
       };
 
+      const effectiveHeroSpd = (h) => {
+        let spd = Math.max(1, h.spd || 1);
+        if (getStatus(h, "slow").turns > 0 && !heroHasPassive(h, "Quick")) spd -= 1;
+        if (heroHasPassive(h, "Quick")) spd += 1;
+        return Math.max(1, spd);
+      };
+
+      const effectiveMonsterSpd = (monster, x, y) => {
+        let spd = monsterSpeedValue(monster);
+        const hasteTier = effectiveUtilityTier(x, y, "haste-glyph");
+        if (hasteTier > 0) spd += hasteTier;
+        if (dominionEffects.monsterFirstStrike) spd += 2;
+        return Math.max(1, spd);
+      };
+
+      const ensureMonsterGuard = (monster, room, x, y) => {
+        monster.statuses = monster.statuses || {};
+        if (monster.shieldedThisTurn) return;
+        let guardValue = 0;
+        const classLabel = String(monster.branchClass || monster.class || "").toLowerCase();
+        if (["tank", "warden", "knight"].some((tag) => classLabel.includes(tag))) guardValue += 1;
+        if (monsterHasPassive(monster, "bulwark")) guardValue += monsterPassiveRank(monster, "bulwark");
+        if (room.roomType === "brawlers-ring") guardValue += 2;
+        if (guardValue > 0) {
+          monster.statuses.guard = {
+            turns: 1,
+            value: Math.max(getStatus(monster, "guard").value || 0, guardValue),
+          };
+        }
+      };
+
       let kills = 0;
       function heroDies(h, why) {
         const essenceGain = Math.round(HERO_KILL_ESSENCE * (eventMods.essenceMult || 1) * raidMult);
@@ -3722,8 +3909,9 @@ function defaultState() {
         essence += essenceGain + extraEssence;
         soulshards += shardGain + extraShards;
         kills += 1;
-        if (h.counters?.cursedMark) {
-          const curseGain = Math.round(h.counters.cursedMark * (eventMods.essenceMult || 1));
+        const markedValue = getStatus(h, "marked").turns > 0 ? getStatus(h, "marked").value || 0 : h.counters?.cursedMark || 0;
+        if (markedValue) {
+          const curseGain = Math.round(markedValue * (eventMods.essenceMult || 1));
           essence += curseGain;
           push(`Cursed Brand triggers on ${invaderLabel(h)}. +${curseGain} Essence`);
         }
@@ -3764,6 +3952,10 @@ function defaultState() {
           if (t.room === "monster") {
             for (const m of t.monsters) {
               m.shieldedThisTurn = false;
+              m.statuses = m.statuses || {};
+              if (m.statuses.guard) {
+                m.statuses.guard = { turns: 0, value: 0 };
+              }
             }
           }
         }
@@ -3949,10 +4141,7 @@ function defaultState() {
           const heroAtk = heroAtkValue(h);
           const atkBonus = monsterAtkBonus(t, h.x, h.y);
           let monsterAtk = m.atk + atkBonus;
-          const hasteFirst =
-            effectiveUtilityTier(h.x, h.y, "haste-glyph") > 0 ||
-            dominionEffects.monsterFirstStrike ||
-            roomHasPassive(t, "swift");
+          ensureMonsterGuard(m, t, h.x, h.y);
           let tempDefBonus = 0;
           if (monsterHasPassive(m, "ironhide")) {
             const maxHp = monsterMaxHp(m);
@@ -3963,23 +4152,27 @@ function defaultState() {
           if (monsterHasPassive(m, "cruelty") && h.hp < safeEntityMaxHp(h) * 0.5) {
             monsterAtk += monsterPassiveRank(m, "cruelty");
           }
+          const monsterSpd = effectiveMonsterSpd(m, h.x, h.y);
+          const heroSpd = effectiveHeroSpd(h);
+          const monsterActsFirst =
+            effectiveUtilityTier(h.x, h.y, "haste-glyph") > 0 ||
+            dominionEffects.monsterFirstStrike ||
+            roomHasPassive(t, "swift") ||
+            monsterSpd >= heroSpd;
 
           const heroStrike = () => {
             const def = (m.def || 0) + monsterDefBonus(h.x, h.y) + tempDefBonus;
             let dmg = Math.max(1, heroAtk - def);
             let mitigation = heroAtk - dmg;
-            if (t.roomType === "brawlers-ring" && !m.shieldedThisTurn) {
-              mitigation += 2;
-              dmg = Math.max(0, dmg - 2);
+            const guard = getStatus(m, "guard");
+            if (guard.turns > 0 && !m.shieldedThisTurn) {
+              mitigation += guard.value || 1;
+              dmg = Math.max(0, dmg - (guard.value || 1));
               m.shieldedThisTurn = true;
+              m.statuses.guard = { turns: 0, value: 0 };
             }
             if (monsterHasPassive(m, "thorns")) {
               applyHeroDamage(h, monsterPassiveRank(m, "thorns"), h.x, h.y, false);
-            }
-            if (monsterHasPassive(m, "bulwark") && !m.shieldedThisTurn) {
-              mitigation += monsterPassiveRank(m, "bulwark");
-              dmg = Math.max(0, dmg - monsterPassiveRank(m, "bulwark"));
-              m.shieldedThisTurn = true;
             }
             m.hp -= dmg;
             return { dmg, base: heroAtk, defense: def, mitigation };
@@ -4026,10 +4219,10 @@ function defaultState() {
             }
           }
 
-          if (hasteFirst) {
+          if (monsterActsFirst) {
             const hitOnInvader = monsterStrike();
             if (hitOnInvader.dmg > 0) {
-              push(`${m.name} -> ${invaderLabel(h)}: base ${hitOnInvader.base}, DEF ${hitOnInvader.defense}, final ${hitOnInvader.dmg}. HP ${Math.max(0, h.hp)}`);
+              push(`${m.name} -> ${invaderLabel(h)}: base ${hitOnInvader.base}, DEF ${hitOnInvader.defense}, final ${hitOnInvader.dmg}. HP ${Math.max(0, h.hp)} | SPD ${monsterSpd} vs ${heroSpd}`);
             }
             if (h.hp <= 0) {
               heroDies(h, "killed in battle");
@@ -4039,7 +4232,7 @@ function defaultState() {
             push(`${invaderLabel(h)} -> ${m.name}: base ${hitOnMonster.base}, DEF ${hitOnMonster.defense}, mitigation ${hitOnMonster.mitigation}, final ${hitOnMonster.dmg}. ${m.name} HP ${Math.max(0, m.hp)}`);
           } else {
             const hitOnMonster = heroStrike();
-            push(`${invaderLabel(h)} -> ${m.name}: base ${hitOnMonster.base}, DEF ${hitOnMonster.defense}, mitigation ${hitOnMonster.mitigation}, final ${hitOnMonster.dmg}. ${m.name} HP ${Math.max(0, m.hp)}`);
+            push(`${invaderLabel(h)} -> ${m.name}: base ${hitOnMonster.base}, DEF ${hitOnMonster.defense}, mitigation ${hitOnMonster.mitigation}, final ${hitOnMonster.dmg}. ${m.name} HP ${Math.max(0, m.hp)} | SPD ${heroSpd} vs ${monsterSpd}`);
             if (m.hp > 0) {
               const hitOnInvader = monsterStrike();
               if (hitOnInvader.dmg > 0) {
@@ -4101,8 +4294,9 @@ function defaultState() {
             h.prev = { x: h.x, y: h.y };
             h.x = next.x;
             h.y = next.y;
-            h.memory = h.memory || { danger: {}, lastIntent: null };
+            h.memory = h.memory || { danger: {}, lastIntent: null, recentTiles: [] };
             h.memory.lastIntent = moveChoice.intent;
+            h.memory.recentTiles = [...(h.memory.recentTiles || []), keyOf(h.x, h.y)].slice(-4);
             moved = true;
             if (moveChoice.wasDetour) {
               councilQuestCounters.detourCount += 1;
@@ -4173,6 +4367,11 @@ function defaultState() {
                 if (tryApplyDebuff(h, "poison", poisonTurns, poisonValue)) {
                   push(`${invaderLabel(h)} is poisoned.`);
                 }
+              } else if (trapKey === "flame-jet") {
+                const burnTurns = 2 + Math.floor((trapStar - 1) / 2);
+                const burnValue = 2 + Math.floor((trapStar - 1) / 2);
+                setStatus(h, "burn", burnTurns, burnValue);
+                push(`${invaderLabel(h)} is burning.`);
               } else if (trapKey === "frost-rune") {
                 const slowTurns = 2 + Math.floor((trapStar - 1) / 2);
                 if (tryApplyDebuff(h, "slow", slowTurns, 1)) {
@@ -4191,8 +4390,10 @@ function defaultState() {
                   push(`${invaderLabel(h)} is rooted.`);
                 }
               } else if (trapKey === "cursed-brand") {
-                h.counters.cursedMark = 10 + (trapRank - 1) * 2 + (trapStar - 1) * 2;
-                push(`${invaderLabel(h)} is cursed.`);
+                const markedValue = 10 + (trapRank - 1) * 2 + (trapStar - 1) * 2;
+                h.counters.cursedMark = markedValue;
+                setStatus(h, "marked", 99, markedValue);
+                push(`${invaderLabel(h)} is marked for death (+${markedValue} Essence).`);
               } else if (trapKey === "blink-trap") {
                 const back = h.prev ? { ...h.prev } : ent;
                 if (back) {
@@ -4236,6 +4437,17 @@ function defaultState() {
           push(`${invaderLabel(h)} takes ${poisonDmg} poison damage. HP ${Math.max(0, h.hp)}`);
           if (h.hp <= 0) {
             heroDies(h, "poison");
+            continue;
+          }
+        }
+
+        if (getStatus(h, "burn").turns > 0) {
+          const burnVal = getStatus(h, "burn").value || 2;
+          const burnDmg = applyHeroDamage(h, burnVal, h.x, h.y, false);
+          consumeStatus(h, "burn");
+          push(`${invaderLabel(h)} takes ${burnDmg} burn damage. HP ${Math.max(0, h.hp)}`);
+          if (h.hp <= 0) {
+            heroDies(h, "burn");
             continue;
           }
         }
@@ -4892,49 +5104,29 @@ function defaultState() {
 
   function fuseMonsters(aIdx, bIdx) {
     setState((s) => {
+      if (!(s.fleshMarketUntilDay >= s.day && s.fleshMarketUntilDay > 0)) return addLog(s, "The Flesh Market is closed.");
+      if (s.phase !== "build") return addLog(s, "Fusion is only available during the build phase.");
       if (aIdx === bIdx) return addLog(s, "Choose two different monsters to fuse.");
       if (aIdx < 0 || bIdx < 0) return s;
       const inv = [...s.invMonsters];
       const first = inv[aIdx];
       const second = inv[bIdx];
       if (!first || !second) return s;
-      const statsA = first.stats || { maxHp: first.hp, atk: first.atk, def: first.def || 0 };
-      const statsB = second.stats || { maxHp: second.hp, atk: second.atk, def: second.def || 0 };
-      const maxHp = Math.round((statsA.maxHp + statsB.maxHp) * 0.6);
-      const atk = Math.round((statsA.atk + statsB.atk) * 0.6);
-      const def = Math.round((statsA.def + statsB.def) * 0.6);
-      const stars = Math.min(MAX_MONSTER_STAR, Math.max(safeEntityStars(first), safeEntityStars(second)) + 1);
-      const passiveKeys = Array.from(new Set([first.passiveKey, second.passiveKey])).filter(Boolean);
-      const passiveRanks = createPassiveRanks(passiveKeys);
-      const hybrid = {
-        key: "abomination",
-        name: `Abomination of ${first.race}/${second.race}`,
-        icon: "Ab",
-        hp: maxHp,
-        atk,
-        def,
-        race: "Abomination",
-        class: "Abomination",
-        stars,
-        passiveKey: passiveKeys[0],
-        passiveKeys,
-        passiveRanks,
-        passive: formatMonsterPassiveList(passiveKeys, passiveRanks),
-        stats: { maxHp, atk, def },
-        affinity: null,
-        evoPoints: 0,
-        evolutionStage: 0,
-        evolution: 0,
-        branchClass: null,
-        foughtThisRaid: false,
-        shieldedThisTurn: false,
-      };
+      if (first.isUnique || second.isUnique) return addLog(s, "Unique monsters cannot be used as fusion stock.");
+      if (first.isFused || second.isFused) return addLog(s, "Fused monsters cannot be used as fusion stock.");
+      const cost = fusionCost(first, second);
+      if ((s.currency.darkcrystals || 0) < cost) return addLog(s, `Not enough Darkcrystals for fusion (${cost}).`);
+      const hybrid = buildFusedMonsterEntity(first, second, s.day);
       const a = Math.max(aIdx, bIdx);
       const b = Math.min(aIdx, bIdx);
       inv.splice(a, 1);
       inv.splice(b, 1);
       inv.push(hybrid);
-      return addLog({ ...s, invMonsters: inv }, "Flesh Market fused two monsters into an Abomination.");
+      const currency = { ...s.currency, darkcrystals: (s.currency.darkcrystals || 0) - cost };
+      return addLog(
+        { ...s, invMonsters: inv, currency },
+        `Flesh Market fuses ${first.name} and ${second.name} into ${hybrid.name} (${formatStars(hybrid.stars)}, ${hybrid.class}) for ${cost} Darkcrystals.`
+      );
     });
   }
 
@@ -4944,6 +5136,7 @@ function defaultState() {
       const target = inv[idx];
       if (!target) return s;
       if (target.isUnique) return addLog(s, `${target.name} is too valuable to sacrifice in the Flesh Market.`);
+      if (target.isFused) return addLog(s, `${target.name} is too unstable to sacrifice safely.`);
       inv.splice(idx, 1);
       const artifactMods = calcArtifactMods(s.artifacts, s.day);
       const gain =
@@ -4958,6 +5151,14 @@ function defaultState() {
       return addLog(ns, `Sacrificed ${target.name}. +${gain} Darkcrystals.`);
     });
   }
+
+  function triggerFusion() {
+    if (fuseA === "" || fuseB === "") return;
+    fuseMonsters(Number(fuseA), Number(fuseB));
+    setFuseA("");
+    setFuseB("");
+  }
+
   function traderPrice(monster, dayOverride = state.day) {
     const stars = safeEntityStars(monster);
     const uniqueCost = UNIQUE_MONSTER_MAP[monster.key]?.costByEra?.[Math.max(0, Math.min(fleshMarketEraIndex(dayOverride), 2))];
@@ -5857,8 +6058,8 @@ function defaultState() {
                     <select className="select" value={sacrificeIdx} onChange={(e) => setSacrificeIdx(e.target.value)}>
                       <option value="">Sacrifice: pick monster</option>
                       {state.invMonsters.map((m, idx) => (
-                        <option key={`sac-${idx}`} value={idx} disabled={!!m.isUnique}>
-                          {m.name}{m.isUnique ? " (Unique)" : ""} ({formatStars(safeEntityStars(m))})
+                        <option key={`sac-${idx}`} value={idx} disabled={!!m.isUnique || !!m.isFused}>
+                          {m.name}{m.isUnique ? " (Unique)" : m.isFused ? " (Fused)" : ""} ({formatStars(safeEntityStars(m))})
                         </option>
                       ))}
                     </select>
@@ -5896,7 +6097,53 @@ function defaultState() {
                       <div className="entityEmpty">No stock remains in the market today.</div>
                     )}
                   </div>
-                  <div className="muted small">Fusion coming later.</div>
+                  <div className="card">
+                    <div className="cardTitle">Fusion Crucible</div>
+                    <div className="row">
+                      <select className="select" value={fuseA} onChange={(e) => setFuseA(e.target.value)}>
+                        <option value="">Primary body</option>
+                        {state.invMonsters.map((m, idx) => (
+                          <option key={`fuse-a-${idx}`} value={idx} disabled={!!m.isUnique || !!m.isFused}>
+                            {m.name}{m.isUnique ? " (Unique)" : m.isFused ? " (Fused)" : ""} ({formatStars(safeEntityStars(m))})
+                          </option>
+                        ))}
+                      </select>
+                      <select className="select" value={fuseB} onChange={(e) => setFuseB(e.target.value)}>
+                        <option value="">Secondary trait</option>
+                        {state.invMonsters.map((m, idx) => (
+                          <option key={`fuse-b-${idx}`} value={idx} disabled={!!m.isUnique || !!m.isFused || `${idx}` === `${fuseA}`}>
+                            {m.name}{m.isUnique ? " (Unique)" : m.isFused ? " (Fused)" : ""} ({formatStars(safeEntityStars(m))})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {fusionPreview ? (
+                      <>
+                        <div className="entityMeta">
+                          Output: {fusionPreview.result.name} | {fusionPreview.result.class} | {formatStars(fusionPreview.result.stars)}
+                        </div>
+                        <div className="muted small">
+                          Passives: {formatMonsterPassiveList(fusionPreview.result.passiveKeys, fusionPreview.result.passiveRanks)}
+                        </div>
+                        <div className="muted small">
+                          Stats: HP {fusionPreview.result.stats.maxHp} | ATK {fusionPreview.result.stats.atk} | DEF {fusionPreview.result.stats.def}
+                        </div>
+                        <div className="muted small">Cost: {fusionPreview.cost} Darkcrystals | Recipe: {fusionPreview.recipe?.name || "Abomination"}</div>
+                      </>
+                    ) : (
+                      <div className="muted small">Choose a primary monster and a secondary trait donor. Unique and fused monsters cannot be used in v1.</div>
+                    )}
+                    <div className="row">
+                      <button
+                        className="btn"
+                        onClick={triggerFusion}
+                        disabled={!fusionPreview || state.currency.darkcrystals < fusionPreview.cost || state.phase !== "build"}
+                      >
+                        Fuse Monsters
+                      </button>
+                      <div className="muted small">Primary sets the body. Secondary sets the recipe and one inherited trait.</div>
+                    </div>
+                  </div>
                 </>
               ) : (
                 <div className="muted">Closed. Gain access by accepting Maltheron's Council boon.</div>
@@ -5961,6 +6208,9 @@ function defaultState() {
                           <div className="muted">
                             Origin {h.raidOriginLabel || "Hero Raid"}{h.factionName ? ` | ${h.factionName}` : ""}{h.isRaidLeader ? " | Leader" : ""} | Behavior {h.archetypeLabel || "Zealot"}{h.memory?.lastIntent ? ` | Intent ${h.memory.lastIntent}` : ""}
                           </div>
+                          <div className="muted">
+                            Status: {entityStatusSummary(h)}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -5977,16 +6227,18 @@ function defaultState() {
                           <div className="entityName">{m.name}</div>
                           <div className="entityMeta">
                             {safeEntityLabel(m.race, "Monster")}
-                            <span className="badge class">{safeEntityLabel(m.class, "Brute")}</span> | {formatStars(safeEntityStars(m))} |{" "}
+                            <span className="badge class">{safeEntityLabel(m.class, "Brute")}</span>
+                            {m.isFused ? <span className="badge unique">Fused</span> : null} | {formatStars(safeEntityStars(m))} |{" "}
                             {safeEntityLabel(m.passive, "None")}
                           </div>
-                        <div className="entityStats">
-                          HP {m.hp}/{safeEntityMaxHp(m)} | ATK {m.atk} | Evo {m.evoPoints || 0}
+                          <div className="entityStats">
+                            HP {m.hp}/{safeEntityMaxHp(m)} | ATK {m.atk} | DEF {m.def || 0} | SPD {monsterSpeedValue(m)} | Evo {m.evoPoints || 0}
+                          </div>
+                          <div className="muted">
+                            {evolutionStageLabel(m)}{m.branchClass ? ` | Branch ${m.branchClass}` : ""}{m.fusionParents?.length ? ` | ${m.fusionParents.join(" + ")}` : ""}
+                          </div>
+                          <div className="muted">Status: {entityStatusSummary(m)}</div>
                         </div>
-                        <div className="muted">
-                          {evolutionStageLabel(m)}{m.branchClass ? ` | Branch ${m.branchClass}` : ""}
-                        </div>
-                      </div>
                       ))}
                     </div>
                   ) : (
@@ -6478,15 +6730,17 @@ function defaultState() {
                       <div className="entityName">{m.name}</div>
                       <div className="entityMeta">
                         {safeEntityLabel(m.race, "Monster")}
-                        <span className="badge class">{safeEntityLabel(m.class, "Brute")}</span> | {formatStars(safeEntityStars(m))} |{" "}
+                        <span className="badge class">{safeEntityLabel(m.class, "Brute")}</span>
+                        {m.isFused ? <span className="badge unique">Fused</span> : null} | {formatStars(safeEntityStars(m))} |{" "}
                         {safeEntityLabel(m.passive, "None")}
                       </div>
                       <div className="entityStats">
-                        HP {m.hp}/{safeEntityMaxHp(m)} | ATK {m.atk} | Evo {m.evoPoints || 0}
+                        HP {m.hp}/{safeEntityMaxHp(m)} | ATK {m.atk} | DEF {m.def || 0} | SPD {monsterSpeedValue(m)} | Evo {m.evoPoints || 0}
                       </div>
                       <div className="muted">
-                        {evolutionStageLabel(m)}{m.branchClass ? ` | Branch ${m.branchClass}` : ""}
+                        {evolutionStageLabel(m)}{m.branchClass ? ` | Branch ${m.branchClass}` : ""}{m.fusionParents?.length ? ` | ${m.fusionParents.join(" + ")}` : ""}
                       </div>
+                      <div className="muted">Status: {entityStatusSummary(m)}</div>
                       <div className="row">
                         <button
                           className="btn"
@@ -6568,16 +6822,18 @@ function defaultState() {
                         <div className="entityMeta">
                           {safeEntityLabel(item.monster.race, "Monster")}
                           <span className="badge class">{safeEntityLabel(item.monster.class, "Brute")}</span> |{" "}
+                          {item.monster.isFused ? <span className="badge unique">Fused</span> : null}{" "}
                           {formatStars(safeEntityStars(item.monster))} | Evo {item.monster.evoPoints || 0} |{" "}
                           {safeEntityLabel(item.monster.passive, "None")}
                         </div>
                         <div className="entityStats">
-                          HP {item.monster.hp}/{safeEntityMaxHp(item.monster)} | ATK {item.monster.atk}
+                          HP {item.monster.hp}/{safeEntityMaxHp(item.monster)} | ATK {item.monster.atk} | DEF {item.monster.def || 0} | SPD {monsterSpeedValue(item.monster)}
                         </div>
                         <div className="muted">Location: {item.label}</div>
                         <div className="muted">
-                          {evolutionStageLabel(item.monster)}{item.monster.branchClass ? ` | Branch ${item.monster.branchClass}` : ""}
+                          {evolutionStageLabel(item.monster)}{item.monster.branchClass ? ` | Branch ${item.monster.branchClass}` : ""}{item.monster.fusionParents?.length ? ` | ${item.monster.fusionParents.join(" + ")}` : ""}
                         </div>
+                        <div className="muted">Status: {entityStatusSummary(item.monster)}</div>
                         <div className="row">
                           <button
                             className="btn"
@@ -6905,6 +7161,36 @@ function defaultState() {
                   <div className="entityItem" key={p.key}>
                     <div className="entityName">{p.name}</div>
                     <div className="entityMeta">{p.desc}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="cardTitle">Statuses</div>
+              <div className="entityList">
+                {STATUS_RULE_LIST.map((status) => (
+                  <div className="entityItem" key={status.key}>
+                    <div className="entityName">
+                      {status.name} <span className="muted small">({status.short})</span>
+                    </div>
+                    <div className="entityMeta">{status.desc}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="cardTitle">Flesh Market Fusion</div>
+              <div className="entityList">
+                {Object.values(FUSION_ARCHETYPE_RULES).map((rule) => (
+                  <div className="entityItem" key={rule.key}>
+                    <div className="entityName">
+                      <span className="iconBadge">{rule.icon}</span>
+                      {rule.name}
+                    </div>
+                    <div className="entityMeta">Secondary role recipe for {rule.classTags.join(", ")}.</div>
+                    <div className="muted small">Base cost {rule.baseCost} Darkcrystals. Primary body + secondary archetype shaping.</div>
                   </div>
                 ))}
               </div>
