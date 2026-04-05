@@ -5472,6 +5472,33 @@ function defaultState() {
 
   const canStartRaid = !locked && isBattlePhase && !state.raidActive && validation.ok;
   const canEndTurn = !locked && isBattlePhase && (state.raidActive || state.heroes.length > 0);
+  const nextUpgradeCost = scaleByDay(25 + dungeonLevel * 15, state.day, 0.03, 3.0);
+  const selectedIsAshBreach = isAshBreachAt(state.ashTrial, state.selected.x, state.selected.y);
+  const selectedReadiness = tileStateChip(selectedTile, state.selected.x, state.selected.y) || "n/a";
+  const selectedTileEffect = roomTypeDesc(selectedTile) || "n/a";
+  const selectedTileFlags = [
+    selectedTile.entrance ? "Entrance" : null,
+    selectedTile.core ? "Core" : null,
+    selectedIsAshBreach ? "Ash Breach" : null,
+  ].filter(Boolean);
+  const selectedTrapSummary =
+    selectedTile.room === "trap"
+      ? `${selectedTile.trap ? "Armed" : "Disarmed"} | ${formatStars(selectedTile.trapStar ?? selectedTile.trapStars ?? 1)} | R${Math.max(1, selectedTile.trapRank ?? selectedTile.roomTier ?? 1)} | ${Math.max(0, selectedTile.trapChargesRemaining ?? 0)} ch | CD ${Math.max(0, selectedTile.trapCooldownRemaining ?? 0)} | ${projectedTrapDamage(selectedTile, state.selected.x, state.selected.y)} dmg`
+      : "n/a";
+  const dungeonRailStatus = locked
+    ? "Core destroyed. Reset or load to continue."
+    : state.movePayload
+    ? "Move mode active. Click a destination tile or cancel the move."
+    : state.raidActive
+    ? `Raid active. ${state.raidRemaining} invader${state.raidRemaining === 1 ? "" : "s"} left to spawn.`
+    : isBattlePhase
+    ? validation.ok
+      ? `Battle staged. ${pendingRaidMeta.label} is ready to begin.`
+      : validation.reason
+    : `Build phase. Next raid: ${pendingRaidMeta.label}.`;
+  const dungeonRailSupport = state.movePayload
+    ? "Moving a room or the Core does not consume a turn."
+    : `Upgrade cost: ${nextUpgradeCost} Essence. ${validation.ok ? "Dungeon route is ready." : "Connect every entrance to the Core."}`;
 
   function evolutionButtonLabel(monster) {
     const cost = monsterEvolutionCost(monster);
@@ -5485,7 +5512,7 @@ function defaultState() {
 
   const mobileTabs = [
     { key: "dungeon", label: "Dungeon", desc: "Grid only" },
-    { key: "toolbox", label: "Toolbox", desc: "Build and raid actions" },
+    { key: "toolbox", label: "Toolbox", desc: "Build and management" },
     { key: "inventory", label: "Inventory", desc: "View monsters and items" },
     { key: "evolution", label: "Evolution", desc: "Spend evolution points" },
     { key: "glossary", label: "Glossary", desc: "Read passives and terms" },
@@ -5539,27 +5566,7 @@ function defaultState() {
             </div>
           )}
         </div>
-        <div className="title">Dungeonlord (Barebones Prototype)</div>
-        <div className="status">
-          <span className="pill">Essence: {state.currency.essence}</span>
-          <span className="pill">Soulshards: {state.currency.soulshards}</span>
-          <span className="pill">Dominion: {state.currency.dominion}</span>
-          <span className="pill">Evolution: {state.currency.evolution}</span>
-          <span className="pill">Day: {state.day}</span>
-          <span className="pill">Dungeon Lvl: {dungeonLevel}</span>
-          <span className="pill">Room Cap: {maxRooms}</span>
-          <span className="pill">Next Upgrade: {25 + dungeonLevel * 15} Essence</span>
-          <span className="pill">
-            Core HP: {Math.max(0, state.coreHp)} / {coreMaxHp}
-          </span>
-          <span className="pill">Core Shield: {state.coreShield}</span>
-          <span className="pill">Turns: {state.turnsSurvived}</span>
-          <span className="pill">Mode: {state.phase === "build" ? "BUILD" : "BATTLE"}</span>
-          {state.raidActive && <span className="pill">Raid Left: {state.raidRemaining}</span>}
-          <span className={"pill " + (validation.ok ? "ok" : "bad")}>
-            {validation.ok ? "Dungeon Valid" : "Invalid"}
-          </span>
-        </div>
+        <div className="title">Dungeonlord</div>
         <div className="panelToggle">
           <span className="panelLabel">Side Panel</span>
           <button
@@ -5850,11 +5857,29 @@ function defaultState() {
 
       <div className="layout" data-tab={activeTab} data-side={sidePanel}>
         <section className="panel panel--dungeon">
-          <div className="panelTitle">
-            Dungeon Layout (place up to {maxRooms} rooms)
-            <span className="capMeta">
-              Remaining: {Math.max(0, maxRooms - roomsPlaced)} | Next cap: {maxRooms + ROOMS_PER_LEVEL}
-            </span>
+          <div className="dungeonHud">
+            <div className="dungeonHudHeader">
+              <div>
+                <div className="dungeonFrameTitle">Dungeon Layout</div>
+                <div className="dungeonFrameSubtitle">Place up to {maxRooms} rooms</div>
+              </div>
+              <div className="capMeta dungeonCapMeta">
+                Remaining: {Math.max(0, maxRooms - roomsPlaced)} | Next cap: {maxRooms + ROOMS_PER_LEVEL}
+              </div>
+            </div>
+            <div className="dungeonHudRail">
+              <span className="pill">Essence: {state.currency.essence}</span>
+              <span className="pill">Soulshards: {state.currency.soulshards}</span>
+              <span className="pill">Dominion: {state.currency.dominion}</span>
+              <span className="pill">
+                Core HP: {Math.max(0, state.coreHp)} / {coreMaxHp}
+              </span>
+              <span className="pill">Core Shield: {state.coreShield}</span>
+              <span className="pill">Mode: {state.phase === "build" ? "BUILD" : "BATTLE"}</span>
+              <span className={"pill " + (validation.ok ? "ok" : "bad")}>
+                {validation.ok ? "Dungeon Valid" : "Invalid"}
+              </span>
+            </div>
           </div>
 
           <div className="gridWrap">
@@ -5894,18 +5919,95 @@ function defaultState() {
             </div>
           )}
 
- {/* Mobile-only always-visible actions */}
-      <div className="mobileBar">
-        <button className="btn primary" onClick={startRaid} disabled={!canStartRaid || state.movePayload}>
-          Start Raid
-        </button>
-        <button className="btn primary" onClick={endTurn} disabled={!canEndTurn || state.movePayload}>
-          End Turn
-        </button>
-        <div className="mobileMeta">
-          {locked ? "Defeat" : state.raidActive ? `RAID - Left ${state.raidRemaining}` : state.phase === "build" ? "BUILD" : "BATTLE"}
-        </div>
-      </div>
+          <div className="dungeonTileDock">
+            <div className="dungeonTileDockHeader">
+              <div className="dungeonTileDockTitle">Selected Tile</div>
+              <div className="muted">({state.selected.x + 1}, {state.selected.y + 1})</div>
+            </div>
+            <div className="dungeonTileDockGrid">
+              <div className="dockFact">
+                <span className="dockLabel">Type</span>
+                <div className="dockValue">
+                  <span className="iconBadge">{roomTypeIcon(selectedTile) || "--"}</span>
+                  {roomTypeName(selectedTile)}
+                </div>
+              </div>
+              <div className="dockFact">
+                <span className="dockLabel">Flags</span>
+                <div className="dockBadgeRow">
+                  {selectedTileFlags.length ? (
+                    selectedTileFlags.map((flag) => (
+                      <span className="badge favorNeutral" key={flag}>
+                        {flag}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="muted small">None</span>
+                  )}
+                </div>
+              </div>
+              <div className="dockFact">
+                <span className="dockLabel">Readiness</span>
+                <div className="dockValue">{selectedReadiness}</div>
+              </div>
+              <div className="dockFact">
+                <span className="dockLabel">Occupants</span>
+                <div className="dockValue">
+                  Heroes {selectedHeroes.length} | Monsters {selectedTile.monsters.length}
+                </div>
+              </div>
+              <div className="dockFact dockFactWide">
+                <span className="dockLabel">Trap</span>
+                <div className="dockValue">{selectedTrapSummary}</div>
+              </div>
+              <div className="dockFact dockFactWide">
+                <span className="dockLabel">Effect</span>
+                <div className="dockValue">{selectedTileEffect}</div>
+              </div>
+              <div className="dockFact dockFactWide">
+                <span className="dockLabel">Auras</span>
+                <div className="dockValue">{selectedTileAuras.length ? selectedTileAuras.join(", ") : "none"}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="dungeonActionRail">
+            <div className="dungeonActionMeta">
+              <div className="dungeonActionStats">
+                <span className="pill">Day: {state.day}</span>
+                <span className="pill">Turns: {state.turnsSurvived}</span>
+                <span className="pill">Dungeon Lvl: {dungeonLevel}</span>
+              </div>
+              <div className="dungeonActionHint">{dungeonRailStatus}</div>
+              <div className="muted small">{dungeonRailSupport}</div>
+            </div>
+            <div className="dungeonActionButtons">
+              <button className="btn" onClick={beginBattle} disabled={locked || state.movePayload || isBattlePhase}>
+                Begin Battle
+              </button>
+              <button className="btn primary" onClick={startRaid} disabled={!canStartRaid || state.movePayload}>
+                Start Raid
+              </button>
+              <button className="btn primary" onClick={endTurn} disabled={!canEndTurn || state.movePayload}>
+                End Turn
+              </button>
+              <button
+                className="btn"
+                onClick={upgradeDungeon}
+                disabled={locked || state.movePayload || !isBuildPhase || state.raidActive}
+              >
+                Upgrade Dungeon
+              </button>
+              <button className="btn" onClick={startMove} disabled={locked || !!state.movePayload || !isBuildPhase}>
+                Move Selected
+              </button>
+              {state.movePayload ? (
+                <button className="btn danger" onClick={cancelMove}>
+                  Cancel Move
+                </button>
+              ) : null}
+            </div>
+          </div>
 
           <div className="hint">
             Place <b>E</b> and <b>C</b>, connect with rooms. Hero cap <b>{HERO_CAP}</b>. Each raid spawns a party of <b>2-4</b> heroes.
@@ -6152,104 +6254,6 @@ function defaultState() {
               ) : (
                 <div className="muted">Closed. Gain access by accepting Maltheron's Council boon.</div>
               )}
-            </div>
-
-            <div className="card">
-              <div className="cardTitle">Selected Tile</div>
-              <div className="kv">
-                <div>Pos</div>
-                <div>({state.selected.x + 1}, {state.selected.y + 1})</div>
-                <div>Entrance</div>
-                <div>{selectedTile.entrance ? "YES" : "no"}</div>
-                <div>Ash Breach</div>
-                <div>{isAshBreachAt(state.ashTrial, state.selected.x, state.selected.y) ? "YES" : "no"}</div>
-                <div>Core</div>
-                <div>{selectedTile.core ? "YES" : "no"}</div>
-                <div>Room</div>
-                <div>
-                  <span className="iconBadge">{roomTypeIcon(selectedTile) || "--"}</span>
-                  {roomTypeName(selectedTile)}
-                </div>
-                <div>Room Tier</div>
-                <div>{selectedTile.room ? selectedTile.roomTier || 1 : "n/a"}</div>
-                <div>Monster Cap</div>
-                <div>{effectiveMonsterRoomCap(selectedTile)}</div>
-                <div>Room Effect</div>
-                <div>{roomTypeDesc(selectedTile) || "n/a"}</div>
-                <div>Readiness</div>
-                <div>{tileStateChip(selectedTile, state.selected.x, state.selected.y) || "n/a"}</div>
-                <div>Trap Armed</div>
-                <div>{selectedTile.room === "trap" ? (selectedTile.trap ? "YES" : "no") : "n/a"}</div>
-                <div>Trap Star</div>
-                <div>{selectedTile.room === "trap" ? formatStars(selectedTile.trapStar ?? selectedTile.trapStars ?? 1) : "n/a"}</div>
-                <div>Trap Rank</div>
-                <div>{selectedTile.room === "trap" ? Math.max(1, selectedTile.trapRank ?? selectedTile.roomTier ?? 1) : "n/a"}</div>
-                <div>Trap Charges</div>
-                <div>{selectedTile.room === "trap" ? Math.max(0, selectedTile.trapChargesRemaining ?? 0) : "n/a"}</div>
-                <div>Trap Cooldown</div>
-                <div>{selectedTile.room === "trap" ? Math.max(0, selectedTile.trapCooldownRemaining ?? 0) : "n/a"}</div>
-                <div>Trap Broken</div>
-                <div>{selectedTile.room === "trap" ? (selectedTile.trapBroken ? "YES" : "no") : "n/a"}</div>
-                <div>Projected Trap</div>
-                <div>{selectedTile.room === "trap" ? projectedTrapDamage(selectedTile, state.selected.x, state.selected.y) : "n/a"}</div>
-                <div>Nearby Auras</div>
-                <div>{selectedTileAuras.length ? selectedTileAuras.join(", ") : "none"}</div>
-                <div>Heroes Here</div>
-                <div>
-                  {selectedHeroes.length ? (
-                    <div className="entityList">
-                      {selectedHeroes.map((h) => (
-                        <div className="entityItem" key={h.id}>
-                          <div className="entityName">
-                            {h.name} ({invaderLabel(h)})
-                          </div>
-                          <div className="entityMeta">
-                            {safeEntityLabel(h.race, "Unknown")} {safeEntityLabel(h.class, "Hero")} | {formatStars(safeEntityStars(h))} | {invaderPassiveSummary(h)}
-                          </div>
-                          <div className="entityStats">
-                            HP {h.hp}/{safeEntityMaxHp(h)} | ATK {h.atk} | DEF {h.def || 0} | SHD {h.shd || 0} | SPD {h.spd || 0}
-                          </div>
-                          <div className="muted">
-                            Origin {h.raidOriginLabel || "Hero Raid"}{h.factionName ? ` | ${h.factionName}` : ""}{h.isRaidLeader ? " | Leader" : ""} | Behavior {h.archetypeLabel || "Zealot"}{h.memory?.lastIntent ? ` | Intent ${h.memory.lastIntent}` : ""}
-                          </div>
-                          <div className="muted">
-                            Status: {entityStatusSummary(h)}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="entityEmpty">none</div>
-                  )}
-                </div>
-                <div>Monsters Here</div>
-                <div>
-                  {selectedTile.monsters.length ? (
-                    <div className="entityList">
-                      {selectedTile.monsters.map((m, idx) => (
-                        <div className="entityItem" key={`${m.key}-${idx}`}>
-                          <div className="entityName">{m.name}</div>
-                          <div className="entityMeta">
-                            {safeEntityLabel(m.race, "Monster")}
-                            <span className="badge class">{safeEntityLabel(m.class, "Brute")}</span>
-                            {m.isFused ? <span className="badge unique">Fused</span> : null} | {formatStars(safeEntityStars(m))} |{" "}
-                            {safeEntityLabel(m.passive, "None")}
-                          </div>
-                          <div className="entityStats">
-                            HP {m.hp}/{safeEntityMaxHp(m)} | ATK {m.atk} | DEF {m.def || 0} | SPD {monsterSpeedValue(m)} | Evo {m.evoPoints || 0}
-                          </div>
-                          <div className="muted">
-                            {evolutionStageLabel(m)}{m.branchClass ? ` | Branch ${m.branchClass}` : ""}{m.fusionParents?.length ? ` | ${m.fusionParents.join(" + ")}` : ""}
-                          </div>
-                          <div className="muted">Status: {entityStatusSummary(m)}</div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="entityEmpty">none</div>
-                  )}
-                </div>
-              </div>
             </div>
 
             <div className="card">
@@ -6500,18 +6504,6 @@ function defaultState() {
             </div>
 
             <div className="card">
-              <div className="cardTitle">Dungeon Upgrades</div>
-              <div className="row">
-                <button className="btn" onClick={upgradeDungeon} disabled={locked || state.movePayload || !isBuildPhase || state.raidActive}>
-                  Upgrade Dungeon
-                </button>
-                <div className="muted">
-                  Cost {scaleByDay(25 + dungeonLevel * 15, state.day, 0.03, 3.0)} Essence. +{ROOMS_PER_LEVEL} room cap.
-                </div>
-              </div>
-            </div>
-
-            <div className="card">
               <div className="cardTitle">Dominion Powers</div>
               <div className="row">
                 <button
@@ -6556,22 +6548,6 @@ function defaultState() {
             </div>
 
             <div className="card">
-              <div className="cardTitle">Move Layout</div>
-              <div className="row">
-                <button className="btn" onClick={startMove} disabled={locked || !!state.movePayload || !isBuildPhase}>
-                  Move Selected
-                </button>
-                <div className="muted">Pick up a room or the Core, then click a new tile.</div>
-              </div>
-              <div className="row">
-                <button className="btn danger" onClick={cancelMove} disabled={!state.movePayload}>
-                  Cancel Move
-                </button>
-                <div className="muted">Returns the piece to its original tile.</div>
-              </div>
-            </div>
-
-            <div className="card">
               <div className="cardTitle">Recruit</div>
               <div className="row">
                 <button className="btn" onClick={recruitMonster} disabled={locked || state.movePayload || !isBuildPhase}>Recruit Monster</button>
@@ -6586,37 +6562,6 @@ function defaultState() {
                 </div>
               )}
             </div>
-            <div className="card">
-              <div className="cardTitle">Raid Controls</div>
-              <div className="row">
-                <button className="btn" onClick={beginBattle} disabled={locked || state.movePayload || isBattlePhase}>
-                  Begin Battle
-                </button>
-                <div className="muted">Ends build phase and generates the next raid: {pendingRaidMeta.label}.</div>
-              </div>
-              <div className="row">
-                <button className="btn primary" onClick={startRaid} disabled={!canStartRaid || state.movePayload}>
-                  Start Raid
-                </button>
-                <div className="muted">
-                  {locked
-                    ? "Defeat - reset to continue."
-                    : state.raidActive
-                    ? `Raid active. Remaining to spawn: ${state.raidRemaining}`
-                    : validation.ok
-                    ? `Starts the raid for Day ${state.day}.`
-                    : "Requires valid dungeon."}
-                </div>
-              </div>
-
-              <div className="row">
-                <button className="btn primary" onClick={endTurn} disabled={!canEndTurn || state.movePayload}>
-                  End Turn
-                </button>
-                <div className="muted">Resolves movement/combat. If raid has heroes pending, one may spawn (cap applies).</div>
-              </div>
-            </div>
-
             <div className="card">
               <div className="cardTitle">Invading Party</div>
               {state.currentParty && state.currentParty.length > 0 ? (
