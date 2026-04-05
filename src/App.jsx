@@ -1136,10 +1136,14 @@ function fusionRecipeForMonster(monster) {
   return FUSION_ARCHETYPE_RULES[monsterRoleBucket(monster)] || Object.values(FUSION_ARCHETYPE_RULES)[0];
 }
 
+function entityStarsValue(entity) {
+  return typeof entity?.stars === "number" ? entity.stars : 1;
+}
+
 function fusionCost(first, second) {
   if (!first || !second) return 0;
   const recipe = fusionRecipeForMonster(second);
-  const maxStar = Math.max(safeEntityStars(first), safeEntityStars(second));
+  const maxStar = Math.max(entityStarsValue(first), entityStarsValue(second));
   const maxStage = Math.max(monsterEvolutionStageValue(first), monsterEvolutionStageValue(second));
   return Math.max(6, (recipe?.baseCost || 8) + maxStar * 2 + maxStage * 4);
 }
@@ -1698,7 +1702,7 @@ function buildFusedMonsterEntity(first, second, day = 1) {
   const secondaryStats = second?.stats || { maxHp: second?.hp || 1, atk: second?.atk || 1, def: second?.def || 0 };
   const recipe = fusionRecipeForMonster(second);
   const weights = recipe?.secondaryWeights || { hp: 0.3, atk: 0.3, def: 0.2, spd: 0 };
-  const stars = Math.min(monsterStarCapForDay(day), Math.max(safeEntityStars(first), safeEntityStars(second)));
+  const stars = Math.min(monsterStarCapForDay(day), Math.max(entityStarsValue(first), entityStarsValue(second)));
   const evolutionStage = Math.max(monsterEvolutionStageValue(first), monsterEvolutionStageValue(second));
   const { passiveKeys, passiveRanks } = fusionPassiveSelection(first, second);
   const primaryRace = first?.race || "Monster";
