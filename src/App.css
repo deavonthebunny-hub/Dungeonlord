@@ -268,12 +268,21 @@ body::before {
   flex: 1;
   min-height: 0;
   display: flex;
+  align-items: flex-start;
+}
+
+.dungeonStage {
+  position: relative;
+  width: 100%;
+  max-width: 460px;
+  min-height: 100%;
+  margin: 0 auto;
 }
 
 .grid {
   width: 100%;
   max-width: 460px;
-  margin: auto;
+  margin: 0;
   display: grid;
   grid-template-columns: repeat(8, 1fr);
   gap: 10px;
@@ -478,8 +487,8 @@ body::before {
   font-size: 12px;
 }
 
-.dungeonTileDock {
-  margin: 0 12px 12px;
+.dungeonTileDock,
+.dungeonTileFloat {
   padding: 10px 12px;
   border-radius: 14px;
   border: 1px solid var(--border);
@@ -544,6 +553,21 @@ body::before {
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
+}
+
+.dungeonTileFloat {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: min(100%, 340px);
+  z-index: 3;
+  background: linear-gradient(160deg, rgba(18, 27, 51, 0.92), rgba(12, 18, 32, 0.9));
+  backdrop-filter: blur(10px);
+  box-shadow: 0 14px 28px rgba(5, 8, 15, 0.34);
+}
+
+.dungeonTileFloat .dockFact {
+  padding: 7px 9px;
 }
 
 .dungeonActionRail {
@@ -1139,15 +1163,24 @@ button.entityItem {
     padding: 10px;
   }
 
+  .dungeonStage {
+    max-width: 380px;
+    min-height: auto;
+  }
+
   .grid {
     width: min(100%, 380px);
     max-width: 380px;
     gap: 8px;
   }
 
-  .dungeonTileDock {
+  .dungeonTileFloat {
+    position: static;
+    width: auto;
     margin: 0 10px 12px;
     padding: 10px;
+    box-shadow: none;
+    backdrop-filter: none;
   }
 
   .dungeonTileDockGrid {

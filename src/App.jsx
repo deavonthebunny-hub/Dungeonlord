@@ -5883,33 +5883,86 @@ function defaultState() {
           </div>
 
           <div className="gridWrap">
-            <div className="grid">
-              {state.grid.map((row, y) =>
-                row.map((t, x) => (
-                  <button
-                    key={keyOf(x, y)}
-                    className={tileClass(t, x, y)}
-                    onClick={() => setSelected(x, y)}
-                    title={`(${x + 1},${y + 1})`}
-                    disabled={locked}
-                  >
-                    {(() => {
-                      const heroesHere = heroesByTile.get(keyOf(x, y)) || [];
-                      const monstersHere = t.room === "monster" ? t.monsters.length : 0;
-                      const glyph = getTileGlyph(t, x, y, heroesHere.length, monstersHere);
-                      const stateChip = tileStateChip(t, x, y);
-                      if (!glyph.text && !glyph.subtext && !stateChip) return null;
-                      return (
-                        <>
-                          {stateChip ? <span className="tileChip tileChipState">{stateChip}</span> : null}
-                          {glyph.text ? <span className={`tileGlyph ${glyph.tone || ""}`}>{glyph.text}</span> : null}
-                          {glyph.subtext ? <span className="tileGlyphSub">{glyph.subtext}</span> : null}
-                        </>
-                      );
-                    })()}
-                  </button>
-                ))
-              )}
+            <div className="dungeonStage">
+              <div className="grid">
+                {state.grid.map((row, y) =>
+                  row.map((t, x) => (
+                    <button
+                      key={keyOf(x, y)}
+                      className={tileClass(t, x, y)}
+                      onClick={() => setSelected(x, y)}
+                      title={`(${x + 1},${y + 1})`}
+                      disabled={locked}
+                    >
+                      {(() => {
+                        const heroesHere = heroesByTile.get(keyOf(x, y)) || [];
+                        const monstersHere = t.room === "monster" ? t.monsters.length : 0;
+                        const glyph = getTileGlyph(t, x, y, heroesHere.length, monstersHere);
+                        const stateChip = tileStateChip(t, x, y);
+                        if (!glyph.text && !glyph.subtext && !stateChip) return null;
+                        return (
+                          <>
+                            {stateChip ? <span className="tileChip tileChipState">{stateChip}</span> : null}
+                            {glyph.text ? <span className={`tileGlyph ${glyph.tone || ""}`}>{glyph.text}</span> : null}
+                            {glyph.subtext ? <span className="tileGlyphSub">{glyph.subtext}</span> : null}
+                          </>
+                        );
+                      })()}
+                    </button>
+                  ))
+                )}
+              </div>
+              <div className="dungeonTileFloat">
+                <div className="dungeonTileDockHeader">
+                  <div className="dungeonTileDockTitle">Selected Tile</div>
+                  <div className="muted">({state.selected.x + 1}, {state.selected.y + 1})</div>
+                </div>
+                <div className="dungeonTileDockGrid">
+                  <div className="dockFact">
+                    <span className="dockLabel">Type</span>
+                    <div className="dockValue">
+                      <span className="iconBadge">{roomTypeIcon(selectedTile) || "--"}</span>
+                      {roomTypeName(selectedTile)}
+                    </div>
+                  </div>
+                  <div className="dockFact">
+                    <span className="dockLabel">Flags</span>
+                    <div className="dockBadgeRow">
+                      {selectedTileFlags.length ? (
+                        selectedTileFlags.map((flag) => (
+                          <span className="badge favorNeutral" key={flag}>
+                            {flag}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="muted small">None</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="dockFact">
+                    <span className="dockLabel">Readiness</span>
+                    <div className="dockValue">{selectedReadiness}</div>
+                  </div>
+                  <div className="dockFact">
+                    <span className="dockLabel">Occupants</span>
+                    <div className="dockValue">
+                      Heroes {selectedHeroes.length} | Monsters {selectedTile.monsters.length}
+                    </div>
+                  </div>
+                  <div className="dockFact dockFactWide">
+                    <span className="dockLabel">Trap</span>
+                    <div className="dockValue">{selectedTrapSummary}</div>
+                  </div>
+                  <div className="dockFact dockFactWide">
+                    <span className="dockLabel">Effect</span>
+                    <div className="dockValue">{selectedTileEffect}</div>
+                  </div>
+                  <div className="dockFact dockFactWide">
+                    <span className="dockLabel">Auras</span>
+                    <div className="dockValue">{selectedTileAuras.length ? selectedTileAuras.join(", ") : "none"}</div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -5918,58 +5971,6 @@ function defaultState() {
               Moving {state.movePayload.type === "core" ? "Core" : "Room"} - click a new tile to place it. Press Esc or Cancel to abort.
             </div>
           )}
-
-          <div className="dungeonTileDock">
-            <div className="dungeonTileDockHeader">
-              <div className="dungeonTileDockTitle">Selected Tile</div>
-              <div className="muted">({state.selected.x + 1}, {state.selected.y + 1})</div>
-            </div>
-            <div className="dungeonTileDockGrid">
-              <div className="dockFact">
-                <span className="dockLabel">Type</span>
-                <div className="dockValue">
-                  <span className="iconBadge">{roomTypeIcon(selectedTile) || "--"}</span>
-                  {roomTypeName(selectedTile)}
-                </div>
-              </div>
-              <div className="dockFact">
-                <span className="dockLabel">Flags</span>
-                <div className="dockBadgeRow">
-                  {selectedTileFlags.length ? (
-                    selectedTileFlags.map((flag) => (
-                      <span className="badge favorNeutral" key={flag}>
-                        {flag}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="muted small">None</span>
-                  )}
-                </div>
-              </div>
-              <div className="dockFact">
-                <span className="dockLabel">Readiness</span>
-                <div className="dockValue">{selectedReadiness}</div>
-              </div>
-              <div className="dockFact">
-                <span className="dockLabel">Occupants</span>
-                <div className="dockValue">
-                  Heroes {selectedHeroes.length} | Monsters {selectedTile.monsters.length}
-                </div>
-              </div>
-              <div className="dockFact dockFactWide">
-                <span className="dockLabel">Trap</span>
-                <div className="dockValue">{selectedTrapSummary}</div>
-              </div>
-              <div className="dockFact dockFactWide">
-                <span className="dockLabel">Effect</span>
-                <div className="dockValue">{selectedTileEffect}</div>
-              </div>
-              <div className="dockFact dockFactWide">
-                <span className="dockLabel">Auras</span>
-                <div className="dockValue">{selectedTileAuras.length ? selectedTileAuras.join(", ") : "none"}</div>
-              </div>
-            </div>
-          </div>
 
           <div className="dungeonActionRail">
             <div className="dungeonActionMeta">
@@ -6069,6 +6070,102 @@ function defaultState() {
               ) : (
                 <div className="muted small">No stored council leverage for the next raid.</div>
               )}
+            </div>
+
+            <div className="card">
+              <div className="cardTitle">Tile Details</div>
+              <div className="kv">
+                <div>Pos</div>
+                <div>({state.selected.x + 1}, {state.selected.y + 1})</div>
+                <div>Entrance</div>
+                <div>{selectedTile.entrance ? "YES" : "no"}</div>
+                <div>Ash Breach</div>
+                <div>{selectedIsAshBreach ? "YES" : "no"}</div>
+                <div>Core</div>
+                <div>{selectedTile.core ? "YES" : "no"}</div>
+                <div>Room</div>
+                <div>
+                  <span className="iconBadge">{roomTypeIcon(selectedTile) || "--"}</span>
+                  {roomTypeName(selectedTile)}
+                </div>
+                <div>Room Tier</div>
+                <div>{selectedTile.room ? selectedTile.roomTier || 1 : "n/a"}</div>
+                <div>Monster Cap</div>
+                <div>{effectiveMonsterRoomCap(selectedTile)}</div>
+                <div>Room Effect</div>
+                <div>{roomTypeDesc(selectedTile) || "n/a"}</div>
+                <div>Readiness</div>
+                <div>{selectedReadiness}</div>
+                <div>Trap Armed</div>
+                <div>{selectedTile.room === "trap" ? (selectedTile.trap ? "YES" : "no") : "n/a"}</div>
+                <div>Trap Star</div>
+                <div>{selectedTile.room === "trap" ? formatStars(selectedTile.trapStar ?? selectedTile.trapStars ?? 1) : "n/a"}</div>
+                <div>Trap Rank</div>
+                <div>{selectedTile.room === "trap" ? Math.max(1, selectedTile.trapRank ?? selectedTile.roomTier ?? 1) : "n/a"}</div>
+                <div>Trap Charges</div>
+                <div>{selectedTile.room === "trap" ? Math.max(0, selectedTile.trapChargesRemaining ?? 0) : "n/a"}</div>
+                <div>Trap Cooldown</div>
+                <div>{selectedTile.room === "trap" ? Math.max(0, selectedTile.trapCooldownRemaining ?? 0) : "n/a"}</div>
+                <div>Trap Broken</div>
+                <div>{selectedTile.room === "trap" ? (selectedTile.trapBroken ? "YES" : "no") : "n/a"}</div>
+                <div>Projected Trap</div>
+                <div>{selectedTile.room === "trap" ? projectedTrapDamage(selectedTile, state.selected.x, state.selected.y) : "n/a"}</div>
+                <div>Nearby Auras</div>
+                <div>{selectedTileAuras.length ? selectedTileAuras.join(", ") : "none"}</div>
+                <div>Heroes Here</div>
+                <div>
+                  {selectedHeroes.length ? (
+                    <div className="entityList">
+                      {selectedHeroes.map((h) => (
+                        <div className="entityItem" key={h.id}>
+                          <div className="entityName">
+                            {h.name} ({invaderLabel(h)})
+                          </div>
+                          <div className="entityMeta">
+                            {safeEntityLabel(h.race, "Unknown")} {safeEntityLabel(h.class, "Hero")} | {formatStars(safeEntityStars(h))} | {invaderPassiveSummary(h)}
+                          </div>
+                          <div className="entityStats">
+                            HP {h.hp}/{safeEntityMaxHp(h)} | ATK {h.atk} | DEF {h.def || 0} | SHD {h.shd || 0} | SPD {h.spd || 0}
+                          </div>
+                          <div className="muted">
+                            Origin {h.raidOriginLabel || "Hero Raid"}{h.factionName ? ` | ${h.factionName}` : ""}{h.isRaidLeader ? " | Leader" : ""} | Behavior {h.archetypeLabel || "Zealot"}{h.memory?.lastIntent ? ` | Intent ${h.memory.lastIntent}` : ""}
+                          </div>
+                          <div className="muted">Status: {entityStatusSummary(h)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="entityEmpty">none</div>
+                  )}
+                </div>
+                <div>Monsters Here</div>
+                <div>
+                  {selectedTile.monsters.length ? (
+                    <div className="entityList">
+                      {selectedTile.monsters.map((m, idx) => (
+                        <div className="entityItem" key={`${m.key}-${idx}`}>
+                          <div className="entityName">{m.name}</div>
+                          <div className="entityMeta">
+                            {safeEntityLabel(m.race, "Monster")}
+                            <span className="badge class">{safeEntityLabel(m.class, "Brute")}</span>
+                            {m.isFused ? <span className="badge unique">Fused</span> : null} | {formatStars(safeEntityStars(m))} |{" "}
+                            {safeEntityLabel(m.passive, "None")}
+                          </div>
+                          <div className="entityStats">
+                            HP {m.hp}/{safeEntityMaxHp(m)} | ATK {m.atk} | DEF {m.def || 0} | SPD {monsterSpeedValue(m)} | Evo {m.evoPoints || 0}
+                          </div>
+                          <div className="muted">
+                            {evolutionStageLabel(m)}{m.branchClass ? ` | Branch ${m.branchClass}` : ""}{m.fusionParents?.length ? ` | ${m.fusionParents.join(" + ")}` : ""}
+                          </div>
+                          <div className="muted">Status: {entityStatusSummary(m)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="entityEmpty">none</div>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="card">
