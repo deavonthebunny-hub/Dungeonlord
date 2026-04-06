@@ -659,6 +659,98 @@ export const COUNCIL_SPONSOR_CONTENT = {
   },
 };
 
+function defaultMonsterUnlockDay(cost = 1) {
+  if (cost <= 14) return 1;
+  if (cost <= 20) return 6;
+  if (cost <= 28) return 12;
+  if (cost <= 36) return 20;
+  return 28;
+}
+
+function defaultMonsterRecruitWeight(unlockDay = 1) {
+  if (unlockDay <= 6) return 6;
+  if (unlockDay <= 14) return 4;
+  if (unlockDay <= 24) return 3;
+  return 2;
+}
+
+const BASE_STANDARD_MONSTERS = [
+  { key: "goblin", name: "Goblin", icon: "G", hp: 8, atk: 3, cost: 15, classPool: ["Warrior", "Rogue", "Skirmisher", "Ranger"] },
+  { key: "kobold", name: "Kobold", icon: "Kb", hp: 6, atk: 3, cost: 12, classPool: ["Rogue", "Skirmisher", "Ranger"] },
+  { key: "hobgoblin", name: "Hobgoblin", icon: "Hg", hp: 12, atk: 4, cost: 18, classPool: ["Warrior", "Tank", "Skirmisher"] },
+  { key: "ogre", name: "Ogre", icon: "O", hp: 24, atk: 6, cost: 30, classPool: ["Brute", "Tank", "Warrior"] },
+  { key: "imp", name: "Imp", icon: "I", hp: 6, atk: 4, cost: 12, classPool: ["Rogue", "Skirmisher", "Hexer", "Mage"] },
+  { key: "skeleton", name: "Skeleton", icon: "S", hp: 10, atk: 4, cost: 14, classPool: ["Warrior", "Tank", "Hexer"] },
+  { key: "zombie", name: "Zombie", icon: "Z", hp: 14, atk: 3, cost: 12, classPool: ["Brute", "Tank", "Warrior"] },
+  { key: "specter", name: "Specter", icon: "Sp", hp: 10, atk: 4, cost: 18, classPool: ["Hexer", "Mage", "Skirmisher"] },
+  { key: "bonehound", name: "Bone Hound", icon: "Bh", hp: 10, atk: 4, cost: 14, classPool: ["Skirmisher", "Ranger", "Warrior"] },
+  { key: "mummy", name: "Mummy", icon: "Mu", hp: 16, atk: 4, cost: 18, classPool: ["Warrior", "Hexer", "Tank"] },
+  { key: "slime", name: "Slime", icon: "L", hp: 12, atk: 2, cost: 10, classPool: ["Brute", "Tank"] },
+  { key: "wraith", name: "Wraith", icon: "W", hp: 14, atk: 5, cost: 22, classPool: ["Hexer", "Mage", "Skirmisher"] },
+  { key: "direRat", name: "Dire Rat", icon: "Dr", hp: 6, atk: 3, cost: 10, classPool: ["Rogue", "Skirmisher"] },
+  { key: "batSwarm", name: "Bat Swarm", icon: "Bs", hp: 8, atk: 3, cost: 12, classPool: ["Skirmisher", "Ranger"] },
+  { key: "hellhound", name: "Hellhound", icon: "Hh", hp: 14, atk: 5, cost: 22, classPool: ["Brute", "Skirmisher", "Warrior"] },
+  { key: "boar", name: "Boar", icon: "Bo", hp: 16, atk: 4, cost: 18, classPool: ["Brute", "Tank", "Warrior"] },
+  { key: "direBoar", name: "Dire Boar", icon: "Db", hp: 20, atk: 5, cost: 26, classPool: ["Brute", "Tank", "Warrior"] },
+  { key: "carrionCrow", name: "Carrion Crow", icon: "Cc", hp: 8, atk: 3, cost: 12, classPool: ["Skirmisher", "Ranger"] },
+  { key: "sporeling", name: "Sporeling", icon: "Sl", hp: 10, atk: 3, cost: 14, classPool: ["Hexer", "Skirmisher"] },
+  { key: "mimic", name: "Mimic", icon: "Mi", hp: 18, atk: 6, cost: 28, classPool: ["Brute", "Tank", "Hexer"] },
+  { key: "animatedArmor", name: "Animated Armor", icon: "Aa", hp: 20, atk: 5, cost: 26, classPool: ["Tank", "Warrior", "Brute"] },
+  { key: "gremlin", name: "Gremlin", icon: "Gr", hp: 8, atk: 3, cost: 12, classPool: ["Rogue", "Skirmisher", "Hexer"] },
+  { key: "myconid", name: "Myconid", icon: "My", hp: 14, atk: 4, cost: 18, classPool: ["Hexer", "Warrior", "Tank"] },
+  { key: "chimera", name: "Chimera", icon: "Ch", hp: 22, atk: 7, cost: 36, classPool: ["Brute", "Warrior", "Mage"] },
+  { key: "kuoToa", name: "Kuo-toa", icon: "Kt", hp: 12, atk: 4, cost: 16, classPool: ["Warrior", "Skirmisher", "Hexer"] },
+  { key: "caveNaga", name: "Cave Naga", icon: "Cn", hp: 16, atk: 6, cost: 26, classPool: ["Mage", "Hexer"] },
+  { key: "deepSpider", name: "Deep Spider", icon: "Ds", hp: 12, atk: 4, cost: 18, classPool: ["Rogue", "Skirmisher", "Hexer"] },
+  { key: "gnoll", name: "Gnoll", icon: "Gn", hp: 14, atk: 5, cost: 20, classPool: ["Warrior", "Brute", "Skirmisher"] },
+  { key: "lizardfolk", name: "Lizardfolk", icon: "Lf", hp: 14, atk: 5, cost: 20, classPool: ["Warrior", "Skirmisher", "Tank"] },
+  { key: "duergar", name: "Duergar", icon: "Dg", hp: 16, atk: 5, cost: 24, classPool: ["Warrior", "Tank", "Hexer"] },
+  { key: "drow", name: "Drow", icon: "Dw", hp: 12, atk: 5, cost: 22, classPool: ["Rogue", "Mage", "Hexer"] },
+  { key: "bugbear", name: "Bugbear", icon: "Bb", hp: 18, atk: 6, cost: 26, classPool: ["Brute", "Warrior", "Rogue"] },
+  { key: "ghoul", name: "Ghoul", icon: "Gh", hp: 16, atk: 5, cost: 20, classPool: ["Brute", "Warrior", "Hexer"] },
+  { key: "orc", name: "Orc", icon: "Or", hp: 18, atk: 6, cost: 24, classPool: ["Warrior", "Brute", "Tank"] },
+  { key: "troll", name: "Troll", icon: "Tr", hp: 26, atk: 7, cost: 34, classPool: ["Brute", "Tank", "Warrior"] },
+  { key: "vampire", name: "Vampire", icon: "V", hp: 18, atk: 7, cost: 30, classPool: ["Rogue", "Mage", "Hexer", "Skirmisher"] },
+  { key: "werewolf", name: "Werewolf", icon: "WW", hp: 20, atk: 8, cost: 32, classPool: ["Brute", "Skirmisher", "Warrior"] },
+  { key: "lich", name: "Lich", icon: "Li", hp: 16, atk: 8, cost: 36, classPool: ["Mage", "Hexer"] },
+  { key: "harpy", name: "Harpy", icon: "H", hp: 14, atk: 5, cost: 20, classPool: ["Skirmisher", "Ranger", "Rogue"] },
+  { key: "gargoyle", name: "Gargoyle", icon: "Ga", hp: 22, atk: 6, cost: 28, classPool: ["Tank", "Warrior", "Brute"] },
+  { key: "basilisk", name: "Basilisk", icon: "Ba", hp: 20, atk: 7, cost: 30, classPool: ["Hexer", "Brute", "Tank"] },
+  { key: "spiderkin", name: "Spiderkin", icon: "Sp", hp: 12, atk: 4, cost: 18, classPool: ["Rogue", "Skirmisher", "Hexer"] },
+  { key: "minotaur", name: "Minotaur", icon: "M", hp: 24, atk: 8, cost: 38, classPool: ["Brute", "Warrior", "Tank"] },
+  { key: "drake", name: "Drake", icon: "D", hp: 22, atk: 7, cost: 34, classPool: ["Warrior", "Brute", "Mage"] },
+  { key: "elemental", name: "Elemental", icon: "E", hp: 20, atk: 6, cost: 30, affinityPool: ["Fire", "Water", "Earth", "Air"] },
+  { key: "construct", name: "Construct", icon: "C", hp: 24, atk: 5, cost: 28, affinityPool: ["Steel", "Stone", "Arcane"] },
+  { key: "sahagin", name: "Sahagin", icon: "Sa", hp: 18, atk: 6, cost: 26, classPool: ["Warrior", "Skirmisher", "Ranger"] },
+  { key: "unicorn", name: "Unicorn", icon: "U", hp: 18, atk: 6, cost: 28, affinityPool: ["Light"] },
+  { key: "nightmare", name: "Nightmare", icon: "Nm", hp: 20, atk: 7, cost: 32, affinityPool: ["Dark"] },
+  { key: "dullahan", name: "Dullahan", icon: "Du", hp: 22, atk: 7, cost: 34, classPool: ["Warrior", "Brute", "Tank"] },
+  { key: "quasit", name: "Quasit", icon: "Qs", hp: 6, atk: 4, cost: 12, unlockDay: 1, classPool: ["Rogue", "Hexer", "Mage"], passiveBias: ["swift", "hex"], fusionHint: "hexer" },
+  { key: "darkling", name: "Darkling", icon: "Dk", hp: 8, atk: 4, cost: 13, unlockDay: 3, classPool: ["Rogue", "Skirmisher", "Ranger"], passiveBias: ["swift", "cruelty"], fusionHint: "stalker" },
+  { key: "carrionCrawler", name: "Carrion Crawler", icon: "Cc", hp: 12, atk: 4, cost: 16, unlockDay: 5, classPool: ["Hexer", "Skirmisher", "Brute"], passiveBias: ["venom-aura", "rot-cloud"], fusionHint: "plague" },
+  { key: "ghast", name: "Ghast", icon: "Gt", hp: 16, atk: 5, cost: 20, unlockDay: 7, classPool: ["Brute", "Warrior", "Hexer"], passiveBias: ["cruelty", "dread-howl"], fusionHint: "plague" },
+  { key: "hookHorror", name: "Hook Horror", icon: "Hk", hp: 18, atk: 6, cost: 26, unlockDay: 10, classPool: ["Warrior", "Tank", "Brute"], passiveBias: ["thorns", "bulwark"], fusionHint: "juggernaut" },
+  { key: "owlbear", name: "Owlbear", icon: "Ow", hp: 20, atk: 6, cost: 28, unlockDay: 12, classPool: ["Brute", "Warrior", "Tank"], passiveBias: ["savage", "packleader"], fusionHint: "predator" },
+  { key: "medusa", name: "Medusa", icon: "Md", hp: 16, atk: 7, cost: 30, unlockDay: 14, classPool: ["Hexer", "Ranger", "Mage"], passiveBias: ["hex", "dread-howl"], fusionHint: "siren" },
+  { key: "fleshGolem", name: "Flesh Golem", icon: "Fg", hp: 24, atk: 6, cost: 30, unlockDay: 16, classPool: ["Tank", "Brute", "Warden"], passiveBias: ["ironhide", "warding"], fusionHint: "juggernaut" },
+  { key: "lamia", name: "Lamia", icon: "La", hp: 18, atk: 7, cost: 32, unlockDay: 20, classPool: ["Rogue", "Hexer", "Mage"], passiveBias: ["hex", "mender", "swift"], fusionHint: "siren" },
+  { key: "hydra", name: "Hydra", icon: "Hy", hp: 28, atk: 8, cost: 40, unlockDay: 24, classPool: ["Brute", "Tank", "Warrior"], passiveBias: ["leech", "savage"], fusionHint: "juggernaut" },
+  { key: "deathKnight", name: "Death Knight", icon: "DK", hp: 24, atk: 8, cost: 40, unlockDay: 28, classPool: ["Knight", "Warrior", "Warden"], passiveBias: ["bulwark", "cruelty"], fusionHint: "vanguard" },
+  { key: "abolethSpawn", name: "Aboleth Spawn", icon: "Ab", hp: 20, atk: 7, cost: 36, unlockDay: 32, classPool: ["Mage", "Hexer", "Seer"], passiveBias: ["hex", "mender", "venom-aura"], fusionHint: "hexer" },
+];
+
+export const STANDARD_MONSTERS = BASE_STANDARD_MONSTERS.map((monster) => {
+  const unlockDay = Number.isFinite(monster.unlockDay) ? monster.unlockDay : defaultMonsterUnlockDay(monster.cost);
+  return {
+    ...monster,
+    unlockDay,
+    recruitWeight: Number.isFinite(monster.recruitWeight) ? monster.recruitWeight : defaultMonsterRecruitWeight(unlockDay),
+    classPool: Array.isArray(monster.classPool) ? [...monster.classPool] : [],
+    affinityPool: Array.isArray(monster.affinityPool) ? [...monster.affinityPool] : undefined,
+    passiveBias: Array.isArray(monster.passiveBias) ? [...monster.passiveBias] : undefined,
+  };
+});
+
 export const FLESH_MARKET_UNIQUE_MONSTERS = [
   {
     key: "patchmaw-chimera",
@@ -1025,6 +1117,33 @@ export const FUSION_ARCHETYPE_RULES = {
     baseCost: 9,
     secondaryWeights: { hp: 0.22, atk: 0.3, def: 0.16, spd: 0 },
   },
+  plague: {
+    key: "plague",
+    name: "Blightmaw",
+    icon: "BM",
+    classTags: ["Hexer", "Brute", "Warlock", "Marauder"],
+    passiveBias: ["venom-aura", "rot-cloud", "bloodcall", "cruelty"],
+    baseCost: 9,
+    secondaryWeights: { hp: 0.26, atk: 0.3, def: 0.16, spd: 0 },
+  },
+  juggernaut: {
+    key: "juggernaut",
+    name: "Ossuary Behemoth",
+    icon: "OB",
+    classTags: ["Tank", "Brute", "Warden", "Knight", "Tyrant"],
+    passiveBias: ["bulwark", "ironhide", "thorns", "warding"],
+    baseCost: 10,
+    secondaryWeights: { hp: 0.46, atk: 0.22, def: 0.38, spd: -1 },
+  },
+  siren: {
+    key: "siren",
+    name: "Hexsinger",
+    icon: "HX",
+    classTags: ["Rogue", "Hexer", "Mage", "Ranger", "Seer"],
+    passiveBias: ["hex", "swift", "mender", "dread-howl"],
+    baseCost: 9,
+    secondaryWeights: { hp: 0.18, atk: 0.34, def: 0.12, spd: 1 },
+  },
 };
 
 export function validateGameContent() {
@@ -1108,6 +1227,35 @@ export function validateGameContent() {
     ) {
       warnings.push(`Standard artifact "${artifact.key || "unknown"}" is missing key fields.`);
     }
+  }
+
+  const seenMonsterKeys = new Set();
+  for (const monster of STANDARD_MONSTERS) {
+    if (
+      !monster.key ||
+      !monster.name ||
+      !monster.icon ||
+      !Number.isFinite(monster.hp) ||
+      !Number.isFinite(monster.atk) ||
+      !Number.isFinite(monster.cost) ||
+      !Number.isFinite(monster.unlockDay) ||
+      !Number.isFinite(monster.recruitWeight)
+    ) {
+      warnings.push(`Standard monster "${monster.key || "unknown"}" is missing key fields.`);
+    }
+    if ((!Array.isArray(monster.classPool) || monster.classPool.length === 0) && (!Array.isArray(monster.affinityPool) || monster.affinityPool.length === 0)) {
+      warnings.push(`Standard monster "${monster.key || "unknown"}" needs a class or affinity pool.`);
+    }
+    if (Array.isArray(monster.passiveBias) && monster.passiveBias.some((key) => typeof key !== "string" || !key)) {
+      warnings.push(`Standard monster "${monster.key || "unknown"}" has an invalid passive bias entry.`);
+    }
+    if (monster.fusionHint && !FUSION_ARCHETYPE_RULES[monster.fusionHint]) {
+      warnings.push(`Standard monster "${monster.key || "unknown"}" references missing fusion hint "${monster.fusionHint}".`);
+    }
+    if (seenMonsterKeys.has(monster.key)) {
+      warnings.push(`Standard monster "${monster.key}" is duplicated.`);
+    }
+    seenMonsterKeys.add(monster.key);
   }
 
   for (const [key, rule] of Object.entries(FUSION_ARCHETYPE_RULES)) {

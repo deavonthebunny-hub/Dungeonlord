@@ -11,6 +11,7 @@ import {
   RAID_DIRECTIVES,
   RAID_TYPE_META,
   STANDARD_ARTIFACTS,
+  STANDARD_MONSTERS,
   STATUS_RULES,
   validateGameContent,
 } from "./gameContent";
@@ -60,65 +61,28 @@ const EVOLUTION_COSTS = {
   1: 50,
 };
 
-const MONSTERS = {
-  goblin: { key: "goblin", name: "Goblin", icon: "G", hp: 8, atk: 3, cost: 15 },
-  kobold: { key: "kobold", name: "Kobold", icon: "Kb", hp: 6, atk: 3, cost: 12 },
-  hobgoblin: { key: "hobgoblin", name: "Hobgoblin", icon: "Hg", hp: 12, atk: 4, cost: 18 },
-  ogre: { key: "ogre", name: "Ogre", icon: "O", hp: 24, atk: 6, cost: 30 },
-  imp: { key: "imp", name: "Imp", icon: "I", hp: 6, atk: 4, cost: 12 },
-  skeleton: { key: "skeleton", name: "Skeleton", icon: "S", hp: 10, atk: 4, cost: 14 },
-  zombie: { key: "zombie", name: "Zombie", icon: "Z", hp: 14, atk: 3, cost: 12 },
-  specter: { key: "specter", name: "Specter", icon: "Sp", hp: 10, atk: 4, cost: 18 },
-  bonehound: { key: "bonehound", name: "Bone Hound", icon: "Bh", hp: 10, atk: 4, cost: 14 },
-  mummy: { key: "mummy", name: "Mummy", icon: "Mu", hp: 16, atk: 4, cost: 18 },
-  slime: { key: "slime", name: "Slime", icon: "L", hp: 12, atk: 2, cost: 10 },
-  wraith: { key: "wraith", name: "Wraith", icon: "W", hp: 14, atk: 5, cost: 22 },
-  direRat: { key: "direRat", name: "Dire Rat", icon: "Dr", hp: 6, atk: 3, cost: 10 },
-  batSwarm: { key: "batSwarm", name: "Bat Swarm", icon: "Bs", hp: 8, atk: 3, cost: 12 },
-  hellhound: { key: "hellhound", name: "Hellhound", icon: "Hh", hp: 14, atk: 5, cost: 22 },
-  boar: { key: "boar", name: "Boar", icon: "Bo", hp: 16, atk: 4, cost: 18 },
-  direBoar: { key: "direBoar", name: "Dire Boar", icon: "Db", hp: 20, atk: 5, cost: 26 },
-  carrionCrow: { key: "carrionCrow", name: "Carrion Crow", icon: "Cc", hp: 8, atk: 3, cost: 12 },
-  sporeling: { key: "sporeling", name: "Sporeling", icon: "Sl", hp: 10, atk: 3, cost: 14 },
-  mimic: { key: "mimic", name: "Mimic", icon: "Mi", hp: 18, atk: 6, cost: 28 },
-  animatedArmor: { key: "animatedArmor", name: "Animated Armor", icon: "Aa", hp: 20, atk: 5, cost: 26 },
-  gremlin: { key: "gremlin", name: "Gremlin", icon: "Gr", hp: 8, atk: 3, cost: 12 },
-  myconid: { key: "myconid", name: "Myconid", icon: "My", hp: 14, atk: 4, cost: 18 },
-  chimera: { key: "chimera", name: "Chimera", icon: "Ch", hp: 22, atk: 7, cost: 36 },
-  kuoToa: { key: "kuoToa", name: "Kuo-toa", icon: "Kt", hp: 12, atk: 4, cost: 16 },
-  caveNaga: { key: "caveNaga", name: "Cave Naga", icon: "Cn", hp: 16, atk: 6, cost: 26 },
-  deepSpider: { key: "deepSpider", name: "Deep Spider", icon: "Ds", hp: 12, atk: 4, cost: 18 },
-  gnoll: { key: "gnoll", name: "Gnoll", icon: "Gn", hp: 14, atk: 5, cost: 20 },
-  lizardfolk: { key: "lizardfolk", name: "Lizardfolk", icon: "Lf", hp: 14, atk: 5, cost: 20 },
-  duergar: { key: "duergar", name: "Duergar", icon: "Dg", hp: 16, atk: 5, cost: 24 },
-  drow: { key: "drow", name: "Drow", icon: "Dw", hp: 12, atk: 5, cost: 22 },
-  bugbear: { key: "bugbear", name: "Bugbear", icon: "Bb", hp: 18, atk: 6, cost: 26 },
-  ghoul: { key: "ghoul", name: "Ghoul", icon: "Gh", hp: 16, atk: 5, cost: 20 },
-  orc: { key: "orc", name: "Orc", icon: "Or", hp: 18, atk: 6, cost: 24 },
-  troll: { key: "troll", name: "Troll", icon: "Tr", hp: 26, atk: 7, cost: 34 },
-  vampire: { key: "vampire", name: "Vampire", icon: "V", hp: 18, atk: 7, cost: 30 },
-  werewolf: { key: "werewolf", name: "Werewolf", icon: "WW", hp: 20, atk: 8, cost: 32 },
-  lich: { key: "lich", name: "Lich", icon: "Li", hp: 16, atk: 8, cost: 36 },
-  harpy: { key: "harpy", name: "Harpy", icon: "H", hp: 14, atk: 5, cost: 20 },
-  gargoyle: { key: "gargoyle", name: "Gargoyle", icon: "Ga", hp: 22, atk: 6, cost: 28 },
-  basilisk: { key: "basilisk", name: "Basilisk", icon: "Ba", hp: 20, atk: 7, cost: 30 },
-  spiderkin: { key: "spiderkin", name: "Spiderkin", icon: "Sp", hp: 12, atk: 4, cost: 18 },
-  minotaur: { key: "minotaur", name: "Minotaur", icon: "M", hp: 24, atk: 8, cost: 38 },
-  drake: { key: "drake", name: "Drake", icon: "D", hp: 22, atk: 7, cost: 34 },
-  elemental: { key: "elemental", name: "Elemental", icon: "E", hp: 20, atk: 6, cost: 30 },
-  construct: { key: "construct", name: "Construct", icon: "C", hp: 24, atk: 5, cost: 28 },
-  sahagin: { key: "sahagin", name: "Sahagin", icon: "Sa", hp: 18, atk: 6, cost: 26 },
-  unicorn: { key: "unicorn", name: "Unicorn", icon: "U", hp: 18, atk: 6, cost: 28 },
-  nightmare: { key: "nightmare", name: "Nightmare", icon: "Nm", hp: 20, atk: 7, cost: 32 },
-  dullahan: { key: "dullahan", name: "Dullahan", icon: "Du", hp: 22, atk: 7, cost: 34 },
-};
-const MONSTER_KEYS = Object.keys(MONSTERS);
+const MONSTERS = Object.fromEntries(STANDARD_MONSTERS.map((monster) => [monster.key, { ...monster }]));
+const MONSTER_KEYS = STANDARD_MONSTERS.map((monster) => monster.key);
 const UNIQUE_MONSTER_MAP = Object.fromEntries(FLESH_MARKET_UNIQUE_MONSTERS.map((monster) => [monster.key, monster]));
 const UNIQUE_ARTIFACT_MAP = Object.fromEntries(FLESH_MARKET_UNIQUE_ARTIFACTS.map((artifact) => [artifact.key, artifact]));
 const STANDARD_ARTIFACT_MAP = Object.fromEntries(STANDARD_ARTIFACTS.map((artifact) => [artifact.key, artifact]));
 const KNOW_MONSTER_KEY = (key) => !!(MONSTERS[key] || UNIQUE_MONSTER_MAP[key]);
 const KNOW_MONSTER_ENTITY = (monster) => !!monster && (!!monster.isFused || KNOW_MONSTER_KEY(monster.key));
 const STATUS_RULE_LIST = Object.values(STATUS_RULES);
+const NEW_RECRUIT_MONSTER_KEYS = new Set([
+  "quasit",
+  "darkling",
+  "carrionCrawler",
+  "ghast",
+  "hookHorror",
+  "owlbear",
+  "medusa",
+  "fleshGolem",
+  "lamia",
+  "hydra",
+  "deathKnight",
+  "abolethSpawn",
+]);
 
 function cloneArtifactEntry(artifact) {
   if (!artifact) return artifact;
@@ -379,62 +343,6 @@ const COUNCIL_MEMBERS = [
   },
 ];
 
-const MONSTER_CLASS_RULES = {
-  goblin: ["Warrior", "Rogue", "Skirmisher", "Ranger"],
-  kobold: ["Rogue", "Skirmisher", "Ranger"],
-  hobgoblin: ["Warrior", "Tank", "Skirmisher"],
-  ogre: ["Brute", "Tank", "Warrior"],
-  imp: ["Rogue", "Skirmisher", "Hexer", "Mage"],
-  skeleton: ["Warrior", "Tank", "Hexer"],
-  zombie: ["Brute", "Tank", "Warrior"],
-  specter: ["Hexer", "Mage", "Skirmisher"],
-  bonehound: ["Skirmisher", "Ranger", "Warrior"],
-  mummy: ["Warrior", "Hexer", "Tank"],
-  slime: ["Brute", "Tank"],
-  wraith: ["Hexer", "Mage", "Skirmisher"],
-  direRat: ["Rogue", "Skirmisher"],
-  batSwarm: ["Skirmisher", "Ranger"],
-  hellhound: ["Brute", "Skirmisher", "Warrior"],
-  boar: ["Brute", "Tank", "Warrior"],
-  direBoar: ["Brute", "Tank", "Warrior"],
-  carrionCrow: ["Skirmisher", "Ranger"],
-  sporeling: ["Hexer", "Skirmisher"],
-  mimic: ["Brute", "Tank", "Hexer"],
-  animatedArmor: ["Tank", "Warrior", "Brute"],
-  gremlin: ["Rogue", "Skirmisher", "Hexer"],
-  myconid: ["Hexer", "Warrior", "Tank"],
-  chimera: ["Brute", "Warrior", "Mage"],
-  kuoToa: ["Warrior", "Skirmisher", "Hexer"],
-  caveNaga: ["Mage", "Hexer"],
-  deepSpider: ["Rogue", "Skirmisher", "Hexer"],
-  gnoll: ["Warrior", "Brute", "Skirmisher"],
-  lizardfolk: ["Warrior", "Skirmisher", "Tank"],
-  duergar: ["Warrior", "Tank", "Hexer"],
-  drow: ["Rogue", "Mage", "Hexer"],
-  bugbear: ["Brute", "Warrior", "Rogue"],
-  ghoul: ["Brute", "Warrior", "Hexer"],
-  orc: ["Warrior", "Brute", "Tank"],
-  troll: ["Brute", "Tank", "Warrior"],
-  vampire: ["Rogue", "Mage", "Hexer", "Skirmisher"],
-  werewolf: ["Brute", "Skirmisher", "Warrior"],
-  lich: ["Mage", "Hexer"],
-  harpy: ["Skirmisher", "Ranger", "Rogue"],
-  gargoyle: ["Tank", "Warrior", "Brute"],
-  basilisk: ["Hexer", "Brute", "Tank"],
-  spiderkin: ["Rogue", "Skirmisher", "Hexer"],
-  minotaur: ["Brute", "Warrior", "Tank"],
-  drake: ["Warrior", "Brute", "Mage"],
-  sahagin: ["Warrior", "Skirmisher", "Ranger"],
-  dullahan: ["Warrior", "Brute", "Tank"],
-};
-
-const MONSTER_AFFINITY_RULES = {
-  elemental: ["Fire", "Water", "Earth", "Air"],
-  construct: ["Steel", "Stone", "Arcane"],
-  unicorn: ["Light"],
-  nightmare: ["Dark"],
-};
-
 const CLASS_STAT_MODS = {
   Warrior: { hp: 4, atk: 1, def: 1 },
   Rogue: { hp: -1, atk: 2, def: 0 },
@@ -592,6 +500,52 @@ function pickUnique(arr, count) {
     out.push(copy.splice(idx, 1)[0]);
   }
   return out;
+}
+
+function availableStandardMonsterDefs(day = 1, poolKeys = null) {
+  const keys = Array.isArray(poolKeys) && poolKeys.length ? poolKeys : MONSTER_KEYS;
+  const defs = keys.map((key) => MONSTERS[key]).filter(Boolean);
+  const unlocked = defs.filter((monster) => (monster.unlockDay || 1) <= day);
+  return unlocked.length ? unlocked : defs;
+}
+
+function pickWeightedMonsterDef(day = 1, poolKeys = null) {
+  const defs = availableStandardMonsterDefs(day, poolKeys);
+  if (!defs.length) return null;
+  const totalWeight = defs.reduce((sum, monster) => sum + Math.max(1, monster.recruitWeight || 1), 0);
+  let roll = Math.random() * totalWeight;
+  for (const monster of defs) {
+    roll -= Math.max(1, monster.recruitWeight || 1);
+    if (roll <= 0) return monster;
+  }
+  return defs[defs.length - 1];
+}
+
+function pickRewardMonsterEntry(day = 1, poolKeys = null) {
+  const uniqueEntries = (Array.isArray(poolKeys) ? poolKeys : [])
+    .map((key) => UNIQUE_MONSTER_MAP[key])
+    .filter(Boolean)
+    .map((monster) => ({ type: "unique", weight: 1, monster }));
+  const strictStandardDefs = (Array.isArray(poolKeys) && poolKeys.length ? poolKeys : MONSTER_KEYS)
+    .map((key) => MONSTERS[key])
+    .filter((monster) => monster && (monster.unlockDay || 1) <= day);
+  const standardEntries = (strictStandardDefs.length ? strictStandardDefs : availableStandardMonsterDefs(day)).map((monster) => ({
+    type: "standard",
+    weight: Math.max(1, monster.recruitWeight || 1),
+    monster,
+  }));
+  const entries = [...standardEntries, ...uniqueEntries];
+  if (!entries.length) {
+    const fallback = pickWeightedMonsterDef(day);
+    return fallback ? { type: "standard", monster: fallback } : null;
+  }
+  const totalWeight = entries.reduce((sum, entry) => sum + entry.weight, 0);
+  let roll = Math.random() * totalWeight;
+  for (const entry of entries) {
+    roll -= entry.weight;
+    if (roll <= 0) return entry;
+  }
+  return entries[entries.length - 1];
 }
 
 function nextCouncilDay(day) {
@@ -890,8 +844,16 @@ function applyCouncilRewardToState(stateLike, reward, sponsorName = "", day = 1)
     const pool = Array.isArray(reward.monsterPool) && reward.monsterPool.length ? reward.monsterPool : MONSTER_KEYS;
     const invMonsters = [...(stateLike.invMonsters || [])];
     const addedNames = [];
+    const artifactMods = calcArtifactMods(stateLike.artifacts || [], day);
     for (let i = 0; i < count; i += 1) {
-      const monster = generateMonster(pick(pool), stateLike.turnsSurvived || 0, monsterStarCapForDay(day), day);
+      const picked = pickRewardMonsterEntry(day, pool);
+      const monster =
+        picked?.type === "unique"
+          ? buildUniqueMonsterEntity(picked.monster, day, artifactMods)
+          : picked?.monster
+            ? generateMonster(picked.monster.key, stateLike.turnsSurvived || 0, monsterStarCapForDay(day), day)
+            : null;
+      if (!monster) continue;
       invMonsters.push(monster);
       addedNames.push(monster.name);
     }
@@ -1327,6 +1289,13 @@ function normalizePassiveKeysForMonster(monster) {
 }
 
 function monsterRoleBucket(monster) {
+  if (monster?.fusionHint && FUSION_ARCHETYPE_RULES[monster.fusionHint]) {
+    return monster.fusionHint;
+  }
+  const baseHint = MONSTERS[monster?.key]?.fusionHint;
+  if (baseHint && FUSION_ARCHETYPE_RULES[baseHint]) {
+    return baseHint;
+  }
   const label = String(monster?.branchClass || monster?.class || "").toLowerCase();
   const passiveKeys = normalizePassiveKeysForMonster(monster);
   for (const rule of Object.values(FUSION_ARCHETYPE_RULES)) {
@@ -1453,6 +1422,25 @@ function getMonsterBaseData(kind) {
     hp: unique.baseStats?.hp || 1,
     atk: unique.baseStats?.atk || 1,
     def: unique.baseStats?.def || 0,
+  };
+}
+
+function buildMonsterPassiveLoadout(base, stars) {
+  const passiveCount = rollPassiveCount(stars);
+  if (passiveCount <= 0) return { passiveKeys: [], passiveRanks: {} };
+  const chosen = [];
+  if (Array.isArray(base?.passiveBias) && base.passiveBias.length > 0) {
+    const preferred = base.passiveBias.filter((key) => MONSTER_PASSIVE_MAP[key]);
+    if (preferred.length > 0) {
+      chosen.push(pick(preferred));
+    }
+  }
+  const remainingPool = MONSTER_PASSIVES.filter((key) => !chosen.includes(key));
+  const extra = pickUnique(remainingPool, Math.max(0, passiveCount - chosen.length));
+  const passiveKeys = [...chosen, ...extra].slice(0, passiveCount);
+  return {
+    passiveKeys,
+    passiveRanks: createPassiveRanks(passiveKeys),
   };
 }
 
@@ -1669,7 +1657,9 @@ function generateCouncilRaider(id, entrancePos, turnsSurvived, day = 1, councilR
   const raidMods = buildRaidModifiers(raidBoons);
   const monsterKey = pick(faction.monsterPool);
   const monsterBase = getMonsterBaseData(monsterKey) || getMonsterBaseData("goblin");
-  const className = pick(faction.classPool.filter(Boolean).length ? faction.classPool : MONSTER_CLASS_RULES[monsterKey] || MONSTER_ARCHETYPES);
+  const className = pick(
+    faction.classPool.filter(Boolean).length ? faction.classPool : MONSTERS[monsterKey]?.classPool || MONSTER_ARCHETYPES
+  );
   const traitPassiveKey = pick(faction.passiveBias.filter(Boolean).length ? faction.passiveBias : MONSTER_PASSIVES);
   const passiveRule = pickHeroPassiveRule(HERO_PASSIVE_RULES);
   const directiveKey = attacker.directiveKey || faction.defaultDirective || resolveRaidDirectiveKey("council", councilRaid, day);
@@ -1729,15 +1719,14 @@ function generateCouncilRaider(id, entrancePos, turnsSurvived, day = 1, councilR
 function generateMonster(kind, turnsSurvived, starCap, day = 1) {
   const base = getMonsterBaseData(kind);
   const stars = rollAuthoritativeStar(day, starCap);
-  const passiveKeys = pickUnique(MONSTER_PASSIVES, rollPassiveCount(stars));
-  const passiveRanks = createPassiveRanks(passiveKeys);
+  const { passiveKeys, passiveRanks } = buildMonsterPassiveLoadout(base, stars);
   let archetype = pick(MONSTER_ARCHETYPES);
   let affinity = null;
-  if (MONSTER_AFFINITY_RULES[kind]) {
-    affinity = pick(MONSTER_AFFINITY_RULES[kind]);
+  if (Array.isArray(base?.affinityPool) && base.affinityPool.length > 0) {
+    affinity = pick(base.affinityPool);
     archetype = `${affinity} Affinity`;
-  } else if (MONSTER_CLASS_RULES[kind]) {
-    archetype = pick(MONSTER_CLASS_RULES[kind]);
+  } else if (Array.isArray(base?.classPool) && base.classPool.length > 0) {
+    archetype = pick(base.classPool);
   }
   const stats = buildMonsterStats(kind, stars, 0);
   const name = `${pick(MONSTER_TITLES)} ${base.name}`;
@@ -1765,12 +1754,16 @@ function generateMonster(kind, turnsSurvived, starCap, day = 1) {
     foughtThisRaid: false,
     shieldedThisTurn: false,
     permanentRoomBonuses: {},
+    fusionHint: base?.fusionHint || null,
     statuses: {},
   };
 }
 
 function initMonsterInventory(turnsSurvived, count = 4, starCap, day = 1) {
-  return Array.from({ length: count }, () => generateMonster(pick(MONSTER_KEYS), turnsSurvived, starCap, day));
+  return Array.from({ length: count }, () => {
+    const picked = pickWeightedMonsterDef(day);
+    return generateMonster(picked?.key || MONSTER_KEYS[0], turnsSurvived, starCap, day);
+  });
 }
 
 function generateHeroParty(turnsSurvived, raidType, day = 1, options = {}) {
@@ -1869,7 +1862,10 @@ function buildRaidPartyWithIntel(turnsSurvived, raidType, day = 1, options = {})
 
 function generateTraderStock(turnsSurvived, day = 1) {
   const count = 3;
-  return Array.from({ length: count }, () => generateMonster(pick(MONSTER_KEYS), turnsSurvived, undefined, day));
+  return Array.from({ length: count }, () => {
+    const picked = pickWeightedMonsterDef(day);
+    return generateMonster(picked?.key || MONSTER_KEYS[0], turnsSurvived, undefined, day);
+  });
 }
 
 function generateArtifactStock(day = 1, ownedArtifacts = []) {
@@ -3738,8 +3734,8 @@ function defaultState() {
       return;
     }
     setState((s) => {
-      const kind = pick(MONSTER_KEYS);
-      const previewMonster = generateMonster(kind, s.turnsSurvived, undefined, s.day);
+      const picked = pickWeightedMonsterDef(s.day);
+      const previewMonster = generateMonster(picked?.key || MONSTER_KEYS[0], s.turnsSurvived, undefined, s.day);
       const scaledCost = traderPrice(previewMonster, s.day);
       if (s.currency.essence < scaledCost) return addLog(s, "Not enough Essence.");
 
@@ -7235,15 +7231,15 @@ function defaultState() {
                     {fusionPreview ? (
                       <>
                         <div className="entityMeta">
-                          Output: {fusionPreview.result.name} | {fusionPreview.result.class} | {formatStars(fusionPreview.result.stars)}
+                          Output: <span className="iconBadge">{fusionPreview.recipe?.icon || fusionPreview.result.icon}</span> {fusionPreview.result.name} | {formatStars(fusionPreview.result.stars)} | Stage {monsterEvolutionStageValue(fusionPreview.result)}
                         </div>
                         <div className="muted small">
-                          Passives: {formatMonsterPassiveList(fusionPreview.result.passiveKeys, fusionPreview.result.passiveRanks)}
+                          Archetype: {fusionPreview.recipe?.name || "Abomination"} | Inherited Passives: {formatMonsterPassiveList(fusionPreview.result.passiveKeys, fusionPreview.result.passiveRanks)}
                         </div>
                         <div className="muted small">
                           Stats: HP {fusionPreview.result.stats.maxHp} | ATK {fusionPreview.result.stats.atk} | DEF {fusionPreview.result.stats.def}
                         </div>
-                        <div className="muted small">Cost: {fusionPreview.cost} Darkcrystals | Recipe: {fusionPreview.recipe?.name || "Abomination"}</div>
+                        <div className="muted small">Cost: {fusionPreview.cost} Darkcrystals | Secondary recipe shapes the fusion result.</div>
                       </>
                     ) : (
                       <div className="muted small">Choose a primary monster and a secondary trait donor. Unique and fused monsters cannot be used in v1.</div>
@@ -8247,6 +8243,29 @@ function defaultState() {
                       {status.name} <span className="muted small">({status.short})</span>
                     </div>
                     <div className="entityMeta">{status.desc}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="cardTitle">New Recruits</div>
+              <div className="entityList">
+                {STANDARD_MONSTERS.filter((monster) => NEW_RECRUIT_MONSTER_KEYS.has(monster.key)).map((monster) => (
+                  <div className="entityItem" key={monster.key}>
+                    <div className="entityName">
+                      <span className="iconBadge">{monster.icon}</span>
+                      {monster.name}
+                    </div>
+                    <div className="entityMeta">
+                      HP {monster.hp} | ATK {monster.atk} | Cost {monster.cost}
+                    </div>
+                    <div className="muted small">
+                      Unlock Day {monster.unlockDay} | Classes {(monster.classPool || []).join(", ") || (monster.affinityPool || []).join(", ")}
+                    </div>
+                    <div className="muted small">
+                      Passive Bias {(monster.passiveBias || []).join(", ") || "None"} | Fusion {monster.fusionHint || "auto"}
+                    </div>
                   </div>
                 ))}
               </div>
