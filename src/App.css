@@ -162,9 +162,9 @@ body::before {
 .pill {
   background: rgba(15, 23, 42, 0.7);
   border: 1px solid var(--border);
-  padding: 6px 10px;
+  padding: 5px 8px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1;
   color: var(--ink-1);
 }
@@ -260,7 +260,7 @@ body::before {
 .dungeonHudRail {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
 .gridWrap {
@@ -271,12 +271,31 @@ body::before {
   align-items: flex-start;
 }
 
+.dungeonBody {
+  width: 100%;
+  min-height: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 18px;
+}
+
+.dungeonGutter {
+  width: 260px;
+  min-height: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding-bottom: 8px;
+  flex: 0 0 260px;
+}
+
 .dungeonStage {
   position: relative;
-  width: 100%;
-  max-width: 460px;
+  width: 460px;
   min-height: 100%;
-  margin: 0 auto;
+  margin: 0;
+  flex: 0 0 460px;
 }
 
 .grid {
@@ -556,10 +575,9 @@ body::before {
 }
 
 .dungeonTileFloat {
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  width: min(100%, 340px);
+  position: sticky;
+  bottom: 16px;
+  width: min(100%, 260px);
   z-index: 3;
   background: linear-gradient(160deg, rgba(18, 27, 51, 0.92), rgba(12, 18, 32, 0.9));
   backdrop-filter: blur(10px);
@@ -1163,9 +1181,23 @@ button.entityItem {
     padding: 10px;
   }
 
+  .dungeonBody {
+    display: block;
+  }
+
+  .dungeonGutter {
+    width: auto;
+    min-height: auto;
+    display: block;
+    padding-bottom: 0;
+  }
+
   .dungeonStage {
     max-width: 380px;
+    width: min(100%, 380px);
     min-height: auto;
+    margin: 0 auto;
+    flex: none;
   }
 
   .grid {
@@ -1176,7 +1208,7 @@ button.entityItem {
 
   .dungeonTileFloat {
     position: static;
-    width: auto;
+    width: min(100%, 420px);
     margin: 0 10px 12px;
     padding: 10px;
     box-shadow: none;

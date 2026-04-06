@@ -5883,84 +5883,88 @@ function defaultState() {
           </div>
 
           <div className="gridWrap">
-            <div className="dungeonStage">
-              <div className="grid">
-                {state.grid.map((row, y) =>
-                  row.map((t, x) => (
-                    <button
-                      key={keyOf(x, y)}
-                      className={tileClass(t, x, y)}
-                      onClick={() => setSelected(x, y)}
-                      title={`(${x + 1},${y + 1})`}
-                      disabled={locked}
-                    >
-                      {(() => {
-                        const heroesHere = heroesByTile.get(keyOf(x, y)) || [];
-                        const monstersHere = t.room === "monster" ? t.monsters.length : 0;
-                        const glyph = getTileGlyph(t, x, y, heroesHere.length, monstersHere);
-                        const stateChip = tileStateChip(t, x, y);
-                        if (!glyph.text && !glyph.subtext && !stateChip) return null;
-                        return (
-                          <>
-                            {stateChip ? <span className="tileChip tileChipState">{stateChip}</span> : null}
-                            {glyph.text ? <span className={`tileGlyph ${glyph.tone || ""}`}>{glyph.text}</span> : null}
-                            {glyph.subtext ? <span className="tileGlyphSub">{glyph.subtext}</span> : null}
-                          </>
-                        );
-                      })()}
-                    </button>
-                  ))
-                )}
-              </div>
-              <div className="dungeonTileFloat">
-                <div className="dungeonTileDockHeader">
-                  <div className="dungeonTileDockTitle">Selected Tile</div>
-                  <div className="muted">({state.selected.x + 1}, {state.selected.y + 1})</div>
+            <div className="dungeonBody">
+              <div className="dungeonGutter">
+                <div className="dungeonTileFloat">
+                  <div className="dungeonTileDockHeader">
+                    <div className="dungeonTileDockTitle">Selected Tile</div>
+                    <div className="muted">({state.selected.x + 1}, {state.selected.y + 1})</div>
+                  </div>
+                  <div className="dungeonTileDockGrid">
+                    <div className="dockFact">
+                      <span className="dockLabel">Type</span>
+                      <div className="dockValue">
+                        <span className="iconBadge">{roomTypeIcon(selectedTile) || "--"}</span>
+                        {roomTypeName(selectedTile)}
+                      </div>
+                    </div>
+                    <div className="dockFact">
+                      <span className="dockLabel">Flags</span>
+                      <div className="dockBadgeRow">
+                        {selectedTileFlags.length ? (
+                          selectedTileFlags.map((flag) => (
+                            <span className="badge favorNeutral" key={flag}>
+                              {flag}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="muted small">None</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="dockFact">
+                      <span className="dockLabel">Readiness</span>
+                      <div className="dockValue">{selectedReadiness}</div>
+                    </div>
+                    <div className="dockFact">
+                      <span className="dockLabel">Occupants</span>
+                      <div className="dockValue">
+                        Heroes {selectedHeroes.length} | Monsters {selectedTile.monsters.length}
+                      </div>
+                    </div>
+                    <div className="dockFact dockFactWide">
+                      <span className="dockLabel">Trap</span>
+                      <div className="dockValue">{selectedTrapSummary}</div>
+                    </div>
+                    <div className="dockFact dockFactWide">
+                      <span className="dockLabel">Effect</span>
+                      <div className="dockValue">{selectedTileEffect}</div>
+                    </div>
+                    <div className="dockFact dockFactWide">
+                      <span className="dockLabel">Auras</span>
+                      <div className="dockValue">{selectedTileAuras.length ? selectedTileAuras.join(", ") : "none"}</div>
+                    </div>
+                  </div>
                 </div>
-                <div className="dungeonTileDockGrid">
-                  <div className="dockFact">
-                    <span className="dockLabel">Type</span>
-                    <div className="dockValue">
-                      <span className="iconBadge">{roomTypeIcon(selectedTile) || "--"}</span>
-                      {roomTypeName(selectedTile)}
-                    </div>
-                  </div>
-                  <div className="dockFact">
-                    <span className="dockLabel">Flags</span>
-                    <div className="dockBadgeRow">
-                      {selectedTileFlags.length ? (
-                        selectedTileFlags.map((flag) => (
-                          <span className="badge favorNeutral" key={flag}>
-                            {flag}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="muted small">None</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="dockFact">
-                    <span className="dockLabel">Readiness</span>
-                    <div className="dockValue">{selectedReadiness}</div>
-                  </div>
-                  <div className="dockFact">
-                    <span className="dockLabel">Occupants</span>
-                    <div className="dockValue">
-                      Heroes {selectedHeroes.length} | Monsters {selectedTile.monsters.length}
-                    </div>
-                  </div>
-                  <div className="dockFact dockFactWide">
-                    <span className="dockLabel">Trap</span>
-                    <div className="dockValue">{selectedTrapSummary}</div>
-                  </div>
-                  <div className="dockFact dockFactWide">
-                    <span className="dockLabel">Effect</span>
-                    <div className="dockValue">{selectedTileEffect}</div>
-                  </div>
-                  <div className="dockFact dockFactWide">
-                    <span className="dockLabel">Auras</span>
-                    <div className="dockValue">{selectedTileAuras.length ? selectedTileAuras.join(", ") : "none"}</div>
-                  </div>
+              </div>
+              <div className="dungeonStage">
+                <div className="grid">
+                  {state.grid.map((row, y) =>
+                    row.map((t, x) => (
+                      <button
+                        key={keyOf(x, y)}
+                        className={tileClass(t, x, y)}
+                        onClick={() => setSelected(x, y)}
+                        title={`(${x + 1},${y + 1})`}
+                        disabled={locked}
+                      >
+                        {(() => {
+                          const heroesHere = heroesByTile.get(keyOf(x, y)) || [];
+                          const monstersHere = t.room === "monster" ? t.monsters.length : 0;
+                          const glyph = getTileGlyph(t, x, y, heroesHere.length, monstersHere);
+                          const stateChip = tileStateChip(t, x, y);
+                          if (!glyph.text && !glyph.subtext && !stateChip) return null;
+                          return (
+                            <>
+                              {stateChip ? <span className="tileChip tileChipState">{stateChip}</span> : null}
+                              {glyph.text ? <span className={`tileGlyph ${glyph.tone || ""}`}>{glyph.text}</span> : null}
+                              {glyph.subtext ? <span className="tileGlyphSub">{glyph.subtext}</span> : null}
+                            </>
+                          );
+                        })()}
+                      </button>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
