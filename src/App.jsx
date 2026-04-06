@@ -8,6 +8,7 @@ import {
   FLESH_MARKET_UNIQUE_MONSTERS,
   FUSION_ARCHETYPE_RULES,
   HERO_ARCHETYPE_RULES,
+  RAID_DIRECTIVES,
   RAID_TYPE_META,
   STANDARD_ARTIFACTS,
   STATUS_RULES,
@@ -930,14 +931,20 @@ function buildCouncilRaidFromRoster(roster = [], day = 1, favorMap = {}) {
       raidName: faction.raidName || member.title,
       desc: faction.desc || member.theme,
       raidModifier: faction.raidModifier || member.role,
+      directiveKey: faction.defaultDirective || "rush-core",
+      archetypeWeights: faction.archetypeWeights || {},
     };
   });
+  const primaryDirectiveKey = attackers[0]?.directiveKey || "rush-core";
+  const directive = getRaidDirectiveRule(primaryDirectiveKey);
   return {
     day,
     attackers,
     label: `Council Retaliation: ${attackers.map((a) => a.memberName).join(" & ")}`,
     desc: attackers.map((a) => a.raidName).join(" / "),
     modifierText: attackers.map((a) => a.raidModifier).join(" "),
+    directiveKey: primaryDirectiveKey,
+    directiveLabel: directive.name,
   };
 }
 
@@ -1015,6 +1022,125 @@ function getHeroArchetypeRule(key) {
   return HERO_ARCHETYPE_RULES[key] || HERO_ARCHETYPE_RULES.zealot;
 }
 
+function getRaidDirectiveRule(key) {
+  return RAID_DIRECTIVES[key] || RAID_DIRECTIVES["rush-core"];
+}
+
+function createHeroMemory(memory = {}) {
+  const targetTile =
+    memory?.targetTile && Number.isFinite(memory.targetTile.x) && Number.isFinite(memory.targetTile.y)
+      ? {
+          x: memory.targetTile.x,
+          y: memory.targetTile.y,
+          kind: memory.targetTile.kind || null,
+          label: memory.targetTile.label || null,
+        }
+      : null;
+  return {
+    danger: memory?.danger || {},
+    lastIntent: memory?.lastIntent || null,
+    recentTiles: Array.isArray(memory?.recentTiles) ? memory.recentTiles.slice(-6) : [],
+    currentObjective: memory?.currentObjective || null,
+    objectiveTurnsLeft: Number.isFinite(memory?.objectiveTurnsLeft) ? memory.objectiveTurnsLeft : 0,
+    targetTile,
+    lastLoopBreak: memory?.lastLoopBreak || null,
+  };
+}
+
+function createEmptyRaidIntel(directive = "rush-core", leaderId = null) {
+  return {
+    dangerTiles: {},
+    trapHubs: [],
+    utilityHubs: [],
+    monsterHubs: [],
+    directive,
+    leaderId: Number.isFinite(leaderId) ? leaderId : null,
+  };
+}
+
+function normalizeRaidIntel(raidIntel, fallbackDirective = "rush-core", fallbackLeaderId = null) {
+  return {
+    dangerTiles: raidIntel?.dangerTiles || {},
+    trapHubs: Array.isArray(raidIntel?.trapHubs) ? [...new Set(raidIntel.trapHubs.filter(Boolean))] : [],
+    utilityHubs: Array.isArray(raidIntel?.utilityHubs) ? [...new Set(raidIntel.utilityHubs.filter(Boolean))] : [],
+    monsterHubs: Array.isArray(raidIntel?.monsterHubs) ? [...new Set(raidIntel.monsterHubs.filter(Boolean))] : [],
+    directive: raidIntel?.directive || fallbackDirective,
+    leaderId: Number.isFinite(raidIntel?.leaderId) ? raidIntel.leaderId : fallbackLeaderId,
+  };
+}
+
+function mergeRaidIntelKey(list = [], key) {
+  if (!key) return list || [];
+  if ((list || []).includes(key)) return list || [];
+  return [...(list || []), key];
+}
+
+function resolveRaidDirectiveKey(raidType = null, councilRaid = null, day = 1) {
+  if (raidType === "council") {
+    const primaryAttacker = councilRaid?.attackers?.[0];
+    if (primaryAttacker?.directiveKey) return primaryAttacker.directiveKey;
+    if (primaryAttacker?.key && COUNCIL_RAID_FACTIONS[primaryAttacker.key]?.defaultDirective) {
+      return COUNCIL_RAID_FACTIONS[primaryAttacker.key].defaultDirective;
+    }
+    return "rush-core";
+  }
+  if (raidType === "elite") {
+    return day % 2 === 0 ? "purge-support" : "break-frontline";
+  }
+  return day % 2 === 0 ? "probe-flanks" : "rush-core";
+}
+
+function weightedPick(weightMap = {}, fallbackKey = "zealot") {
+  const entries = Object.entries(weightMap).filter(([, weight]) => Number.isFinite(weight) && weight > 0);
+  if (!entries.length) return fallbackKey;
+  const total = entries.reduce((sum, [, weight]) => sum + weight, 0);
+  let roll = Math.random() * total;
+  for (const [key, weight] of entries) {
+    roll -= weight;
+    if (roll <= 0) return key;
+  }
+  return entries[0][0];
+}
+
+function topArchetypesFromWeights(weightMap = {}, count = 2) {
+  return Object.entries(weightMap)
+    .filter(([, weight]) => Number.isFinite(weight) && weight > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, count)
+    .map(([key]) => getHeroArchetypeRule(key).name);
+}
+
+function raidDirectiveArchetypeSummary(raidType = null, councilRaid = null, day = 1) {
+  if (raidType === "council" && councilRaid?.attackers?.length) {
+    const mergedWeights = {};
+    for (const attacker of councilRaid.attackers) {
+      const faction = COUNCIL_RAID_FACTIONS[attacker.key] || {};
+      for (const [key, weight] of Object.entries(faction.archetypeWeights || {})) {
+        mergedWeights[key] = (mergedWeights[key] || 0) + weight;
+      }
+    }
+    const names = topArchetypesFromWeights(mergedWeights, 2);
+    return names.length ? names.join(" / ") : "Mixed pressure";
+  }
+  const directive = getRaidDirectiveRule(resolveRaidDirectiveKey(raidType, councilRaid, day));
+  const names = topArchetypesFromWeights(directive.archetypeWeights || {}, 2);
+  return names.length ? names.join(" / ") : "Mixed pressure";
+}
+
+function partyArchetypeSummary(party = []) {
+  const counts = {};
+  for (const member of party || []) {
+    const key = member?.archetypeKey;
+    if (!key) continue;
+    counts[key] = (counts[key] || 0) + 1;
+  }
+  const names = Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 2)
+    .map(([key]) => getHeroArchetypeRule(key).name);
+  return names.length ? names.join(" / ") : "Mixed pressure";
+}
+
 function pickHeroPassiveRule(pool = HERO_PASSIVE_RULES) {
   const normalizedPool = Array.isArray(pool)
     ? pool
@@ -1039,6 +1165,24 @@ function pickHeroArchetypeKey(heroClass, passiveKey, raidType = null) {
   if (["Mage", "Cleric"].includes(heroClass)) return "purifier";
   if (["Ranger", "Rogue"].includes(heroClass)) return "scout";
   return "zealot";
+}
+
+function pickRaidArchetypeKey(heroClass, passiveKey, raidType = null, directiveKey = null) {
+  const baseKey = pickHeroArchetypeKey(heroClass, passiveKey, raidType);
+  const directiveWeights = getRaidDirectiveRule(directiveKey).archetypeWeights || {};
+  const weights = { ...directiveWeights };
+  weights[baseKey] = (weights[baseKey] || 0) + 2;
+  return weightedPick(weights, baseKey);
+}
+
+function pickFactionArchetypeKey(faction, fallbackKey = "zealot") {
+  if (faction?.archetypeWeights && Object.keys(faction.archetypeWeights).length) {
+    return weightedPick(faction.archetypeWeights, fallbackKey);
+  }
+  if (Array.isArray(faction?.archetypes) && faction.archetypes.length) {
+    return pick(faction.archetypes);
+  }
+  return fallbackKey;
 }
 
 function applyRaidStarBias(stars, day = 1, raidType = null, bias = 0) {
@@ -1438,17 +1582,17 @@ function normalizeHeroEntity(hero, day = 1, raidType = null) {
     factionKey: hero?.factionKey || null,
     factionName: hero?.factionName || null,
     raidOriginLabel: hero?.raidOriginLabel || null,
+    raidDirectiveKey:
+      hero?.raidDirectiveKey ||
+      (hero?.factionKey ? COUNCIL_RAID_FACTIONS[hero.factionKey]?.defaultDirective : null) ||
+      resolveRaidDirectiveKey(raidType, null, safeDay),
     traitPassiveKey: hero?.traitPassiveKey || null,
     traitPassiveName: hero?.traitPassiveName || null,
     isRaidLeader: !!hero?.isRaidLeader,
     stats,
     name: hero?.name || `${HERO_NAMES[0]} the ${hero?.class || HERO_CLASSES[0]}`,
     statuses: hero?.statuses || {},
-    memory: {
-      danger: hero?.memory?.danger || {},
-      lastIntent: hero?.memory?.lastIntent || null,
-      recentTiles: Array.isArray(hero?.memory?.recentTiles) ? hero.memory.recentTiles.slice(-4) : [],
-    },
+    memory: createHeroMemory(hero?.memory),
     counters: {
       stunnedOnce: false,
       siphonGained: 0,
@@ -1470,7 +1614,8 @@ function generateHero(id, entrancePos, turnsSurvived, raidType, day = 1, options
   const racePool = options.racePool || HERO_RACES;
   const passiveRule = pickHeroPassiveRule(passivePool);
   const heroClass = pick(classPool);
-  const archetypeKey = options.archetypeKey || pickHeroArchetypeKey(heroClass, passiveRule.key, raidType);
+  const directiveKey = options.directiveKey || resolveRaidDirectiveKey(raidType, options.councilRaid, day);
+  const archetypeKey = options.archetypeKey || pickRaidArchetypeKey(heroClass, passiveRule.key, raidType, directiveKey);
   const stars = applyRaidStarBias(rollAuthoritativeStar(day), day, raidType, options.starBias || 0);
   const race = pick(racePool);
   const name = `${pick(HERO_NAMES)} the ${heroClass}`;
@@ -1497,13 +1642,14 @@ function generateHero(id, entrancePos, turnsSurvived, raidType, day = 1, options
     factionKey: null,
     factionName: null,
     raidOriginLabel: raidTypeMeta(raidType).label,
+    raidDirectiveKey: directiveKey,
     traitPassiveKey: null,
     traitPassiveName: null,
     isRaidLeader: false,
     stats,
     name,
     statuses: {},
-    memory: { danger: {}, lastIntent: null, recentTiles: [] },
+    memory: createHeroMemory(),
     counters: {
       stunnedOnce: false,
       siphonGained: 0,
@@ -1526,7 +1672,8 @@ function generateCouncilRaider(id, entrancePos, turnsSurvived, day = 1, councilR
   const className = pick(faction.classPool.filter(Boolean).length ? faction.classPool : MONSTER_CLASS_RULES[monsterKey] || MONSTER_ARCHETYPES);
   const traitPassiveKey = pick(faction.passiveBias.filter(Boolean).length ? faction.passiveBias : MONSTER_PASSIVES);
   const passiveRule = pickHeroPassiveRule(HERO_PASSIVE_RULES);
-  const archetypeKey = pick(faction.archetypes?.length ? faction.archetypes : Object.keys(HERO_ARCHETYPE_RULES));
+  const directiveKey = attacker.directiveKey || faction.defaultDirective || resolveRaidDirectiveKey("council", councilRaid, day);
+  const archetypeKey = pickFactionArchetypeKey(faction, pickHeroArchetypeKey(className, passiveRule.key, "council"));
   const stars = applyRaidStarBias(rollAuthoritativeStar(day), day, "council", raidMods.starBias || 0);
   const monsterStats = buildMonsterStats(monsterKey, stars, 0);
   const stats = {
@@ -1557,13 +1704,14 @@ function generateCouncilRaider(id, entrancePos, turnsSurvived, day = 1, councilR
     factionKey: attacker.key,
     factionName: attacker.memberName,
     raidOriginLabel: councilRaid?.label || RAID_TYPE_META.council.label,
+    raidDirectiveKey: directiveKey,
     traitPassiveKey,
     traitPassiveName: MONSTER_PASSIVE_MAP[traitPassiveKey]?.name || "Faction Trait",
     isRaidLeader: false,
     stats,
     name: `${attacker.memberName.split(" ")[0]} ${monsterBase.name}`,
     statuses: {},
-    memory: { danger: {}, lastIntent: null, recentTiles: [] },
+    memory: createHeroMemory(),
     counters: {
       stunnedOnce: false,
       siphonGained: 0,
@@ -1633,16 +1781,19 @@ function generateHeroParty(turnsSurvived, raidType, day = 1, options = {}) {
   const basePos = { x: 0, y: 0 };
   const party = [];
   let nextId = 1;
+  const directiveKey = options.directiveKey || resolveRaidDirectiveKey(raidType, options.councilRaid, day);
   const eliteOptions =
     raidType === "elite"
       ? {
           classPool: ["Warrior", "Ranger", "Cleric", "Monk", "Warrior", "Ranger"],
           passivePool: ["Brave", "Stoic", "Focused", "Warded", "Quick", "Unyielding", "Resolute"],
           starBias: 0.45 + (raidMods.starBias || 0),
+          directiveKey,
         }
       : {
-          starBias: raidMods.starBias || 0,
-        };
+        starBias: raidMods.starBias || 0,
+        directiveKey,
+      };
   for (let i = 0; i < size; i++) {
     const hero = generateHero(nextId, basePos, turnsSurvived, raidType, day, eliteOptions);
     party.push(hero);
@@ -1700,6 +1851,20 @@ function generateRaidParty(turnsSurvived, raidType, day = 1, options = {}) {
     );
   }
   return generateHeroParty(turnsSurvived, raidType, day, options);
+}
+
+function buildRaidPartyWithIntel(turnsSurvived, raidType, day = 1, options = {}) {
+  const directiveKey = options.directiveKey || resolveRaidDirectiveKey(raidType, options.councilRaid, day);
+  const party = generateRaidParty(turnsSurvived, raidType, day, {
+    ...options,
+    directiveKey,
+  });
+  const leader = party.find((member) => member.isRaidLeader) || null;
+  return {
+    directiveKey,
+    party,
+    raidIntel: createEmptyRaidIntel(directiveKey, leader?.id || null),
+  };
 }
 
 function generateTraderStock(turnsSurvived, day = 1) {
@@ -2449,13 +2614,195 @@ function invaderPassiveSummary(entity) {
   return entity.passive || "None";
 }
 
-function chooseInvaderMove(entity, grid, corePos, raidBoons = [], doctrineEffects = {}) {
+function objectiveTargetLabel(target) {
+  return target ? `${target.label || target.kind || "Target"} ${formatGridPos(target)}` : "No target";
+}
+
+function isObjectiveTargetValid(target, grid, corePos) {
+  if (!target || !Number.isFinite(target.x) || !Number.isFinite(target.y)) return false;
+  if (target.kind === "core" || target.kind === "safe-core") {
+    return !!corePos && corePos.x === target.x && corePos.y === target.y;
+  }
+  const tile = grid[target.y]?.[target.x];
+  if (!tile) return false;
+  if (target.kind === "monster") return tile.room === "monster" && (tile.monsters || []).length > 0;
+  if (target.kind === "support") return tile.room === "trap" || tile.room === "utility";
+  if (target.kind === "flank") return tileWalkable(tile) && !tile.core;
+  return tileWalkable(tile);
+}
+
+function objectiveCandidates(grid, current, corePos, selector) {
+  const candidates = [];
+  for (let y = 0; y < H; y += 1) {
+    for (let x = 0; x < W; x += 1) {
+      const tile = grid[y]?.[x];
+      if (!tile) continue;
+      if (!selector(tile, x, y)) continue;
+      const dist = pathDistance(grid, current, { x, y });
+      if (!Number.isFinite(dist)) continue;
+      const coreDist = corePos ? pathDistance(grid, { x, y }, corePos) : Number.POSITIVE_INFINITY;
+      candidates.push({
+        x,
+        y,
+        tile,
+        dist,
+        coreDist,
+        threat: tileThreatScore(grid, x, y),
+        lure: corePos ? branchLureScore(grid, { x, y }, corePos) : 0,
+      });
+    }
+  }
+  return candidates;
+}
+
+function chooseObjectiveTarget(entity, grid, corePos, raidIntel = null) {
+  const archetype = getHeroArchetypeRule(entity.archetypeKey);
+  const current = { x: entity.x, y: entity.y };
+  const sharedIntel = normalizeRaidIntel(raidIntel, entity.raidDirectiveKey || "rush-core");
+  for (const kind of archetype.objectiveKinds || ["core"]) {
+    if ((kind === "core" || kind === "safe-core") && corePos) {
+      return {
+        kind,
+        label: kind === "safe-core" ? "Safest Core lane" : "Press the Core",
+        x: corePos.x,
+        y: corePos.y,
+      };
+    }
+    if (kind === "monster") {
+      const target = objectiveCandidates(grid, current, corePos, (tile) => tile.room === "monster" && (tile.monsters || []).length > 0)
+        .sort((a, b) => b.tile.monsters.length - a.tile.monsters.length || a.dist - b.dist || b.threat - a.threat)[0];
+      if (target) {
+        return {
+          kind,
+          label: "Break monster room",
+          x: target.x,
+          y: target.y,
+        };
+      }
+    }
+    if (kind === "support") {
+      const approachSupportTarget = (x, y, sourceTile) =>
+        neighbors(x, y)
+          .filter((pos) => tileWalkable(grid[pos.y]?.[pos.x]))
+          .map((pos) => ({
+            x: pos.x,
+            y: pos.y,
+            tile: grid[pos.y]?.[pos.x],
+            dist: pathDistance(grid, current, pos),
+            threat: tileThreatScore(grid, pos.x, pos.y),
+            sourceTile,
+          }))
+          .filter((entry) => Number.isFinite(entry.dist));
+      const keyedSupport = [...(sharedIntel.trapHubs || []), ...(sharedIntel.utilityHubs || [])]
+        .flatMap((key) => {
+          const [x, y] = String(key)
+            .split(",")
+            .map((part) => Number(part));
+          const sourceTile = Number.isFinite(x) && Number.isFinite(y) ? grid[y]?.[x] : null;
+          if (!sourceTile || (sourceTile.room !== "trap" && sourceTile.room !== "utility")) return [];
+          if (sourceTile.room === "utility") return approachSupportTarget(x, y, sourceTile);
+          return [
+            {
+              x,
+              y,
+              tile: sourceTile,
+              dist: pathDistance(grid, current, { x, y }),
+              threat: tileThreatScore(grid, x, y),
+              sourceTile,
+            },
+          ].filter((entry) => Number.isFinite(entry.dist));
+        });
+      const scannedSupport = objectiveCandidates(grid, current, corePos, (tile) => tile.room === "trap")
+        .map((entry) => ({ ...entry, sourceTile: entry.tile }))
+        .concat(
+          Array.from({ length: H * W }, (_, idx) => {
+            const x = idx % W;
+            const y = Math.floor(idx / W);
+            const tile = grid[y]?.[x];
+            return tile?.room === "utility" ? approachSupportTarget(x, y, tile) : [];
+          }).flat()
+        );
+      const supportTarget =
+        keyedSupport.sort((a, b) => a.dist - b.dist || b.threat - a.threat)[0] ||
+        scannedSupport.sort(
+          (a, b) =>
+            (b.threat + (b.sourceTile?.room === "utility" ? 4 : 2)) -
+              (a.threat + (a.sourceTile?.room === "utility" ? 4 : 2)) || a.dist - b.dist
+        )[0];
+      if (supportTarget) {
+        return {
+          kind,
+          label: supportTarget.sourceTile?.room === "utility" ? "Purge support hub" : "Break trap line",
+          x: supportTarget.x,
+          y: supportTarget.y,
+        };
+      }
+    }
+    if (kind === "flank") {
+      const flankTarget = objectiveCandidates(grid, current, corePos, (tile, x, y) => tileWalkable(tile) && !tile.core && !(x === current.x && y === current.y))
+        .map((candidate) => ({
+          ...candidate,
+          score:
+            candidate.lure * 1.4 +
+            (candidate.coreDist > 1 ? 1 : 0) +
+            ((sharedIntel.dangerTiles || {})[keyOf(candidate.x, candidate.y)] ? -2 : 0) -
+            candidate.dist * 0.6,
+        }))
+        .filter((candidate) => candidate.score >= 2.5)
+        .sort((a, b) => b.score - a.score || a.dist - b.dist)[0];
+      if (flankTarget) {
+        return {
+          kind,
+          label: "Probe flank route",
+          x: flankTarget.x,
+          y: flankTarget.y,
+        };
+      }
+    }
+  }
+  return corePos
+    ? {
+        kind: "core",
+        label: "Press the Core",
+        x: corePos.x,
+        y: corePos.y,
+      }
+    : null;
+}
+
+function chooseInvaderMove(entity, grid, corePos, raidBoons = [], doctrineEffects = {}, raidIntel = null) {
   if (!entity || !corePos) return { next: null, options: [], intent: "No path" };
   const archetype = getHeroArchetypeRule(entity.archetypeKey);
+  const directiveKey = entity.raidDirectiveKey || raidIntel?.directive || "rush-core";
+  const directive = getRaidDirectiveRule(directiveKey);
+  const factionRetargetBias = entity.factionKey ? COUNCIL_RAID_FACTIONS[entity.factionKey]?.retargetBias || 0 : 0;
+  const objectiveCommitTurns =
+    archetype.objectiveCommitTurns < 0
+      ? -1
+      : Math.max(1, archetype.objectiveCommitTurns + (entity.raidOriginLabel === RAID_TYPE_META.elite.label ? 1 : 0) - factionRetargetBias);
   const current = { x: entity.x, y: entity.y };
   const currentCoreDist = pathDistance(grid, current, corePos);
   const raidMods = buildRaidModifiers(raidBoons);
   const recentTiles = Array.isArray(entity.memory?.recentTiles) ? entity.memory.recentTiles : [];
+  const currentMemory = createHeroMemory(entity.memory);
+  const retainedTarget = currentMemory.targetTile;
+  const retainedObjectiveActive =
+    retainedTarget &&
+    isObjectiveTargetValid(retainedTarget, grid, corePos) &&
+    (currentMemory.objectiveTurnsLeft < 0 || currentMemory.objectiveTurnsLeft > 0);
+  const currentDanger = (currentMemory.danger?.[keyOf(current.x, current.y)] || 0) + ((raidIntel?.dangerTiles || {})[keyOf(current.x, current.y)] || 0);
+  const forceRetarget = archetype.retargetOnDamage && currentDanger >= (archetype.dangerThreshold || 8);
+  const objectiveTarget =
+    retainedObjectiveActive && !forceRetarget
+      ? retainedTarget
+      : chooseObjectiveTarget(entity, grid, corePos, raidIntel);
+  const objectiveChanged =
+    !retainedTarget ||
+    forceRetarget ||
+    retainedTarget?.x !== objectiveTarget?.x ||
+    retainedTarget?.y !== objectiveTarget?.y ||
+    retainedTarget?.kind !== objectiveTarget?.kind;
+  const currentObjectiveDist = objectiveTarget ? pathDistance(grid, current, objectiveTarget) : Number.POSITIVE_INFINITY;
   const isBacktrack = (option) =>
     !!(entity.prev && option && entity.prev.x === option.next.x && entity.prev.y === option.next.y);
   const options = neighbors(entity.x, entity.y)
@@ -2464,22 +2811,38 @@ function chooseInvaderMove(entity, grid, corePos, raidBoons = [], doctrineEffect
       const tile = grid[next.y][next.x];
       const coreDist = pathDistance(grid, next, corePos);
       if (!Number.isFinite(coreDist)) return null;
-      const threat = tileThreatScore(grid, next.x, next.y) + (entity.memory?.danger?.[keyOf(next.x, next.y)] || 0);
+      const nextKey = keyOf(next.x, next.y);
+      const localDanger = currentMemory.danger?.[nextKey] || 0;
+      const sharedDanger = raidIntel?.dangerTiles?.[nextKey] || 0;
+      const threat = tileThreatScore(grid, next.x, next.y) + localDanger + (["cautious", "purifier", "scout"].includes(archetype.key) ? sharedDanger : sharedDanger * 0.35);
       const lure = branchLureScore(grid, next, corePos) + (raidMods.lureBoost || 0) + (doctrineEffects.utilityScoutBonus || 0);
       const roomBias =
-        (tile.room === "trap" ? archetype.weights.trap : 0) +
-        (tile.room === "monster" ? archetype.weights.monster : 0) +
-        (tile.room === "utility" ? archetype.weights.utility : 0);
+        (tile.room === "trap" ? archetype.weights.trap + (directive.weights?.trap || 0) : 0) +
+        (tile.room === "monster" ? archetype.weights.monster + (directive.weights?.monster || 0) : 0) +
+        (tile.room === "utility" ? archetype.weights.utility + (directive.weights?.utility || 0) : 0);
       const progress = Number.isFinite(currentCoreDist) ? currentCoreDist - coreDist : 0;
+      const objectiveDist = objectiveTarget ? pathDistance(grid, next, objectiveTarget) : Number.POSITIVE_INFINITY;
+      const objectiveProgress = Number.isFinite(currentObjectiveDist) && Number.isFinite(objectiveDist) ? currentObjectiveDist - objectiveDist : 0;
+      const objectiveBonus =
+        objectiveProgress * 2.2 * (directive.weights?.objective || 1) +
+        (objectiveTarget && objectiveTarget.x === next.x && objectiveTarget.y === next.y ? 4 : 0);
       const backtrackPenalty = entity.prev && entity.prev.x === next.x && entity.prev.y === next.y ? archetype.weights.backtrack : 0;
-      const revisitPenalty = recentTiles.filter((key) => key === keyOf(next.x, next.y)).length * (1.25 + archetype.weights.backtrack * 0.2);
+      const revisitPenalty = recentTiles.filter((key) => key === nextKey).length * (1.25 + archetype.weights.backtrack * 0.2);
+      const directLoopPenalty = recentTiles.length >= 2 && nextKey === recentTiles[recentTiles.length - 2] ? 12 : 0;
+      const longLoopPenalty = recentTiles.length >= 4 && nextKey === recentTiles[recentTiles.length - 4] ? 8 : 0;
+      const thresholdPenalty =
+        threat > (archetype.dangerThreshold || 99) ? (threat - archetype.dangerThreshold) * 2.5 : 0;
       const score =
-        progress * archetype.weights.core +
-        lure * archetype.weights.lure +
-        roomBias -
-        threat * archetype.weights.danger -
+        progress * archetype.weights.core * (directive.weights?.core || 1) +
+        lure * archetype.weights.lure * (directive.weights?.lure || 1) +
+        roomBias +
+        objectiveBonus -
+        threat * archetype.weights.danger * (directive.weights?.danger || 1) -
         backtrackPenalty -
-        revisitPenalty;
+        revisitPenalty -
+        directLoopPenalty -
+        longLoopPenalty -
+        thresholdPenalty;
       const intent =
         tile.core
           ? "Press Core"
@@ -2489,17 +2852,61 @@ function chooseInvaderMove(entity, grid, corePos, raidBoons = [], doctrineEffect
           ? "Force the trap line"
           : tile.room === "utility"
           ? "Disrupt support"
+          : objectiveTarget?.kind === "flank"
+          ? "Probe the flank"
           : "Advance";
-      return { next, tile, score, threat, lure, coreDist, intent, revisitPenalty };
+      return {
+        next,
+        tile,
+        score,
+        threat,
+        lure,
+        coreDist,
+        objectiveDist,
+        intent,
+        revisitPenalty,
+        isLoopRisk: directLoopPenalty > 0 || longLoopPenalty > 0,
+      };
     })
     .filter(Boolean)
-    .sort((a, b) => b.score - a.score || a.coreDist - b.coreDist);
+    .sort((a, b) => b.score - a.score || a.coreDist - b.coreDist || a.objectiveDist - b.objectiveDist);
   let best = options[0] || null;
-  if (best && isBacktrack(best)) {
-    const forwardAlternatives = options.filter((option) => option.coreDist < currentCoreDist && !isBacktrack(option));
+  let loopBreakReason = null;
+  if (best && (isBacktrack(best) || best.isLoopRisk)) {
+    const forwardAlternatives = options.filter(
+      (option) =>
+        !isBacktrack(option) &&
+        !option.isLoopRisk &&
+        (option.coreDist < currentCoreDist || option.objectiveDist < currentObjectiveDist || option.score >= (best.score - 3))
+    );
     if (forwardAlternatives.length > 0) {
       best = forwardAlternatives[0];
+      loopBreakReason = "Loop avoided";
     }
+  }
+  const reachedTarget = !!(best && objectiveTarget && best.next.x === objectiveTarget.x && best.next.y === objectiveTarget.y);
+  let objectiveTurnsLeft = currentMemory.objectiveTurnsLeft;
+  if (objectiveChanged) {
+    objectiveTurnsLeft = objectiveCommitTurns;
+  } else if (objectiveTurnsLeft > 0) {
+    objectiveTurnsLeft -= 1;
+  }
+  if (reachedTarget) {
+    objectiveTurnsLeft = 0;
+  }
+  let decisionLog = null;
+  if (objectiveChanged && objectiveTarget) {
+    if (archetype.key === "scout" && objectiveTarget.kind === "flank") {
+      decisionLog = `Scout diverts toward flank route ${formatGridPos(objectiveTarget)}.`;
+    } else if (archetype.key === "breaker" && objectiveTarget.kind === "monster") {
+      decisionLog = `Breaker commits to monster room at ${formatGridPos(objectiveTarget)}.`;
+    } else if (archetype.key === "purifier" && objectiveTarget.kind === "support") {
+      decisionLog = `Purifier marks support hub at ${formatGridPos(objectiveTarget)}.`;
+    } else if (archetype.key === "cautious" && forceRetarget) {
+      decisionLog = "Cautious reroutes after trap losses.";
+    }
+  } else if (archetype.key === "cautious" && forceRetarget) {
+    decisionLog = "Cautious reroutes after trap losses.";
   }
   return {
     next: best?.next || null,
@@ -2507,6 +2914,15 @@ function chooseInvaderMove(entity, grid, corePos, raidBoons = [], doctrineEffect
     intent: best ? best.intent : "Hold position",
     lure: best?.lure || 0,
     wasDetour: !!(best && !best.tile.core && best.lure >= 4),
+    directiveKey,
+    directiveLabel: directive.name,
+    currentObjective: objectiveTarget?.label || "Press the Core",
+    targetTile: objectiveTarget || null,
+    targetTileLabel: objectiveTargetLabel(objectiveTarget),
+    objectiveTurnsLeft,
+    objectiveChanged,
+    loopBreakReason,
+    decisionLog,
   };
 }
 
@@ -2589,7 +3005,8 @@ export default function App() {
   const [sacrificeIdx, setSacrificeIdx] = useState("");
   const [selectedInventoryMonsterIndex, setSelectedInventoryMonsterIndex] = useState("");
 function defaultState() {
-    const startingParty = generateRaidParty(0, null, 1);
+    const startingRaid = buildRaidPartyWithIntel(0, null, 1);
+    const startingParty = startingRaid.party;
     const dailyEvent = rollDailyEvent();
     const traderStock = generateTraderStock(0, 1);
     const artifacts = [];
@@ -2646,6 +3063,7 @@ function defaultState() {
       currentParty: startingParty,
       currentPartyRaidType: null,
       partyQueue: startingParty.map((h) => ({ ...h })),
+      raidIntel: startingRaid.raidIntel,
       dailyEvent,
       traderStock,
       dpRegenCounter: 0,
@@ -2811,6 +3229,19 @@ function defaultState() {
       const activeRaidBoons = Array.isArray(parsed.activeRaidBoons) ? parsed.activeRaidBoons.filter(Boolean) : [];
       const normalizeHeroList = (list, raidType = null) =>
         Array.isArray(list) ? list.filter(Boolean).map((hero) => normalizeHeroEntity(hero, savedDay, raidType)) : [];
+      const normalizedCurrentParty = normalizeHeroList(parsed.currentParty, currentPartyRaidType);
+      const normalizedHeroes = normalizeHeroList(parsed.heroes, parsed.raidType || currentPartyRaidType);
+      const normalizedPartyQueue = normalizeHeroList(parsed.partyQueue, currentPartyRaidType);
+      const normalizedScoutQueue = normalizeHeroList(parsed.scoutQueue, currentPartyRaidType);
+      const raidDirectiveFallback =
+        normalizedCurrentParty[0]?.raidDirectiveKey ||
+        normalizedHeroes[0]?.raidDirectiveKey ||
+        resolveRaidDirectiveKey(parsed.raidType || currentPartyRaidType || nextRaidType, pendingCouncilRaid, savedDay);
+      const raidLeaderFallback =
+        normalizedCurrentParty.find((hero) => hero.isRaidLeader)?.id ||
+        normalizedHeroes.find((hero) => hero.isRaidLeader)?.id ||
+        null;
+      const raidIntel = normalizeRaidIntel(parsed.raidIntel, raidDirectiveFallback, raidLeaderFallback);
       const fleshMarketUntilDay = parsed.fleshMarketUntilDay || base.fleshMarketUntilDay;
       const fleshMarketStock =
         fleshMarketUntilDay >= savedDay && fleshMarketUntilDay > 0
@@ -2852,10 +3283,11 @@ function defaultState() {
         nextRaidBoons,
         activeRaidBoons,
         currentPartyRaidType,
-        heroes: normalizeHeroList(parsed.heroes, parsed.raidType || currentPartyRaidType),
-        currentParty: normalizeHeroList(parsed.currentParty, currentPartyRaidType),
-        partyQueue: normalizeHeroList(parsed.partyQueue, currentPartyRaidType),
-        scoutQueue: normalizeHeroList(parsed.scoutQueue, currentPartyRaidType),
+        raidIntel,
+        heroes: normalizedHeroes,
+        currentParty: normalizedCurrentParty,
+        partyQueue: normalizedPartyQueue,
+        scoutQueue: normalizedScoutQueue,
         invMonsters: Array.isArray(parsed.invMonsters)
           ? parsed.invMonsters
               .filter((monster) => KNOW_MONSTER_ENTITY(monster))
@@ -3811,10 +4243,11 @@ function defaultState() {
     }
     setState((s) => {
       const raidType = s.pendingPunitiveRaid ? "council" : s.nextRaidType;
-      const party = generateRaidParty(s.turnsSurvived, raidType, s.day, {
+      const stagedRaid = buildRaidPartyWithIntel(s.turnsSurvived, raidType, s.day, {
         councilRaid: s.pendingCouncilRaid,
         raidBoons: s.nextRaidBoons,
       });
+      const party = stagedRaid.party;
       let scoutQueue = [];
       const doctrineEffects = getDoctrineEffects(s.doctrines);
       const raidMods = buildRaidModifiers(s.nextRaidBoons);
@@ -3840,6 +4273,7 @@ function defaultState() {
         currentPartyRaidType: raidType || null,
         partyQueue: party.map((h) => ({ ...h })),
         scoutQueue,
+        raidIntel: stagedRaid.raidIntel,
       };
       if (scoutQueue.length > 0) {
         ns = addCouncilQuestCounter(ns, "revealedInvaderCount", scoutQueue.length);
@@ -3847,6 +4281,7 @@ function defaultState() {
       const meta = raidTypeMeta(raidType, s.pendingCouncilRaid);
       ns = addLog(ns, `Day ${s.day} battle begins. ${meta.label}. Party size ${party.length}.`);
       ns = addLog(ns, meta.desc);
+      ns = addLog(ns, `Raid directive: ${getRaidDirectiveRule(stagedRaid.directiveKey).name}.`);
         if (scoutQueue.length > 0) {
           const previews = scoutQueue
           .map((h) => `${h.name}${h.isRaidLeader ? " [Leader]" : ""} (${formatStars(safeEntityStars(h))}, ATK ${h.atk}, HP ${h.hp})`)
@@ -3932,12 +4367,22 @@ function defaultState() {
         s.currentParty &&
         s.currentParty.length &&
         (s.currentPartyRaidType || null) === (raidType || null);
-      const party = reuseParty
-        ? s.currentParty
-        : generateRaidParty(s.turnsSurvived, raidType, s.day, {
+      const stagedRaid = reuseParty
+        ? {
+            directiveKey:
+              s.raidIntel?.directive || s.currentParty?.[0]?.raidDirectiveKey || resolveRaidDirectiveKey(raidType, s.pendingCouncilRaid, s.day),
+            party: s.currentParty,
+            raidIntel: normalizeRaidIntel(
+              s.raidIntel,
+              s.currentParty?.[0]?.raidDirectiveKey || resolveRaidDirectiveKey(raidType, s.pendingCouncilRaid, s.day),
+              s.currentParty?.find((hero) => hero.isRaidLeader)?.id || null
+            ),
+          }
+        : buildRaidPartyWithIntel(s.turnsSurvived, raidType, s.day, {
             councilRaid: s.pendingCouncilRaid,
             raidBoons: s.nextRaidBoons,
           });
+      const party = stagedRaid.party;
       let partyQueue = [...party];
       let raidRemaining = partyQueue.length;
       let raidKills = 0;
@@ -3988,6 +4433,7 @@ function defaultState() {
           currentParty: party,
           currentPartyRaidType: raidType || null,
           partyQueue,
+          raidIntel: stagedRaid.raidIntel,
           raidType: raidType || null,
           nextRaidType: null,
           pendingPunitiveRaid: false,
@@ -3999,6 +4445,7 @@ function defaultState() {
           ns = addCouncilQuestCounter(ns, "revealedInvaderCount", scoutQueue.length);
         }
         const meta = raidTypeMeta(raidType, s.pendingCouncilRaid);
+        ns = addLog(ns, `Raid directive: ${getRaidDirectiveRule(stagedRaid.directiveKey).name}.`);
         if (doctrineShield > 0) {
           ns = addLog(ns, `Core Doctrine fortifies the Core with +${doctrineShield} Shield.`);
         }
@@ -4036,6 +4483,7 @@ function defaultState() {
         currentParty: party,
         currentPartyRaidType: raidType || null,
         partyQueue,
+        raidIntel: stagedRaid.raidIntel,
         raidType: raidType || null,
         nextRaidType: null,
         pendingPunitiveRaid: false,
@@ -4047,6 +4495,7 @@ function defaultState() {
         ns = addCouncilQuestCounter(ns, "revealedInvaderCount", scoutQueue.length);
       }
       const meta = raidTypeMeta(raidType, s.pendingCouncilRaid);
+      ns = addLog(ns, `Raid directive: ${getRaidDirectiveRule(stagedRaid.directiveKey).name}.`);
       if (doctrineShield > 0) {
         ns = addLog(ns, `Core Doctrine fortifies the Core with +${doctrineShield} Shield.`);
       }
@@ -4102,6 +4551,11 @@ function defaultState() {
       const doctrineEffectsLocal = getDoctrineEffects(s.doctrines || {});
       const raidBoons = s.activeRaidBoons || [];
       const raidMods = buildRaidModifiers(raidBoons);
+      let raidIntel = normalizeRaidIntel(
+        s.raidIntel,
+        s.currentParty?.[0]?.raidDirectiveKey || resolveRaidDirectiveKey(s.raidType, s.pendingCouncilRaid, s.day),
+        s.currentParty?.find((hero) => hero.isRaidLeader)?.id || null
+      );
       let councilQuestCounters = {
         ...createEmptyCouncilQuestCounters(),
         ...(s.councilQuestCounters || {}),
@@ -4157,10 +4611,32 @@ function defaultState() {
       };
 
       const heroHasPassive = (h, name) => normalizeHeroPassiveKey(h.heroPassiveKey || h.passive) === normalizeHeroPassiveKey(name);
-      const rememberDanger = (h, x, y, amount = 1) => {
-        h.memory = h.memory || { danger: {}, lastIntent: null, recentTiles: [] };
+      const shareRaidDanger = (x, y, amount = 1) => {
+        const key = keyOf(x, y);
+        const sharedAmount = Math.max(1, Math.round(amount)) + (s.raidType === "elite" ? 1 : 0);
+        raidIntel = {
+          ...raidIntel,
+          dangerTiles: {
+            ...(raidIntel.dangerTiles || {}),
+            [key]: Math.min(16, (raidIntel.dangerTiles?.[key] || 0) + sharedAmount),
+          },
+        };
+      };
+      const rememberDanger = (h, x, y, amount = 1, share = false) => {
+        h.memory = createHeroMemory(h.memory);
         const key = keyOf(x, y);
         h.memory.danger[key] = Math.min(12, (h.memory.danger[key] || 0) + Math.max(1, Math.round(amount)));
+        if (share) shareRaidDanger(x, y, amount);
+      };
+      const markRaidHub = (x, y, kind) => {
+        const key = keyOf(x, y);
+        if (kind === "trap") {
+          raidIntel = { ...raidIntel, trapHubs: mergeRaidIntelKey(raidIntel.trapHubs, key) };
+        } else if (kind === "utility") {
+          raidIntel = { ...raidIntel, utilityHubs: mergeRaidIntelKey(raidIntel.utilityHubs, key) };
+        } else if (kind === "monster") {
+          raidIntel = { ...raidIntel, monsterHubs: mergeRaidIntelKey(raidIntel.monsterHubs, key) };
+        }
       };
 
       const tryApplyDebuff = (h, key, turns, value, label) => {
@@ -4516,6 +4992,9 @@ function defaultState() {
             const totalBase = monsterAtk + bonus;
             const defense = heroDefValue(h);
             const dmg = applyHeroDamage(h, totalBase, h.x, h.y, true);
+            if (dmg >= 4) {
+              rememberDanger(h, h.x, h.y, Math.max(2, Math.round(dmg / 3)), true);
+            }
             if (dmg > 0 && t.roomType === "savage-kennels") {
               m.hp = Math.min(monsterMaxHp(m), m.hp + 2);
             }
@@ -4534,6 +5013,7 @@ function defaultState() {
           for (const roomMonster of t.monsters) {
             roomMonster.foughtThisRaid = true;
           }
+          markRaidHub(h.x, h.y, "monster");
 
           if (t.roomType === "ambush-alcove" && !t.ambushUsed) {
             const ambush = monsterStrike();
@@ -4579,6 +5059,9 @@ function defaultState() {
                 m.shieldedThisTurn = true;
               }
             }
+            if (h.hp < safeEntityMaxHp(h)) {
+              shareRaidDanger(h.x, h.y, 2);
+            }
           }
 
           if (h.hp <= 0) {
@@ -4614,20 +5097,34 @@ function defaultState() {
         }
 
         if (!skipped) {
-          const moveChoice = chooseInvaderMove(h, grid, corePos, raidBoons, doctrineEffectsLocal);
+          const moveChoice = chooseInvaderMove(h, grid, corePos, raidBoons, doctrineEffectsLocal, raidIntel);
+          if (moveChoice.decisionLog) {
+            push(moveChoice.decisionLog);
+          }
           if (moveChoice.next) {
             const next = moveChoice.next;
             h.prev = { x: h.x, y: h.y };
             h.x = next.x;
             h.y = next.y;
-            h.memory = h.memory || { danger: {}, lastIntent: null, recentTiles: [] };
+            h.memory = createHeroMemory(h.memory);
             h.memory.lastIntent = moveChoice.intent;
-            h.memory.recentTiles = [...(h.memory.recentTiles || []), keyOf(h.x, h.y)].slice(-4);
+            h.memory.currentObjective = moveChoice.currentObjective;
+            h.memory.objectiveTurnsLeft = moveChoice.objectiveTurnsLeft;
+            h.memory.targetTile = moveChoice.targetTile
+              ? {
+                  x: moveChoice.targetTile.x,
+                  y: moveChoice.targetTile.y,
+                  kind: moveChoice.targetTile.kind || null,
+                  label: moveChoice.targetTile.label || null,
+                }
+              : null;
+            h.memory.lastLoopBreak = moveChoice.loopBreakReason || null;
+            h.memory.recentTiles = [...(h.memory.recentTiles || []), keyOf(h.x, h.y)].slice(-6);
             moved = true;
             if (moveChoice.wasDetour) {
               councilQuestCounters.detourCount += 1;
             }
-            push(`${invaderLabel(h)} moves to (${h.x + 1},${h.y + 1}) - ${moveChoice.intent}`);
+            push(`${invaderLabel(h)} moves to (${h.x + 1},${h.y + 1}) - ${moveChoice.intent}${moveChoice.loopBreakReason ? ` | ${moveChoice.loopBreakReason}` : ""}`);
           } else {
             push(`${invaderLabel(h)} waits (no path).`);
           }
@@ -4639,6 +5136,9 @@ function defaultState() {
 
         // TRAP TRIGGER
         const t2 = grid[h.y][h.x];
+        if (moved && t2.room === "trap") markRaidHub(h.x, h.y, "trap");
+        if (moved && t2.room === "utility") markRaidHub(h.x, h.y, "utility");
+        if (moved && t2.room === "monster" && t2.monsters.length > 0) markRaidHub(h.x, h.y, "monster");
         if (moved && t2.room === "monster" && t2.monsters.length > 0) {
           if (roomHasPassive(t2, "venom-aura")) {
             if (tryApplyDebuff(h, "poison", 2 + Math.max(0, roomPassiveRank(t2, "venom-aura") - 1), 2 + roomPassiveRank(t2, "venom-aura"))) {
@@ -4684,6 +5184,7 @@ function defaultState() {
                 dealt = applyHeroDamage(h, trapDmg, h.x, h.y, false);
                 if (dealt > 0) {
                   h.counters.trapDamaged = true;
+                  shareRaidDanger(h.x, h.y, Math.max(2, Math.round(dealt / 2)));
                 }
               }
 
@@ -4691,48 +5192,56 @@ function defaultState() {
                 const poisonTurns = 3 + Math.floor((trapStar - 1) / 2);
                 const poisonValue = 2 + Math.floor((trapStar - 1) / 2);
                 if (tryApplyDebuff(h, "poison", poisonTurns, poisonValue)) {
+                  shareRaidDanger(h.x, h.y, poisonValue);
                   push(`${invaderLabel(h)} is poisoned.`);
                 }
               } else if (trapKey === "flame-jet") {
                 const burnTurns = 2 + Math.floor((trapStar - 1) / 2);
                 const burnValue = 2 + Math.floor((trapStar - 1) / 2);
                 setStatus(h, "burn", burnTurns, burnValue);
+                shareRaidDanger(h.x, h.y, burnValue);
                 push(`${invaderLabel(h)} is burning.`);
               } else if (trapKey === "frost-rune") {
                 const slowTurns = 2 + Math.floor((trapStar - 1) / 2);
                 if (tryApplyDebuff(h, "slow", slowTurns, 1)) {
+                  shareRaidDanger(h.x, h.y, 2);
                   push(`${invaderLabel(h)} is slowed.`);
                 }
               } else if (trapKey === "shock-coil") {
                 if (!h.counters.stunnedOnce) {
                   if (tryApplyDebuff(h, "stun", 1, 1)) {
                     h.counters.stunnedOnce = true;
+                    shareRaidDanger(h.x, h.y, 2);
                     push(`${invaderLabel(h)} is stunned.`);
                   }
                 }
               } else if (trapKey === "snare-net") {
                 const rootTurns = 1 + Math.floor((trapStar - 1) / 2);
                 if (tryApplyDebuff(h, "root", rootTurns, 1)) {
+                  shareRaidDanger(h.x, h.y, 2);
                   push(`${invaderLabel(h)} is rooted.`);
                 }
               } else if (trapKey === "cursed-brand") {
                 const markedValue = 10 + (trapRank - 1) * 2 + (trapStar - 1) * 2;
                 h.counters.cursedMark = markedValue;
                 setStatus(h, "marked", 99, markedValue);
+                shareRaidDanger(h.x, h.y, 2);
                 push(`${invaderLabel(h)} is marked for death (+${markedValue} Essence).`);
               } else if (trapKey === "blink-trap") {
-                const back = h.prev ? { ...h.prev } : ent;
+                const back = h.prev ? { ...h.prev } : null;
                 if (back) {
                   const from = { x: h.x, y: h.y };
                   h.x = back.x;
                   h.y = back.y;
                   h.prev = from;
+                  shareRaidDanger(from.x, from.y, 2);
                   push(`${invaderLabel(h)} blinks back to (${h.x + 1},${h.y + 1}).`);
                   applyFearAura();
                 }
               } else if (trapKey === "arrow-gallery") {
                 const arrowDamage = trapDamage(t2, trapBase, h.x, h.y, 0);
                 setStatus(h, "arrow", 1, arrowDamage);
+                shareRaidDanger(h.x, h.y, Math.max(1, Math.round(arrowDamage / 2)));
                 push(`${invaderLabel(h)} is targeted by arrows.`);
               }
 
@@ -4760,6 +5269,7 @@ function defaultState() {
           const poisonVal = getStatus(h, "poison").value || 2;
           const poisonDmg = applyHeroDamage(h, poisonVal, h.x, h.y, false);
           consumeStatus(h, "poison");
+          shareRaidDanger(h.x, h.y, poisonVal);
           push(`${invaderLabel(h)} takes ${poisonDmg} poison damage. HP ${Math.max(0, h.hp)}`);
           if (h.hp <= 0) {
             heroDies(h, "poison");
@@ -4771,6 +5281,7 @@ function defaultState() {
           const burnVal = getStatus(h, "burn").value || 2;
           const burnDmg = applyHeroDamage(h, burnVal, h.x, h.y, false);
           consumeStatus(h, "burn");
+          shareRaidDanger(h.x, h.y, burnVal);
           push(`${invaderLabel(h)} takes ${burnDmg} burn damage. HP ${Math.max(0, h.hp)}`);
           if (h.hp <= 0) {
             heroDies(h, "burn");
@@ -4781,6 +5292,7 @@ function defaultState() {
         if (getStatus(h, "arrow").turns > 0) {
           const arrowDmg = applyHeroDamage(h, getStatus(h, "arrow").value || 3, h.x, h.y, false);
           consumeStatus(h, "arrow");
+          shareRaidDanger(h.x, h.y, Math.max(1, Math.round(arrowDmg / 2)));
           push(`${invaderLabel(h)} is hit by arrows for ${arrowDmg}. HP ${Math.max(0, h.hp)}`);
           if (h.hp <= 0) {
             heroDies(h, "arrows");
@@ -4851,6 +5363,7 @@ function defaultState() {
           turnsSurvived,
           raidKills,
           scoutQueue: [],
+          raidIntel: null,
           activeRaidBoons: [],
         };
         nextState = addLog(nextState, "CORE DESTROYED - Defeat.");
@@ -4905,6 +5418,7 @@ function defaultState() {
         raidKills,
         scoutQueue,
         partyQueue,
+        raidIntel,
         dpRegenCounter,
         councilQuestCounters,
         activeRaidBoons: raidActive ? raidBoons : [],
@@ -4916,6 +5430,7 @@ function defaultState() {
         nextState.phase = "build";
         nextState.currentParty = [];
         nextState.partyQueue = [];
+        nextState.raidIntel = null;
         nextState.dailyEvent = rollDailyEvent();
         nextState.traderStock = generateTraderStock(nextState.turnsSurvived, nextState.day);
         nextState.shadyStock = generateArtifactStock(nextState.day, nextState.artifacts);
@@ -5083,7 +5598,8 @@ function defaultState() {
   function resetRun() {
     setState((s) => {
       const grid = resetLayoutKeepStructure(s.grid);
-      const startingParty = generateRaidParty(0, null, 1);
+      const startingRaid = buildRaidPartyWithIntel(0, null, 1);
+      const startingParty = startingRaid.party;
       const dailyEvent = rollDailyEvent();
       const traderStock = generateTraderStock(0, 1);
       const shadyStock = generateArtifactStock(1, []);
@@ -5133,6 +5649,7 @@ function defaultState() {
         currentParty: startingParty,
         currentPartyRaidType: null,
         partyQueue: startingParty.map((h) => ({ ...h })),
+        raidIntel: startingRaid.raidIntel,
         dailyEvent,
         traderStock,
         dpRegenCounter: 0,
@@ -5219,10 +5736,11 @@ function defaultState() {
         ns = addLog(ns, `Council attendees: ${names}.`);
       }
       if (s.phase === "battle") {
-        const party = generateRaidParty(s.turnsSurvived, nextRaidType, s.day, {
+        const stagedRaid = buildRaidPartyWithIntel(s.turnsSurvived, nextRaidType, s.day, {
           councilRaid: null,
           raidBoons: s.nextRaidBoons,
         });
+        const party = stagedRaid.party;
         let scoutQueue = [];
         const doctrineEffects = getDoctrineEffects(s.doctrines);
         const raidMods = buildRaidModifiers(s.nextRaidBoons);
@@ -5247,11 +5765,13 @@ function defaultState() {
           currentPartyRaidType: nextRaidType || null,
           partyQueue: party.map((h) => ({ ...h })),
           scoutQueue,
+          raidIntel: stagedRaid.raidIntel,
         };
         if (scoutQueue.length > 0) {
           ns = addCouncilQuestCounter(ns, "revealedInvaderCount", scoutQueue.length);
         }
         ns = addLog(ns, "Council choice updated today's raid.");
+        ns = addLog(ns, `Raid directive: ${getRaidDirectiveRule(stagedRaid.directiveKey).name}.`);
       }
       return ns;
     });
@@ -5285,10 +5805,11 @@ function defaultState() {
         ns = addLog(ns, `The Council prepares a punitive raid. ${pendingCouncilRaid?.label || ""}`.trim());
       }
       if (s.phase === "battle") {
-        const party = generateRaidParty(s.turnsSurvived, nextRaidType, s.day, {
+        const stagedRaid = buildRaidPartyWithIntel(s.turnsSurvived, nextRaidType, s.day, {
           councilRaid: pendingCouncilRaid,
           raidBoons: s.nextRaidBoons,
         });
+        const party = stagedRaid.party;
         let scoutQueue = [];
         const doctrineEffects = getDoctrineEffects(s.doctrines);
         const raidMods = buildRaidModifiers(s.nextRaidBoons);
@@ -5313,11 +5834,13 @@ function defaultState() {
           currentPartyRaidType: nextRaidType || null,
           partyQueue: party.map((h) => ({ ...h })),
           scoutQueue,
+          raidIntel: stagedRaid.raidIntel,
         };
         if (scoutQueue.length > 0) {
           ns = addCouncilQuestCounter(ns, "revealedInvaderCount", scoutQueue.length);
         }
         ns = addLog(ns, "Council choice updated today's raid.");
+        ns = addLog(ns, `Raid directive: ${getRaidDirectiveRule(stagedRaid.directiveKey).name}.`);
       }
       return ns;
     });
@@ -5773,7 +6296,8 @@ function defaultState() {
   }
 
   const selectedTileAuras = describeTileAuras(state.selected.x, state.selected.y);
-  const selectedHeroIntent = selectedHeroes[0] && core ? chooseInvaderMove(selectedHeroes[0], state.grid, core, state.activeRaidBoons, doctrineEffects) : null;
+  const selectedHeroIntent =
+    selectedHeroes[0] && core ? chooseInvaderMove(selectedHeroes[0], state.grid, core, state.activeRaidBoons, doctrineEffects, state.raidIntel) : null;
   const focusedCouncilFavor = focusedCouncilMember ? state.councilFavor?.[focusedCouncilMember.key] || 0 : 0;
   const focusedCouncilSponsor =
     focusedCouncilMember && state.councilSession?.sponsors
@@ -5791,10 +6315,21 @@ function defaultState() {
 
   const previewPathKeys = useMemo(() => {
     if (selectedHeroes[0] && core) {
-      const choice = chooseInvaderMove(selectedHeroes[0], state.grid, core, state.activeRaidBoons, doctrineEffects);
+      const choice = chooseInvaderMove(selectedHeroes[0], state.grid, core, state.activeRaidBoons, doctrineEffects, state.raidIntel);
       const current = keyOf(selectedHeroes[0].x, selectedHeroes[0].y);
-      const routed = choice?.next ? aStarPath(state.grid, choice.next, core) || [choice.next] : aStarPath(state.grid, { x: selectedHeroes[0].x, y: selectedHeroes[0].y }, core);
-      return new Set([current, ...(routed || []).map((pos) => keyOf(pos.x, pos.y))]);
+      const previewKeys = new Set([current]);
+      const objectiveTarget = choice?.targetTile || core;
+      const firstLegStart = choice?.next || { x: selectedHeroes[0].x, y: selectedHeroes[0].y };
+      const toObjective =
+        objectiveTarget && aStarPath(state.grid, firstLegStart, { x: objectiveTarget.x, y: objectiveTarget.y });
+      for (const pos of toObjective || (choice?.next ? [choice.next] : [])) {
+        previewKeys.add(keyOf(pos.x, pos.y));
+      }
+      if (objectiveTarget && !objectiveTarget.core && !(objectiveTarget.x === core.x && objectiveTarget.y === core.y)) {
+        const toCore = aStarPath(state.grid, { x: objectiveTarget.x, y: objectiveTarget.y }, core) || [];
+        for (const pos of toCore) previewKeys.add(keyOf(pos.x, pos.y));
+      }
+      return previewKeys;
     }
     if (activeEntrances.length > 0 && core) {
       const paths = new Set();
@@ -5806,19 +6341,25 @@ function defaultState() {
       return paths;
     }
     return new Set();
-  }, [selectedHeroes, state.grid, core, activeEntrances, state.activeRaidBoons, doctrineEffects]);
+  }, [selectedHeroes, state.grid, core, activeEntrances, state.activeRaidBoons, doctrineEffects, state.raidIntel]);
 
   const lureCandidateKeys = useMemo(() => {
     if (!selectedHeroes[0] || !core) return new Set();
-    const choice = chooseInvaderMove(selectedHeroes[0], state.grid, core, state.activeRaidBoons, doctrineEffects);
+    const choice = chooseInvaderMove(selectedHeroes[0], state.grid, core, state.activeRaidBoons, doctrineEffects, state.raidIntel);
     return new Set(
       (choice.options || [])
         .filter((option) => option.lure >= 4 && !option.tile.core)
         .map((option) => keyOf(option.next.x, option.next.y))
     );
-  }, [selectedHeroes, state.grid, core, state.activeRaidBoons, doctrineEffects]);
+  }, [selectedHeroes, state.grid, core, state.activeRaidBoons, doctrineEffects, state.raidIntel]);
 
   const pendingRaidMeta = raidTypeMeta(state.pendingPunitiveRaid ? "council" : state.nextRaidType, state.pendingCouncilRaid);
+  const pendingDirectiveKey = resolveRaidDirectiveKey(state.pendingPunitiveRaid ? "council" : state.nextRaidType, state.pendingCouncilRaid, state.day);
+  const pendingDirective = getRaidDirectiveRule(state.raidIntel?.directive || pendingDirectiveKey);
+  const raidForecastMix =
+    isBattlePhase && state.currentParty?.length
+      ? partyArchetypeSummary(state.currentParty)
+      : raidDirectiveArchetypeSummary(state.pendingPunitiveRaid ? "council" : state.nextRaidType, state.pendingCouncilRaid, state.day);
 
   const invPreview = state.invMonsters.slice(0, 3);
 
@@ -6408,6 +6949,8 @@ function defaultState() {
               <div className="cardTitle">Raid Forecast</div>
               <div className="entityName">{pendingRaidMeta.label}</div>
               <div className="muted">{pendingRaidMeta.desc}</div>
+              <div className="muted">Directive: {pendingDirective.name}</div>
+              <div className="muted small">Expected mix: {raidForecastMix}</div>
               {state.pendingCouncilRaid?.attackers?.length ? (
                 <div className="entityList">
                   {state.pendingCouncilRaid.attackers.map((attacker) => (
@@ -6415,6 +6958,10 @@ function defaultState() {
                       <div className="entityName">{attacker.memberName}</div>
                       <div className="entityMeta">{attacker.raidName}</div>
                       <div className="muted">{attacker.raidModifier}</div>
+                      <div className="muted small">
+                        Directive {getRaidDirectiveRule(attacker.directiveKey || COUNCIL_RAID_FACTIONS[attacker.key]?.defaultDirective || state.pendingCouncilRaid?.directiveKey || "rush-core").name} |{" "}
+                        {topArchetypesFromWeights(attacker.archetypeWeights || {}, 2).join(" / ") || "Mixed pressure"}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -6490,7 +7037,10 @@ function defaultState() {
                             HP {h.hp}/{safeEntityMaxHp(h)} | ATK {h.atk} | DEF {h.def || 0} | SHD {h.shd || 0} | SPD {h.spd || 0}
                           </div>
                           <div className="muted">
-                            Origin {h.raidOriginLabel || "Hero Raid"}{h.factionName ? ` | ${h.factionName}` : ""}{h.isRaidLeader ? " | Leader" : ""} | Behavior {h.archetypeLabel || "Zealot"}{h.memory?.lastIntent ? ` | Intent ${h.memory.lastIntent}` : ""}
+                            Origin {h.raidOriginLabel || "Hero Raid"}{h.factionName ? ` | ${h.factionName}` : ""}{h.isRaidLeader ? " | Leader" : ""} | Behavior {h.archetypeLabel || "Zealot"}{h.raidDirectiveKey ? ` | Directive ${getRaidDirectiveRule(h.raidDirectiveKey).name}` : ""}{h.memory?.lastIntent ? ` | Intent ${h.memory.lastIntent}` : ""}
+                          </div>
+                          <div className="muted">
+                            Objective {h.memory?.currentObjective || "Press the Core"}{h.memory?.targetTile ? ` | Target ${objectiveTargetLabel(h.memory.targetTile)}` : ""}
                           </div>
                           <div className="muted">Status: {entityStatusSummary(h)}</div>
                         </div>
@@ -6721,8 +7271,11 @@ function defaultState() {
                 <>
                   <div className="entityName">{invaderLabel(selectedHeroes[0])}</div>
                   <div className="entityMeta">
-                    {selectedHeroes[0].archetypeLabel || "Zealot"} | {selectedHeroIntent.intent}
+                    {selectedHeroes[0].archetypeLabel || "Zealot"} | {selectedHeroIntent.directiveLabel}
                   </div>
+                  <div className="muted">Objective: {selectedHeroIntent.currentObjective}</div>
+                  <div className="muted">Target Tile: {selectedHeroIntent.targetTileLabel}</div>
+                  <div className="muted small">Intent: {selectedHeroIntent.intent}</div>
                   <div className="muted">
                     Path tiles glow cyan. Likely lure candidates glow amber.
                   </div>
@@ -7116,7 +7669,13 @@ function defaultState() {
                           HP {h.hp}/{safeEntityMaxHp(h)} | ATK {h.atk} | DEF {h.def || 0} | SHD {h.shd || 0} | SPD {h.spd || 0}
                         </div>
                         <div className="muted small">{invaderPassiveSummary(h)}</div>
-                        <div className="muted small">{h.raidOriginLabel || "Hero Raid"}{h.factionName ? ` | ${h.factionName}` : ""}{h.isRaidLeader ? " | Leader" : ""}</div>
+                        <div className="muted small">
+                          {h.raidOriginLabel || "Hero Raid"}{h.factionName ? ` | ${h.factionName}` : ""}{h.isRaidLeader ? " | Leader" : ""}
+                          {h.raidDirectiveKey ? ` | ${getRaidDirectiveRule(h.raidDirectiveKey).name}` : ""}
+                        </div>
+                        <div className="muted small">
+                          Objective {h.memory?.currentObjective || "Press the Core"}{h.memory?.targetTile ? ` | ${objectiveTargetLabel(h.memory.targetTile)}` : ""}
+                        </div>
                       </div>
                     ))}
                 </div>
@@ -7154,7 +7713,10 @@ function defaultState() {
                         HP {h.hp}/{safeEntityMaxHp(h)} | ATK {h.atk}
                       </div>
                       <div className="muted small">{invaderPassiveSummary(h)}</div>
-                      <div className="muted small">{h.raidOriginLabel || "Hero Raid"}{h.factionName ? ` | ${h.factionName}` : ""}{h.isRaidLeader ? " | Leader" : ""}</div>
+                      <div className="muted small">
+                        {h.raidOriginLabel || "Hero Raid"}{h.factionName ? ` | ${h.factionName}` : ""}{h.isRaidLeader ? " | Leader" : ""}
+                        {h.raidDirectiveKey ? ` | ${getRaidDirectiveRule(h.raidDirectiveKey).name}` : ""}
+                      </div>
                     </div>
                   ))}
                 </div>

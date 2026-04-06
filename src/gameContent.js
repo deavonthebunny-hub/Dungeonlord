@@ -5,6 +5,10 @@ export const HERO_ARCHETYPE_RULES = {
     desc: "Prioritizes the shortest push toward the Core.",
     weights: { core: 7, lure: 0.6, danger: 1.1, trap: 0.2, monster: 0.3, utility: -0.4, backtrack: 5.5 },
     intent: "Rush the Core",
+    objectiveKinds: ["core"],
+    objectiveCommitTurns: 1,
+    dangerThreshold: 10,
+    retargetOnDamage: false,
   },
   cautious: {
     key: "cautious",
@@ -12,6 +16,10 @@ export const HERO_ARCHETYPE_RULES = {
     desc: "Avoids lethal rooms and remembers danger.",
     weights: { core: 4.5, lure: 0.9, danger: 2.9, trap: -1.6, monster: -1.1, utility: -0.2, backtrack: 6.5 },
     intent: "Avoid danger",
+    objectiveKinds: ["safe-core", "monster", "core"],
+    objectiveCommitTurns: 2,
+    dangerThreshold: 6,
+    retargetOnDamage: true,
   },
   scout: {
     key: "scout",
@@ -19,6 +27,10 @@ export const HERO_ARCHETYPE_RULES = {
     desc: "Investigates side branches and lure paths.",
     weights: { core: 3.3, lure: 2.8, danger: 1.4, trap: 0.3, monster: 0.7, utility: 0.3, backtrack: 4.5 },
     intent: "Probe side routes",
+    objectiveKinds: ["flank", "support", "core"],
+    objectiveCommitTurns: 2,
+    dangerThreshold: 8,
+    retargetOnDamage: true,
   },
   breaker: {
     key: "breaker",
@@ -26,6 +38,10 @@ export const HERO_ARCHETYPE_RULES = {
     desc: "Targets monster rooms to clear resistance before pushing on.",
     weights: { core: 4.2, lure: 1.6, danger: 1.6, trap: -0.3, monster: 2.6, utility: -0.2, backtrack: 5.2 },
     intent: "Break defenders",
+    objectiveKinds: ["monster", "core"],
+    objectiveCommitTurns: -1,
+    dangerThreshold: 8,
+    retargetOnDamage: false,
   },
   purifier: {
     key: "purifier",
@@ -33,6 +49,41 @@ export const HERO_ARCHETYPE_RULES = {
     desc: "Seeks trap and utility nodes to dismantle the dungeon's support.",
     weights: { core: 4.1, lure: 1.9, danger: 1.7, trap: 2.4, monster: 0.6, utility: 1.8, backtrack: 5.4 },
     intent: "Purge support rooms",
+    objectiveKinds: ["support", "flank", "core"],
+    objectiveCommitTurns: -1,
+    dangerThreshold: 7,
+    retargetOnDamage: true,
+  },
+};
+
+export const RAID_DIRECTIVES = {
+  "rush-core": {
+    key: "rush-core",
+    name: "Rush Core",
+    desc: "Drive straight toward the Core and accept some losses on the way.",
+    weights: { core: 1.3, lure: 0.4, danger: 0.9, trap: -0.2, monster: 0.4, utility: -0.5, objective: 1.2 },
+    archetypeWeights: { zealot: 5, breaker: 3, cautious: 1, scout: 1, purifier: 1 },
+  },
+  "break-frontline": {
+    key: "break-frontline",
+    name: "Break Frontline",
+    desc: "Smash defended rooms first, then force the central route open.",
+    weights: { core: 1.05, lure: 0.5, danger: 1.05, trap: 0.1, monster: 1.4, utility: -0.2, objective: 1.35 },
+    archetypeWeights: { breaker: 5, zealot: 3, cautious: 2, scout: 1, purifier: 1 },
+  },
+  "purge-support": {
+    key: "purge-support",
+    name: "Purge Support",
+    desc: "Hunt trap lines and utility hubs before committing to the Core.",
+    weights: { core: 0.85, lure: 0.9, danger: 1.15, trap: 1.3, monster: 0.7, utility: 1.55, objective: 1.35 },
+    archetypeWeights: { purifier: 5, scout: 3, cautious: 2, breaker: 1, zealot: 1 },
+  },
+  "probe-flanks": {
+    key: "probe-flanks",
+    name: "Probe Flanks",
+    desc: "Pressure side routes and lure branches until a weak path opens.",
+    weights: { core: 0.95, lure: 1.45, danger: 1, trap: 0.35, monster: 0.8, utility: 0.9, objective: 1.2 },
+    archetypeWeights: { scout: 5, purifier: 3, breaker: 2, cautious: 1, zealot: 1 },
   },
 };
 
@@ -64,6 +115,9 @@ export const COUNCIL_RAID_FACTIONS = {
     passiveBias: ["bulwark", "warding", "cruelty"],
     statBias: { hp: 1.15, atk: 1.05, def: 1 },
     archetypes: ["zealot", "breaker"],
+    archetypeWeights: { zealot: 5, breaker: 3, cautious: 1, scout: 1, purifier: 1 },
+    defaultDirective: "rush-core",
+    retargetBias: -1,
     raidModifier: "Presses the main route and punishes weak front lines.",
   },
   "crimson-twins": {
@@ -75,6 +129,9 @@ export const COUNCIL_RAID_FACTIONS = {
     passiveBias: ["swift", "cruelty", "dread-howl"],
     statBias: { hp: 0.95, atk: 1.15, def: 0.9 },
     archetypes: ["scout", "purifier"],
+    archetypeWeights: { scout: 5, purifier: 3, breaker: 1, cautious: 1, zealot: 1 },
+    defaultDirective: "probe-flanks",
+    retargetBias: 1,
     raidModifier: "Favours detours and side pressure over direct force.",
   },
   zephyra: {
@@ -86,6 +143,9 @@ export const COUNCIL_RAID_FACTIONS = {
     passiveBias: ["hex", "venom-aura", "mender"],
     statBias: { hp: 1, atk: 1.2, def: 0.9 },
     archetypes: ["purifier", "scout"],
+    archetypeWeights: { purifier: 5, scout: 3, cautious: 2, breaker: 1, zealot: 1 },
+    defaultDirective: "purge-support",
+    retargetBias: 1,
     raidModifier: "Hits support rooms and inflicts layered debuffs.",
   },
   grimjaw: {
@@ -97,6 +157,9 @@ export const COUNCIL_RAID_FACTIONS = {
     passiveBias: ["bulwark", "ironhide", "warding"],
     statBias: { hp: 1.2, atk: 1, def: 1.1 },
     archetypes: ["zealot", "cautious"],
+    archetypeWeights: { zealot: 4, breaker: 3, cautious: 3, scout: 1, purifier: 1 },
+    defaultDirective: "break-frontline",
+    retargetBias: -1,
     raidModifier: "Hard to kill and difficult to dislodge from the core path.",
   },
   blackthorn: {
@@ -108,6 +171,9 @@ export const COUNCIL_RAID_FACTIONS = {
     passiveBias: ["hex", "swift", "mender"],
     statBias: { hp: 0.95, atk: 1.1, def: 1 },
     archetypes: ["scout", "breaker"],
+    archetypeWeights: { scout: 4, breaker: 3, purifier: 2, cautious: 1, zealot: 1 },
+    defaultDirective: "probe-flanks",
+    retargetBias: 1,
     raidModifier: "Prefers split pressure and exploitable weak rooms.",
   },
   lyralei: {
@@ -119,6 +185,9 @@ export const COUNCIL_RAID_FACTIONS = {
     passiveBias: ["hex", "mender", "swift"],
     statBias: { hp: 1, atk: 1.05, def: 1 },
     archetypes: ["cautious", "purifier"],
+    archetypeWeights: { cautious: 4, purifier: 3, scout: 3, breaker: 1, zealot: 1 },
+    defaultDirective: "purge-support",
+    retargetBias: 1,
     raidModifier: "Avoids the worst killboxes and seeks information-rich routes.",
   },
   maltheron: {
@@ -130,6 +199,9 @@ export const COUNCIL_RAID_FACTIONS = {
     passiveBias: ["leech", "savage", "bloodcall"],
     statBias: { hp: 1.2, atk: 1.1, def: 0.95 },
     archetypes: ["breaker", "zealot"],
+    archetypeWeights: { breaker: 5, zealot: 3, cautious: 1, scout: 1, purifier: 1 },
+    defaultDirective: "break-frontline",
+    retargetBias: -1,
     raidModifier: "Heavy sustain and brutal room-clearing pressure.",
   },
   vexira: {
@@ -141,6 +213,9 @@ export const COUNCIL_RAID_FACTIONS = {
     passiveBias: ["venom-aura", "rot-cloud", "cruelty"],
     statBias: { hp: 1, atk: 1.12, def: 0.95 },
     archetypes: ["purifier", "scout"],
+    archetypeWeights: { purifier: 4, scout: 3, cautious: 2, breaker: 1, zealot: 1 },
+    defaultDirective: "purge-support",
+    retargetBias: 1,
     raidModifier: "Attrition pressure rises with every exchange.",
   },
   tharos: {
@@ -152,6 +227,9 @@ export const COUNCIL_RAID_FACTIONS = {
     passiveBias: ["swift", "cruelty", "dread-howl"],
     statBias: { hp: 0.92, atk: 1.15, def: 0.95 },
     archetypes: ["scout", "purifier"],
+    archetypeWeights: { scout: 5, purifier: 3, breaker: 1, cautious: 1, zealot: 1 },
+    defaultDirective: "probe-flanks",
+    retargetBias: 1,
     raidModifier: "Assassin-minded raiders hunt backline utility and trap hubs.",
   },
   xaldros: {
@@ -163,6 +241,9 @@ export const COUNCIL_RAID_FACTIONS = {
     passiveBias: ["dread-howl", "hex", "swift"],
     statBias: { hp: 0.98, atk: 1.1, def: 0.95 },
     archetypes: ["scout", "cautious"],
+    archetypeWeights: { scout: 4, cautious: 3, purifier: 2, breaker: 1, zealot: 1 },
+    defaultDirective: "probe-flanks",
+    retargetBias: 2,
     raidModifier: "Unpredictable routeing that still converges on weak points.",
   },
   zurkhan: {
@@ -174,6 +255,9 @@ export const COUNCIL_RAID_FACTIONS = {
     passiveBias: ["savage", "packleader", "leech"],
     statBias: { hp: 1.08, atk: 1.16, def: 0.92 },
     archetypes: ["zealot", "breaker"],
+    archetypeWeights: { zealot: 4, breaker: 4, scout: 1, cautious: 1, purifier: 1 },
+    defaultDirective: "break-frontline",
+    retargetBias: -1,
     raidModifier: "Fast beasts collapse on front-line rooms and force trades.",
   },
   nihaza: {
@@ -185,6 +269,9 @@ export const COUNCIL_RAID_FACTIONS = {
     passiveBias: ["rot-cloud", "bulwark", "dread-howl"],
     statBias: { hp: 1.12, atk: 1.08, def: 1.02 },
     archetypes: ["cautious", "purifier"],
+    archetypeWeights: { cautious: 4, purifier: 3, breaker: 2, scout: 1, zealot: 1 },
+    defaultDirective: "break-frontline",
+    retargetBias: 0,
     raidModifier: "Slow, relentless, and punishing to fragmented layouts.",
   },
 };
@@ -947,6 +1034,15 @@ export function validateGameContent() {
     if (!rule.weights || typeof rule.weights.core !== "number") {
       warnings.push(`Hero archetype "${key}" is missing score weights.`);
     }
+    if (!Array.isArray(rule.objectiveKinds) || rule.objectiveKinds.length === 0) {
+      warnings.push(`Hero archetype "${key}" is missing objective kinds.`);
+    }
+  }
+
+  for (const [key, directive] of Object.entries(RAID_DIRECTIVES)) {
+    if (!directive.name || !directive.desc || !directive.weights || typeof directive.weights.core !== "number") {
+      warnings.push(`Raid directive "${key}" is missing name, description, or weights.`);
+    }
   }
 
   for (const [key, rule] of Object.entries(DOCTRINE_RULES)) {
@@ -973,6 +1069,9 @@ export function validateGameContent() {
     }
     if (!Array.isArray(faction.passiveBias) || faction.passiveBias.length === 0) {
       warnings.push(`Council faction "${key}" has no passive bias list.`);
+    }
+    if (!faction.defaultDirective || !RAID_DIRECTIVES[faction.defaultDirective]) {
+      warnings.push(`Council faction "${key}" is missing a valid default directive.`);
     }
   }
 
