@@ -653,6 +653,159 @@ export const FLESH_MARKET_UNIQUE_MONSTERS = [
   },
 ];
 
+export const STANDARD_ARTIFACTS = [
+  {
+    key: "graven-coin",
+    name: "Graven Coin",
+    desc: "+2 Essence on hero death.",
+    cost: { currency: "soulshards", amount: 20 },
+    tags: ["economy"],
+    maxCopies: 2,
+    unlockDay: 1,
+    mods: { essenceOnKill: 2 },
+  },
+  {
+    key: "shard-prism",
+    name: "Shard Prism",
+    desc: "+1 Soulshard on hero death.",
+    cost: { currency: "soulshards", amount: 18 },
+    tags: ["economy"],
+    maxCopies: 2,
+    unlockDay: 1,
+    mods: { soulshardOnKill: 1 },
+  },
+  {
+    key: "rage-brand",
+    name: "Rage Brand",
+    desc: "Monsters gain +1 ATK.",
+    cost: { currency: "essence", amount: 25 },
+    tags: ["monster"],
+    maxCopies: 2,
+    unlockDay: 1,
+    mods: { monsterAtk: 1 },
+  },
+  {
+    key: "wicked-gears",
+    name: "Wicked Gears",
+    desc: "Traps deal +15% damage.",
+    cost: { currency: "essence", amount: 20 },
+    tags: ["trap"],
+    maxCopies: 2,
+    unlockDay: 1,
+    mods: { trapMult: 0.15 },
+  },
+  {
+    key: "dread-veil",
+    name: "Dread Veil",
+    desc: "Core takes -1 damage from hero hits (min 1).",
+    cost: { currency: "soulshards", amount: 30 },
+    tags: ["core"],
+    maxCopies: 2,
+    unlockDay: 1,
+    mods: { coreDamageReduction: 1 },
+  },
+  {
+    key: "cinder-chain",
+    name: "Cinder Chain",
+    desc: "Traps deal +1 flat damage.",
+    cost: { currency: "essence", amount: 22 },
+    tags: ["trap"],
+    maxCopies: 2,
+    unlockDay: 6,
+    mods: { trapFlatDamage: 1 },
+  },
+  {
+    key: "warden-spikes",
+    name: "Warden Spikes",
+    desc: "Core retaliation deals +1 damage.",
+    cost: { currency: "soulshards", amount: 24 },
+    tags: ["core"],
+    maxCopies: 2,
+    unlockDay: 6,
+    mods: { coreRetaliationBonus: 1 },
+  },
+  {
+    key: "iron-kennel-sigil",
+    name: "Iron Kennel Sigil",
+    desc: "Monsters gain +1 DEF.",
+    cost: { currency: "essence", amount: 24 },
+    tags: ["monster"],
+    maxCopies: 2,
+    unlockDay: 8,
+    mods: { monsterDef: 1 },
+  },
+  {
+    key: "scout-lens",
+    name: "Scout Lens",
+    desc: "Reveal +1 invader at battle start.",
+    cost: { currency: "soulshards", amount: 20 },
+    tags: ["scouting"],
+    maxCopies: 2,
+    unlockDay: 8,
+    mods: { scoutRevealBonus: 1 },
+  },
+  {
+    key: "clockwork-magazine",
+    name: "Clockwork Magazine",
+    desc: "Armed traps start each raid with +1 charge.",
+    cost: { currency: "essence", amount: 28 },
+    tags: ["trap"],
+    maxCopies: 1,
+    unlockDay: 12,
+    mods: { trapChargeBonus: 1 },
+  },
+  {
+    key: "beast-lash",
+    name: "Beast Lash",
+    desc: "Monster rooms gain +1 capacity.",
+    cost: { currency: "essence", amount: 34 },
+    tags: ["room"],
+    maxCopies: 1,
+    unlockDay: 14,
+    mods: { monsterRoomCapBonus: 1 },
+  },
+  {
+    key: "soul-sluice",
+    name: "Soul Sluice",
+    desc: "Trap kills grant +2 Essence.",
+    cost: { currency: "soulshards", amount: 22 },
+    tags: ["economy", "trap"],
+    maxCopies: 2,
+    unlockDay: 14,
+    mods: { trapKillEssence: 2 },
+  },
+  {
+    key: "ashen-mortar",
+    name: "Ashen Mortar",
+    desc: "Utility rooms count as +1 effective tier.",
+    cost: { currency: "soulshards", amount: 30 },
+    tags: ["utility"],
+    maxCopies: 1,
+    unlockDay: 18,
+    mods: { utilityPotencyBonus: 1 },
+  },
+  {
+    key: "stable-hooks",
+    name: "Stable Hooks",
+    desc: "Returning a monster from a room heals it to full.",
+    cost: { currency: "soulshards", amount: 26 },
+    tags: ["management"],
+    maxCopies: 1,
+    unlockDay: 18,
+    mods: { roomWithdrawHealFull: 1 },
+  },
+  {
+    key: "black-satchel",
+    name: "Black Satchel",
+    desc: "Shady Dealer offers +1 extra artifact each day.",
+    cost: { currency: "essence", amount: 28 },
+    tags: ["shop", "economy"],
+    maxCopies: 1,
+    unlockDay: 18,
+    mods: { shadyStockBonus: 1 },
+  },
+];
+
 export const FLESH_MARKET_UNIQUE_ARTIFACTS = [
   {
     key: "cadaver-ledger",
@@ -838,6 +991,23 @@ export function validateGameContent() {
   for (const artifact of FLESH_MARKET_UNIQUE_ARTIFACTS) {
     if (!artifact.key || !artifact.name || !Array.isArray(artifact.costByEra) || !artifact.mods) {
       warnings.push(`Unique Flesh Market artifact "${artifact.key || "unknown"}" is missing key fields.`);
+    }
+  }
+
+  for (const artifact of STANDARD_ARTIFACTS) {
+    if (
+      !artifact.key ||
+      !artifact.name ||
+      !artifact.cost ||
+      !artifact.cost.currency ||
+      !Number.isFinite(artifact.cost.amount) ||
+      !Array.isArray(artifact.tags) ||
+      !artifact.tags.length ||
+      !Number.isFinite(artifact.maxCopies) ||
+      !Number.isFinite(artifact.unlockDay) ||
+      !artifact.mods
+    ) {
+      warnings.push(`Standard artifact "${artifact.key || "unknown"}" is missing key fields.`);
     }
   }
 

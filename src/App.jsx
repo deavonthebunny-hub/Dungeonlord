@@ -9,6 +9,7 @@ import {
   FUSION_ARCHETYPE_RULES,
   HERO_ARCHETYPE_RULES,
   RAID_TYPE_META,
+  STANDARD_ARTIFACTS,
   STATUS_RULES,
   validateGameContent,
 } from "./gameContent";
@@ -113,8 +114,80 @@ const MONSTERS = {
 const MONSTER_KEYS = Object.keys(MONSTERS);
 const UNIQUE_MONSTER_MAP = Object.fromEntries(FLESH_MARKET_UNIQUE_MONSTERS.map((monster) => [monster.key, monster]));
 const UNIQUE_ARTIFACT_MAP = Object.fromEntries(FLESH_MARKET_UNIQUE_ARTIFACTS.map((artifact) => [artifact.key, artifact]));
+const STANDARD_ARTIFACT_MAP = Object.fromEntries(STANDARD_ARTIFACTS.map((artifact) => [artifact.key, artifact]));
 const KNOW_MONSTER_KEY = (key) => !!(MONSTERS[key] || UNIQUE_MONSTER_MAP[key]);
+const KNOW_MONSTER_ENTITY = (monster) => !!monster && (!!monster.isFused || KNOW_MONSTER_KEY(monster.key));
 const STATUS_RULE_LIST = Object.values(STATUS_RULES);
+
+function cloneArtifactEntry(artifact) {
+  if (!artifact) return artifact;
+  return {
+    ...artifact,
+    cost: artifact.cost ? { ...artifact.cost } : artifact.cost,
+    tags: Array.isArray(artifact.tags) ? [...artifact.tags] : artifact.tags,
+    mods: artifact.mods ? { ...artifact.mods } : artifact.mods,
+  };
+}
+
+function hydrateArtifactDefinition(artifact) {
+  if (!artifact?.key) return cloneArtifactEntry(artifact);
+  const standard = STANDARD_ARTIFACT_MAP[artifact.key];
+  if (standard) {
+    return {
+      ...cloneArtifactEntry(standard),
+      ...cloneArtifactEntry(artifact),
+      cost: { ...(standard.cost || {}), ...(artifact.cost || {}) },
+      tags: Array.isArray(artifact.tags) && artifact.tags.length ? [...artifact.tags] : [...(standard.tags || [])],
+      maxCopies: Number.isFinite(artifact.maxCopies) ? artifact.maxCopies : standard.maxCopies,
+      unlockDay: Number.isFinite(artifact.unlockDay) ? artifact.unlockDay : standard.unlockDay,
+      mods: { ...(standard.mods || {}), ...(artifact.mods || {}) },
+    };
+  }
+  const unique = UNIQUE_ARTIFACT_MAP[artifact.key];
+  if (unique) {
+    return {
+      ...cloneArtifactEntry(unique),
+      ...cloneArtifactEntry(artifact),
+      isUnique: artifact.isUnique ?? true,
+      cost: artifact.cost ? { ...artifact.cost } : { currency: "darkcrystals", amount: unique.costByEra?.[0] || 0 },
+      tags: Array.isArray(artifact.tags) && artifact.tags.length ? [...artifact.tags] : ["unique", "flesh-market"],
+      maxCopies: Number.isFinite(artifact.maxCopies) ? artifact.maxCopies : 1,
+      unlockDay: Number.isFinite(artifact.unlockDay) ? artifact.unlockDay : 0,
+      mods: { ...(unique.mods || {}), ...(artifact.mods || {}) },
+    };
+  }
+  return cloneArtifactEntry(artifact);
+}
+
+function artifactCopyCap(artifact) {
+  return Math.max(1, hydrateArtifactDefinition(artifact)?.maxCopies || 1);
+}
+
+function artifactTagsForDisplay(artifact) {
+  const hydrated = hydrateArtifactDefinition(artifact);
+  return Array.isArray(hydrated?.tags) ? hydrated.tags : [];
+}
+
+function countOwnedArtifacts(artifacts = []) {
+  return (artifacts || []).reduce((acc, artifact) => {
+    if (!artifact?.key) return acc;
+    acc[artifact.key] = (acc[artifact.key] || 0) + 1;
+    return acc;
+  }, {});
+}
+
+function normalizeArtifactList(artifacts = []) {
+  return Array.isArray(artifacts) ? artifacts.filter(Boolean).map((artifact) => hydrateArtifactDefinition(artifact)) : [];
+}
+
+function normalizeArtifactStock(stock = [], day = 1, ownedArtifacts = []) {
+  if (Array.isArray(stock)) {
+    return stock
+      .filter((artifact) => STANDARD_ARTIFACT_MAP[artifact?.key])
+      .map((artifact) => hydrateArtifactDefinition(artifact));
+  }
+  return generateArtifactStock(day, ownedArtifacts);
+}
 
 const HERO_RACES = ["Human", "Elf", "Dwarf", "Orc", "Tiefling", "Halfling"];
 const HERO_CLASSES = ["Warrior", "Rogue", "Mage", "Ranger", "Cleric", "Monk"];
@@ -384,15 +457,6 @@ const AFFINITY_STAT_MODS = {
   Light: { hp: 2, atk: 1, def: 1 },
   Dark: { hp: 0, atk: 2, def: 0 },
 };
-
-const ARTIFACTS = [
-  { key: "graven-coin", name: "Graven Coin", desc: "+2 Essence on hero death.", cost: { currency: "soulshards", amount: 20 }, mods: { essenceOnKill: 2 } },
-  { key: "shard-prism", name: "Shard Prism", desc: "+1 Soulshard on hero death.", cost: { currency: "soulshards", amount: 18 }, mods: { soulshardOnKill: 1 } },
-  { key: "rage-brand", name: "Rage Brand", desc: "Monsters gain +1 ATK.", cost: { currency: "essence", amount: 25 }, mods: { monsterAtk: 1 } },
-  { key: "wicked-gears", name: "Wicked Gears", desc: "Traps deal +15% damage.", cost: { currency: "essence", amount: 20 }, mods: { trapMult: 0.15 } },
-  { key: "dread-veil", name: "Dread Veil", desc: "Core takes -1 damage from hero hits (min 1).", cost: { currency: "soulshards", amount: 30 }, mods: { coreDamageReduction: 1 } },
-];
-const ARTIFACT_MAP = Object.fromEntries(ARTIFACTS.map((a) => [a.key, a]));
 
 const UTILITY_ROOMS = [
   { key: "soul-altar", name: "Soul Altar", desc: "Hero dies within 1 tile: +15 Essence." },
@@ -1552,6 +1616,7 @@ function generateMonster(kind, turnsSurvived, starCap, day = 1) {
     branchClass: null,
     foughtThisRaid: false,
     shieldedThisTurn: false,
+    permanentRoomBonuses: {},
     statuses: {},
   };
 }
@@ -1642,8 +1707,24 @@ function generateTraderStock(turnsSurvived, day = 1) {
   return Array.from({ length: count }, () => generateMonster(pick(MONSTER_KEYS), turnsSurvived, undefined, day));
 }
 
-function generateArtifactStock() {
-  return pickUnique(ARTIFACTS, 3).map((a) => ({ ...a }));
+function generateArtifactStock(day = 1, ownedArtifacts = []) {
+  const ownedCounts = countOwnedArtifacts(ownedArtifacts);
+  const stockSize = 4 + Math.max(0, calcArtifactMods(ownedArtifacts, day).shadyStockBonus || 0);
+  const pool = STANDARD_ARTIFACTS.filter((artifact) => {
+    if ((artifact.unlockDay || 1) > day) return false;
+    return (ownedCounts[artifact.key] || 0) < artifactCopyCap(artifact);
+  });
+  if (!pool.length) return [];
+  const stock = [];
+  const workingCounts = { ...ownedCounts };
+  while (stock.length < stockSize) {
+    const candidates = pool.filter((artifact) => (workingCounts[artifact.key] || 0) < artifactCopyCap(artifact));
+    if (!candidates.length) break;
+    const chosen = pick(candidates);
+    stock.push(hydrateArtifactDefinition(chosen));
+    workingCounts[chosen.key] = (workingCounts[chosen.key] || 0) + 1;
+  }
+  return stock;
 }
 
 function fleshMarketEraIndex(day = 1) {
@@ -1678,6 +1759,7 @@ function buildUniqueMonsterEntity(def, day = 1, artifactMods = {}) {
       foughtThisRaid: false,
       shieldedThisTurn: false,
       isUnique: true,
+      permanentRoomBonuses: {},
       statuses: {},
     },
     {},
@@ -1735,6 +1817,7 @@ function buildFusedMonsterEntity(first, second, day = 1) {
     foughtThisRaid: false,
     shieldedThisTurn: false,
     isFused: true,
+    permanentRoomBonuses: {},
     fusionRecipeKey: recipe?.key || null,
     fusionRecipeName: recipe?.name || "Abomination",
     fusionParents: [primaryRace, secondaryRace],
@@ -1780,8 +1863,82 @@ function monsterRoomCap(tier) {
 
 function effectiveMonsterRoomCapValue(stateLike, tier) {
   const doctrineEffects = getDoctrineEffects(stateLike?.doctrines || {});
+  const artifactMods = calcArtifactMods(stateLike?.artifacts || [], stateLike?.day || 1);
   const ashBonus = isTimedBlessingActive(stateLike?.ashMonsterRoomCapUntilDay, stateLike?.day || 1) ? 1 : 0;
-  return monsterRoomCap(tier) + doctrineEffects.monsterRoomCapBonus + ashBonus;
+  return monsterRoomCap(tier) + doctrineEffects.monsterRoomCapBonus + (artifactMods.monsterRoomCapBonus || 0) + ashBonus;
+}
+
+function roomPermanentBonusTotal(roomType, roomTier = 1) {
+  const tierBonus = Math.max(0, (roomTier || 1) - 1);
+  if (roomType === "training-den") return 1 + tierBonus;
+  if (roomType === "thick-hide") return 3 + tierBonus * 2;
+  return 0;
+}
+
+function inferPermanentRoomBonuses(monster) {
+  const existing = monster?.permanentRoomBonuses && typeof monster.permanentRoomBonuses === "object"
+    ? { ...monster.permanentRoomBonuses }
+    : {};
+  if (!monster || monster.isFused || !KNOW_MONSTER_KEY(monster.key)) return existing;
+  const baseStats = buildMonsterStats(monster.key, clampMonsterStar(monster.stars), monsterEvolutionStageValue(monster));
+  const rawAtk = Number.isFinite(monster.atk) ? monster.atk : baseStats.atk;
+  const rawMaxHp = Number.isFinite(monster?.stats?.maxHp) ? monster.stats.maxHp : monster.hp || baseStats.maxHp;
+  const trainingBonus = Math.max(0, rawAtk - baseStats.atk);
+  const thickHideBonus = Math.max(0, rawMaxHp - baseStats.maxHp);
+  if (trainingBonus > 0) {
+    existing["training-den"] = Math.max(existing["training-den"] || 0, trainingBonus);
+  }
+  if (thickHideBonus > 0) {
+    existing["thick-hide"] = Math.max(existing["thick-hide"] || 0, thickHideBonus);
+  }
+  return existing;
+}
+
+function applyStoredPermanentRoomBonuses(monster, sourceMonster = monster) {
+  const marks = inferPermanentRoomBonuses(sourceMonster);
+  const next = {
+    ...monster,
+    stats: {
+      ...(monster.stats || {
+        maxHp: monster.hp || 1,
+        atk: monster.atk || 1,
+        def: monster.def || 0,
+      }),
+    },
+    permanentRoomBonuses: { ...marks },
+  };
+  const sourceMaxHp = Math.max(1, sourceMonster?.stats?.maxHp || sourceMonster?.hp || next.stats.maxHp || 1);
+  const sourceHp = Math.max(1, sourceMonster?.hp || sourceMaxHp);
+  const hpRatio = Math.max(0, Math.min(1, sourceHp / sourceMaxHp));
+  const atkBonus = Math.max(0, marks["training-den"] || 0);
+  const hpBonus = Math.max(0, marks["thick-hide"] || 0);
+  if (atkBonus > 0) {
+    next.atk += atkBonus;
+    next.stats.atk = next.atk;
+  }
+  if (hpBonus > 0) {
+    next.stats.maxHp += hpBonus;
+    next.hp = Math.max(1, Math.min(next.stats.maxHp, Math.round(next.stats.maxHp * hpRatio)));
+  }
+  return next;
+}
+
+function prepareMonsterForInventory(monster, artifactMods = {}) {
+  if (!monster) return monster;
+  const next = {
+    ...monster,
+    stats: {
+      ...(monster.stats || {
+        maxHp: monster.hp || 1,
+        atk: monster.atk || 1,
+        def: monster.def || 0,
+      }),
+    },
+  };
+  if (artifactMods.roomWithdrawHealFull) {
+    next.hp = Math.max(1, next.stats.maxHp || next.hp || 1);
+  }
+  return next;
 }
 
 function applyMonsterRoomPlacementStatic(monster, roomType, roomTier = 1) {
@@ -1794,22 +1951,50 @@ function applyMonsterRoomPlacementStatic(monster, roomType, roomTier = 1) {
         def: monster.def || 0,
       }),
     },
+    permanentRoomBonuses: inferPermanentRoomBonuses(monster),
   };
   if (!roomType) return m;
-  const tierBonus = Math.max(0, roomTier - 1);
+  const targetBonus = roomPermanentBonusTotal(roomType, roomTier);
+  const currentBonus = m.permanentRoomBonuses?.[roomType] || 0;
+  const delta = Math.max(0, targetBonus - currentBonus);
+  if (delta <= 0) return m;
   if (roomType === "training-den") {
-    m.atk += 1 + tierBonus;
+    m.atk += delta;
     m.stats.atk = m.atk;
   } else if (roomType === "thick-hide") {
-    const delta = 3 + tierBonus * 2;
     m.stats.maxHp = (m.stats.maxHp || m.hp || 1) + delta;
     m.hp = Math.min(m.stats.maxHp, (m.hp || m.stats.maxHp) + delta);
   }
+  m.permanentRoomBonuses = {
+    ...(m.permanentRoomBonuses || {}),
+    [roomType]: targetBonus,
+  };
   return m;
 }
 
 function normalizeMonsterEntity(monster, roomType, roomTier = 1) {
-  if (!monster || !KNOW_MONSTER_KEY(monster.key)) return monster;
+  if (!monster || !KNOW_MONSTER_ENTITY(monster)) return monster;
+  if (monster.isFused) {
+    const passiveKeys = normalizePassiveKeysForMonster(monster);
+    const passiveRanks = createPassiveRanks(passiveKeys, monster.passiveRanks || {});
+    return {
+      ...monster,
+      hp: Math.max(1, monster.hp || monster.stats?.maxHp || 1),
+      atk: Math.max(1, monster.atk || monster.stats?.atk || 1),
+      def: Math.max(0, monster.def || monster.stats?.def || 0),
+      stats: {
+        maxHp: Math.max(1, monster.stats?.maxHp || monster.hp || 1),
+        atk: Math.max(1, monster.atk || monster.stats?.atk || 1),
+        def: Math.max(0, monster.def || monster.stats?.def || 0),
+      },
+      passiveKey: passiveKeys[0] || null,
+      passiveKeys,
+      passiveRanks,
+      passive: formatMonsterPassiveList(passiveKeys, passiveRanks),
+      permanentRoomBonuses: inferPermanentRoomBonuses(monster),
+      statuses: monster.statuses || {},
+    };
+  }
   const stage = monsterEvolutionStageValue(monster);
   const branchClass = stage > 0 ? defaultBranchClass(monster) : monster.branchClass || null;
   let normalized = rebuildMonsterEntity(
@@ -1823,6 +2008,7 @@ function normalizeMonsterEntity(monster, roomType, roomTier = 1) {
     {},
     { healToFull: false }
   );
+  normalized = applyStoredPermanentRoomBonuses(normalized, monster);
   if (roomType) {
     normalized = applyMonsterRoomPlacementStatic(normalized, roomType, roomTier);
   }
@@ -1835,6 +2021,7 @@ function normalizeMonsterEntity(monster, roomType, roomTier = 1) {
   normalized.fusionRecipeKey = monster.fusionRecipeKey || null;
   normalized.fusionRecipeName = monster.fusionRecipeName || null;
   normalized.fusionParents = Array.isArray(monster.fusionParents) ? monster.fusionParents : [];
+  normalized.permanentRoomBonuses = normalized.permanentRoomBonuses || inferPermanentRoomBonuses(monster);
   normalized.statuses = monster.statuses || {};
   return normalized;
 }
@@ -1851,21 +2038,23 @@ function calcArtifactMods(artifacts, day = 1) {
     coreStartShield: 0,
     trapDamageVulnerability: 0,
     uniqueMonsterHpOnBuy: 0,
+    trapFlatDamage: 0,
+    coreRetaliationBonus: 0,
+    monsterDef: 0,
+    scoutRevealBonus: 0,
+    trapChargeBonus: 0,
+    monsterRoomCapBonus: 0,
+    trapKillEssence: 0,
+    utilityPotencyBonus: 0,
+    roomWithdrawHealFull: 0,
+    shadyStockBonus: 0,
   };
-  const effectMult = dayMultiplier(day, 0.015, 1.6);
-  const unscaledKeys = new Set([
-    "trapMult",
-    "sacrificeBonusDarkcrystals",
-    "multiPassiveAtkBonus",
-    "coreStartShield",
-    "trapDamageVulnerability",
-    "uniqueMonsterHpOnBuy",
-  ]);
-  for (const art of artifacts || []) {
+  for (const artifact of artifacts || []) {
+    const art = hydrateArtifactDefinition(artifact);
     if (!art || !art.mods) continue;
-    for (const [key, val] of Object.entries(art.mods)) {
+    for (const [key, val] of Object.entries(art.mods || {})) {
       if (typeof val === "number") {
-        mods[key] = (mods[key] || 0) + (unscaledKeys.has(key) ? val : Math.round(val * effectMult));
+        mods[key] = (mods[key] || 0) + val;
       } else {
         mods[key] = (mods[key] || 0) + val;
       }
@@ -2398,11 +2587,13 @@ export default function App() {
   const [fuseA, setFuseA] = useState("");
   const [fuseB, setFuseB] = useState("");
   const [sacrificeIdx, setSacrificeIdx] = useState("");
+  const [selectedInventoryMonsterIndex, setSelectedInventoryMonsterIndex] = useState("");
 function defaultState() {
     const startingParty = generateRaidParty(0, null, 1);
     const dailyEvent = rollDailyEvent();
     const traderStock = generateTraderStock(0, 1);
-    const shadyStock = generateArtifactStock();
+    const artifacts = [];
+    const shadyStock = generateArtifactStock(1, artifacts);
     const grid = initStartingGrid();
     let invMonsters = initMonsterInventory(0, 2, 2, 1);
     const starterRoom = grid[0]?.[1];
@@ -2426,7 +2617,7 @@ function defaultState() {
         utility: 0,
         core: 0,
       },
-      artifacts: [],
+      artifacts,
       shadyStock,
       coreHp: getCoreMaxHp({ doctrines: { trap: 0, monster: 0, utility: 0, core: 0 } }),
       coreShield: 0,
@@ -2510,7 +2701,7 @@ function defaultState() {
             const roomTier = rawCell.roomTier ?? cell.roomTier ?? 1;
             const monsters = Array.isArray(rawCell.monsters)
               ? rawCell.monsters
-                  .filter((monster) => monster && KNOW_MONSTER_KEY(monster.key))
+                  .filter((monster) => KNOW_MONSTER_ENTITY(monster))
                   .map((monster) =>
                     normalizeMonsterEntity(monster, rawCell.room === "monster" ? roomType : null, roomTier)
                   )
@@ -2548,9 +2739,10 @@ function defaultState() {
         ? { ...base.currency, ...parsed.currency }
         : { ...base.currency, essence: parsed.essence ?? base.currency.essence };
       const dailyEvent = parsed.dailyEvent || base.dailyEvent;
+      const savedDay = Math.max(1, parsed.day || base.day || 1);
+      const artifacts = normalizeArtifactList(parsed.artifacts || base.artifacts);
       const traderStock = parsed.traderStock || base.traderStock;
-      const shadyStock = parsed.shadyStock || base.shadyStock;
-      const artifacts = parsed.artifacts || base.artifacts;
+      const shadyStock = normalizeArtifactStock(parsed.shadyStock, savedDay, artifacts);
       const doctrines = {
         trap: Math.max(0, parsed.doctrines?.trap || 0),
         monster: Math.max(0, parsed.doctrines?.monster || 0),
@@ -2569,7 +2761,6 @@ function defaultState() {
         declinedStreak: Number.isFinite(councilRaw.declinedStreak) ? councilRaw.declinedStreak : 0,
       };
       const councilFavor = parsed.councilFavor && typeof parsed.councilFavor === "object" ? parsed.councilFavor : {};
-      const savedDay = Math.max(1, parsed.day || base.day || 1);
       const ashTrial = normalizeAshTrial(parsed.ashTrial, savedDay);
       const ashTributeUntilDay = Number.isFinite(parsed.ashTributeUntilDay) ? parsed.ashTributeUntilDay : 0;
       const ashMonsterRoomCapUntilDay = Number.isFinite(parsed.ashMonsterRoomCapUntilDay) ? parsed.ashMonsterRoomCapUntilDay : 0;
@@ -2667,7 +2858,7 @@ function defaultState() {
         scoutQueue: normalizeHeroList(parsed.scoutQueue, currentPartyRaidType),
         invMonsters: Array.isArray(parsed.invMonsters)
           ? parsed.invMonsters
-              .filter((monster) => monster && KNOW_MONSTER_KEY(monster.key))
+              .filter((monster) => KNOW_MONSTER_ENTITY(monster))
               .map((monster) => normalizeMonsterEntity(monster))
           : base.invMonsters,
       };
@@ -2741,6 +2932,8 @@ function defaultState() {
   const validation = useMemo(() => validateDungeon(state.grid, state.ashTrial), [state.grid, state.ashTrial]);
   const roomsPlaced = useMemo(() => countRooms(state.grid), [state.grid]);
   const doctrineEffects = useMemo(() => getDoctrineEffects(state.doctrines || {}), [state.doctrines]);
+  const artifactMods = useMemo(() => calcArtifactMods(state.artifacts, state.day), [state.artifacts, state.day]);
+  const ownedArtifactCounts = useMemo(() => countOwnedArtifacts(state.artifacts), [state.artifacts]);
   const contentWarnings = useMemo(() => validateGameContent(), []);
   const coreMaxHp = useMemo(() => getCoreMaxHp(state), [state.doctrines, state.nihazaCurseUntilDay, state.day]);
   const dungeonLevel = Number.isFinite(state.dungeonLevel) ? state.dungeonLevel : 1;
@@ -2760,6 +2953,9 @@ function defaultState() {
   const selectedTile = state.grid[state.selected.y][state.selected.x];
   const selectedHeroes = heroesByTile.get(keyOf(state.selected.x, state.selected.y)) || [];
   const roomUpgradePrice = selectedTile.room ? roomUpgradeCost(selectedTile.roomTier || 1) : null;
+  const selectedMonsterRoomCapValue = selectedTile.room === "monster" ? effectiveMonsterRoomCapValue(state, selectedTile.roomTier || 1) : 0;
+  const canManageSelectedMonsterRoom = isBuildPhase && !state.movePayload && selectedTile.room === "monster";
+  const selectedMonsterRoomHasSpace = canManageSelectedMonsterRoom && selectedTile.monsters.length < selectedMonsterRoomCapValue;
   const fusionFirst = fuseA === "" ? null : state.invMonsters[Number(fuseA)] || null;
   const fusionSecond = fuseB === "" ? null : state.invMonsters[Number(fuseB)] || null;
   const fusionPreview =
@@ -2770,6 +2966,31 @@ function defaultState() {
           result: buildFusedMonsterEntity(fusionFirst, fusionSecond, state.day),
         }
       : null;
+
+  useEffect(() => {
+    if (!canManageSelectedMonsterRoom) {
+      if (selectedInventoryMonsterIndex !== "") setSelectedInventoryMonsterIndex("");
+      return;
+    }
+    if (selectedInventoryMonsterIndex !== "" && !state.invMonsters[Number(selectedInventoryMonsterIndex)]) {
+      setSelectedInventoryMonsterIndex("");
+    }
+  }, [canManageSelectedMonsterRoom, selectedInventoryMonsterIndex, state.invMonsters]);
+
+  const ownedArtifactGroups = useMemo(() => {
+    const groups = new Map();
+    for (const rawArtifact of state.artifacts || []) {
+      const artifact = hydrateArtifactDefinition(rawArtifact);
+      if (!artifact?.key) continue;
+      const existing = groups.get(artifact.key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        groups.set(artifact.key, { artifact, count: 1 });
+      }
+    }
+    return Array.from(groups.values()).sort((a, b) => a.artifact.name.localeCompare(b.artifact.name));
+  }, [state.artifacts]);
 
   function setSelected(x, y) {
     if (locked) return;
@@ -2823,7 +3044,8 @@ function defaultState() {
       if (t.entrance) return addLog(s, "Entrance cannot be cleared once placed.");
       if (isAshBreachAt(s.ashTrial, s.selected.x, s.selected.y)) return addLog(s, "Ash Breaches cannot be cleared while the trial is active.");
 
-      const invMonsters = [...s.invMonsters, ...t.monsters.map((m) => ({ ...m }))];
+      const artifactMods = calcArtifactMods(s.artifacts, s.day);
+      const invMonsters = [...s.invMonsters, ...t.monsters.map((m) => prepareMonsterForInventory({ ...m }, artifactMods))];
 
       t.entrance = false;
       t.core = false;
@@ -2949,7 +3171,10 @@ function defaultState() {
       t.trapStar = trapStar;
       t.trapStars = trapStar;
       t.trapRank = 1;
-      t.trapChargesRemaining = trapChargesForStar(trapStar);
+      t.trapChargesRemaining = trapChargesForStar(trapStar, {
+        ...getDoctrineEffects(s.doctrines),
+        trapChargeBonus: (getDoctrineEffects(s.doctrines).trapChargeBonus || 0) + (calcArtifactMods(s.artifacts, s.day).trapChargeBonus || 0),
+      });
       t.trapCooldownRemaining = 0;
       t.trapBroken = false;
       t.monsters = [];
@@ -3057,7 +3282,10 @@ function defaultState() {
         if (t.trapBroken) {
           t.trapBroken = false;
         }
-        t.trapChargesRemaining = trapChargesForStar(t.trapStar || t.trapStars || 1);
+        t.trapChargesRemaining = trapChargesForStar(t.trapStar || t.trapStars || 1, {
+          ...getDoctrineEffects(s.doctrines),
+          trapChargeBonus: (getDoctrineEffects(s.doctrines).trapChargeBonus || 0) + (calcArtifactMods(s.artifacts, s.day).trapChargeBonus || 0),
+        });
         t.trapCooldownRemaining = 0;
         return addLog({ ...s, grid }, `Trap armed. ${t.trapChargesRemaining} charge(s) ready.`);
       }
@@ -3240,29 +3468,84 @@ function defaultState() {
     return applyMonsterRoomPlacementStatic(monster, roomType, roomTier);
   }
 
-  function addMonsterToRoom() {
+  function placeInventoryMonsterInSelectedRoom(index) {
     if (locked) return;
     if (!isBuildPhase) {
-      setState((s) => addLog(s, "You can only summon during the build phase."));
+      setState((s) => addLog(s, "You can only staff rooms during the build phase."));
       return;
     }
     if (state.movePayload) {
-      setState((s) => addLog(s, "Finish moving before summoning."));
+      setState((s) => addLog(s, "Finish moving before changing room staff."));
       return;
     }
     setState((s) => {
+      if (!Number.isFinite(index)) return addLog(s, "Choose a monster from inventory first.");
       const grid = cloneGrid(s.grid);
       const t = grid[s.selected.y][s.selected.x];
       if (t.room !== "monster") return addLog(s, "Select a monster room first.");
       const cap = effectiveMonsterRoomCapValue(s, t.roomTier || 1);
       if (t.monsters.length >= cap) return addLog(s, `Monster room is full (max ${cap}).`);
       if (s.invMonsters.length <= 0) return addLog(s, "No monsters in inventory.");
+      const invMonsters = [...s.invMonsters];
+      const target = invMonsters[index];
+      if (!target) return addLog(s, "That inventory monster is no longer available.");
 
-      const monster = applyMonsterRoomPlacement(s.invMonsters[0], t.roomType, t.roomTier);
+      const monster = applyMonsterRoomPlacement(target, t.roomType, t.roomTier);
       t.monsters.push(monster);
-
-      const invMonsters = s.invMonsters.slice(1);
+      invMonsters.splice(index, 1);
       return addLog({ ...s, grid, invMonsters }, `Placed ${monster.name} in room.`);
+    });
+  }
+
+  function addMonsterToRoom() {
+    placeInventoryMonsterInSelectedRoom(selectedInventoryMonsterIndex === "" ? Number.NaN : Number(selectedInventoryMonsterIndex));
+  }
+
+  function returnMonsterFromSelectedRoom(index) {
+    if (locked) return;
+    if (!isBuildPhase) {
+      setState((s) => addLog(s, "You can only withdraw room staff during the build phase."));
+      return;
+    }
+    if (state.movePayload) {
+      setState((s) => addLog(s, "Finish moving before changing room staff."));
+      return;
+    }
+    setState((s) => {
+      if (!Number.isFinite(index)) return s;
+      const grid = cloneGrid(s.grid);
+      const t = grid[s.selected.y][s.selected.x];
+      if (t.room !== "monster") return addLog(s, "Select a monster room first.");
+      const target = t.monsters[index];
+      if (!target) return addLog(s, "That monster is no longer in the room.");
+      const artifactMods = calcArtifactMods(s.artifacts, s.day);
+      const invMonsters = [...s.invMonsters, prepareMonsterForInventory({ ...target }, artifactMods)];
+      t.monsters.splice(index, 1);
+      return addLog({ ...s, grid, invMonsters }, `Returned ${target.name} to inventory.`);
+    });
+  }
+
+  function returnAllMonstersFromSelectedRoom() {
+    if (locked) return;
+    if (!isBuildPhase) {
+      setState((s) => addLog(s, "You can only withdraw room staff during the build phase."));
+      return;
+    }
+    if (state.movePayload) {
+      setState((s) => addLog(s, "Finish moving before changing room staff."));
+      return;
+    }
+    setState((s) => {
+      const grid = cloneGrid(s.grid);
+      const t = grid[s.selected.y][s.selected.x];
+      if (t.room !== "monster") return addLog(s, "Select a monster room first.");
+      if (!t.monsters.length) return addLog(s, "That room has no monsters to withdraw.");
+      const artifactMods = calcArtifactMods(s.artifacts, s.day);
+      const returned = t.monsters.map((monster) => prepareMonsterForInventory({ ...monster }, artifactMods));
+      const count = returned.length;
+      const invMonsters = [...s.invMonsters, ...returned];
+      t.monsters = [];
+      return addLog({ ...s, grid, invMonsters }, `Returned ${count} monster${count === 1 ? "" : "s"} to inventory.`);
     });
   }
 
@@ -3429,20 +3712,15 @@ function defaultState() {
       if (t.room === "trap") {
         t.trapRank = nextTier;
         if (t.trap) {
-          t.trapChargesRemaining = trapChargesForStar(t.trapStar || t.trapStars || 1, getDoctrineEffects(s.doctrines));
+          t.trapChargesRemaining = trapChargesForStar(t.trapStar || t.trapStars || 1, {
+            ...getDoctrineEffects(s.doctrines),
+            trapChargeBonus: (getDoctrineEffects(s.doctrines).trapChargeBonus || 0) + (calcArtifactMods(s.artifacts, s.day).trapChargeBonus || 0),
+          });
           t.trapCooldownRemaining = 0;
         }
       }
       if (t.room === "monster") {
-        for (const m of t.monsters) {
-          if (t.roomType === "training-den") {
-            m.atk += 1;
-            m.stats.atk = m.atk;
-          } else if (t.roomType === "thick-hide") {
-            m.stats.maxHp = (m.stats.maxHp || m.hp) + 2;
-            m.hp += 2;
-          }
-        }
+        t.monsters = t.monsters.map((monster) => applyMonsterRoomPlacement(monster, t.roomType, nextTier));
       }
 
       const currency = { ...s.currency, essence: s.currency.essence - cost };
@@ -3464,21 +3742,25 @@ function defaultState() {
     }
     setState((s) => {
       const stock = s.shadyStock ? [...s.shadyStock] : [];
-      const target = stock[idx];
+      const target = hydrateArtifactDefinition(stock[idx]);
       if (!target) return s;
       const rawCost = target.cost || { currency: "soulshards", amount: 0 };
-      const cost = {
-        ...rawCost,
-        amount: scaleByDay(rawCost.amount || 0, s.day, 0.04, 2.5),
-      };
+      const cost = { ...rawCost };
       const currency = { ...s.currency };
       if (currency[cost.currency] < cost.amount) {
         return addLog(s, `Not enough ${cost.currency}.`);
       }
+      const ownedCount = countOwnedArtifacts(s.artifacts)[target.key] || 0;
+      const copyCap = artifactCopyCap(target);
+      if (ownedCount >= copyCap) {
+        return addLog(s, `${target.name} is already at its copy limit.`);
+      }
       currency[cost.currency] -= cost.amount;
       stock.splice(idx, 1);
       const artifacts = [...s.artifacts, target];
-      return addLog({ ...s, currency, shadyStock: stock, artifacts }, `Bought ${target.name} for ${cost.amount} ${cost.currency}.`);
+      const nextOwnedCount = ownedCount + 1;
+      const shadyStock = stock.filter((offer) => offer?.key !== target.key || nextOwnedCount < artifactCopyCap(offer));
+      return addLog({ ...s, currency, shadyStock, artifacts }, `Bought ${target.name} for ${cost.amount} ${cost.currency}.`);
     });
   }
 
@@ -3536,9 +3818,19 @@ function defaultState() {
       let scoutQueue = [];
       const doctrineEffects = getDoctrineEffects(s.doctrines);
       const raidMods = buildRaidModifiers(s.nextRaidBoons);
-      const mirrorTier = maxUtilityTier(s.grid, "scout-mirror") + doctrineEffects.utilityScoutBonus;
-      if (mirrorTier > 0) {
-        const revealCount = Math.min(party.length, 2 + (mirrorTier - 1) + raidMods.scoutRevealBonus);
+      const artifactMods = calcArtifactMods(s.artifacts, s.day);
+      const baseMirrorTier = maxUtilityTier(s.grid, "scout-mirror");
+      const mirrorTier =
+        baseMirrorTier > 0
+          ? baseMirrorTier +
+            doctrineEffects.utilityPotencyBonus +
+            doctrineEffects.utilityPotencyBonusExtra +
+            doctrineEffects.utilityScoutBonus +
+            (artifactMods.utilityPotencyBonus || 0)
+          : 0;
+      const revealBase = artifactMods.scoutRevealBonus || 0;
+      if (mirrorTier > 0 || revealBase > 0) {
+        const revealCount = Math.min(party.length, revealBase + (mirrorTier > 0 ? 2 + (mirrorTier - 1) + raidMods.scoutRevealBonus : 0));
         scoutQueue = party.slice(0, revealCount).map((h) => ({ ...h }));
       }
       let ns = {
@@ -3559,7 +3851,7 @@ function defaultState() {
           const previews = scoutQueue
           .map((h) => `${h.name}${h.isRaidLeader ? " [Leader]" : ""} (${formatStars(safeEntityStars(h))}, ATK ${h.atk}, HP ${h.hp})`)
           .join(" | ");
-        ns = addLog(ns, `Scout's Mirror reveals: ${previews}`);
+        ns = addLog(ns, `Scout report: ${previews}`);
       }
       return ns;
     });
@@ -3620,7 +3912,10 @@ function defaultState() {
             t.trapStars = trapStar;
             t.trapRank = Math.max(1, t.trapRank ?? t.roomTier ?? 1);
             if (t.trap && !t.trapBroken) {
-              t.trapChargesRemaining = trapChargesForStar(trapStar, getDoctrineEffects(s.doctrines));
+              t.trapChargesRemaining = trapChargesForStar(trapStar, {
+                ...getDoctrineEffects(s.doctrines),
+                trapChargeBonus: (getDoctrineEffects(s.doctrines).trapChargeBonus || 0) + (calcArtifactMods(s.artifacts, s.day).trapChargeBonus || 0),
+              });
               t.trapCooldownRemaining = 0;
             } else {
               t.trapChargesRemaining = 0;
@@ -3651,11 +3946,23 @@ function defaultState() {
       const doctrineEffects = getDoctrineEffects(s.doctrines);
       const artifactModsStart = calcArtifactMods(s.artifacts, s.day);
       const raidMods = buildRaidModifiers(s.nextRaidBoons);
-      const mirrorTier = maxUtilityTier(s.grid, "scout-mirror") + doctrineEffects.utilityScoutBonus;
+      const baseMirrorTier = maxUtilityTier(s.grid, "scout-mirror");
+      const mirrorTier =
+        baseMirrorTier > 0
+          ? baseMirrorTier +
+            doctrineEffects.utilityPotencyBonus +
+            doctrineEffects.utilityPotencyBonusExtra +
+            doctrineEffects.utilityScoutBonus +
+            (artifactModsStart.utilityPotencyBonus || 0)
+          : 0;
       const doctrineShield = doctrineEffects.coreShieldBonus || 0;
       const fortifiedCoreShield = (s.coreShield || 0) + doctrineShield + (raidMods.coreShieldBonus || 0) + (artifactModsStart.coreStartShield || 0);
-      if (mirrorTier > 0) {
-        const revealCount = Math.min(partyQueue.length, 2 + (mirrorTier - 1) + raidMods.scoutRevealBonus);
+      const revealBase = artifactModsStart.scoutRevealBonus || 0;
+      if (mirrorTier > 0 || revealBase > 0) {
+        const revealCount = Math.min(
+          partyQueue.length,
+          revealBase + (mirrorTier > 0 ? 2 + (mirrorTier - 1) + raidMods.scoutRevealBonus : 0)
+        );
         scoutQueue = partyQueue.slice(0, revealCount).map((h) => ({ ...h }));
       }
 
@@ -3707,7 +4014,7 @@ function defaultState() {
           const previews = scoutQueue
             .map((h) => `${h.name}${h.isRaidLeader ? " [Leader]" : ""} (${formatStars(safeEntityStars(h))}, ATK ${h.atk}, HP ${h.hp})`)
             .join(" | ");
-          ns = addLog(ns, `Scout's Mirror reveals: ${previews}`);
+          ns = addLog(ns, `Scout report: ${previews}`);
         }
         return ns;
       }
@@ -3755,7 +4062,7 @@ function defaultState() {
           .slice(0, 2)
           .map((h) => `${h.name}${h.isRaidLeader ? " [Leader]" : ""} (${formatStars(safeEntityStars(h))}, ATK ${h.atk}, HP ${h.hp})`)
           .join(" | ");
-        ns = addLog(ns, `Scout's Mirror reveals: ${previews}`);
+        ns = addLog(ns, `Scout report: ${previews}`);
       }
       return ns;
     });
@@ -3814,7 +4121,12 @@ function defaultState() {
       const effectiveUtilityTier = (x, y, key) => {
         const baseTier = utilityTier(grid, x, y, key);
         if (baseTier <= 0) return 0;
-        return baseTier + doctrineEffectsLocal.utilityPotencyBonus + doctrineEffectsLocal.utilityPotencyBonusExtra;
+        return (
+          baseTier +
+          doctrineEffectsLocal.utilityPotencyBonus +
+          doctrineEffectsLocal.utilityPotencyBonusExtra +
+          (artifactMods.utilityPotencyBonus || 0)
+        );
       };
 
       const getStatus = (h, key) => h.statuses?.[key] || { turns: 0, value: 0 };
@@ -3910,7 +4222,8 @@ function defaultState() {
         const extraEssence = artifactMods.essenceOnKill || 0;
         const extraShards = artifactMods.soulshardOnKill || 0;
         const ashTributeGain = isTimedBlessingActive(s.ashTributeUntilDay, s.day) ? 3 : 0;
-        essence += essenceGain + extraEssence;
+        const trapKillEssence = why === "trap" || why === "arrows" ? artifactMods.trapKillEssence || 0 : 0;
+        essence += essenceGain + extraEssence + trapKillEssence;
         soulshards += shardGain + extraShards;
         kills += 1;
         const markedValue = getStatus(h, "marked").turns > 0 ? getStatus(h, "marked").value || 0 : h.counters?.cursedMark || 0;
@@ -3929,7 +4242,7 @@ function defaultState() {
           essence += ashTributeGain;
           push(`Ash Tribute consumes ${invaderLabel(h)}. +${ashTributeGain} Essence`);
         }
-        const totalEssence = essenceGain + extraEssence;
+        const totalEssence = essenceGain + extraEssence + trapKillEssence;
         const totalShards = shardGain + extraShards;
         const deathTile = grid[h.y]?.[h.x];
         if (why === "trap" || why === "arrows") {
@@ -4054,6 +4367,7 @@ function defaultState() {
         if (room && room.room === "monster" && roomHasPassive(room, "warding")) {
           bonus += roomPassiveRank(room, "warding");
         }
+        bonus += artifactMods.monsterDef || 0;
         return bonus;
       }
 
@@ -4061,7 +4375,12 @@ function defaultState() {
         if (!base && !extraFlat) return 0;
         const trapStar = clampMonsterStar(tile.trapStar ?? tile.trapStars ?? 1);
         const trapRank = Math.max(1, tile.trapRank ?? tile.roomTier ?? 1);
-        let dmg = base * (1 + 0.25 * (trapStar - 1)) + (trapRank - 1) * 2 + extraFlat + (doctrineEffectsLocal.trapFlatDamage || 0);
+        let dmg =
+          base * (1 + 0.25 * (trapStar - 1)) +
+          (trapRank - 1) * 2 +
+          extraFlat +
+          (doctrineEffectsLocal.trapFlatDamage || 0) +
+          (artifactMods.trapFlatDamage || 0);
         let mult = 1;
         const wardTier = effectiveUtilityTier(x, y, "ward-lantern");
         if (wardTier > 0) mult += 0.25 + 0.05 * (wardTier - 1);
@@ -4125,10 +4444,13 @@ function defaultState() {
           }
           coreHp -= heroAtk;
           const coreCounter =
-            DUNGEON_LORD_ATK + (doctrineEffectsLocal.dungeonlordAtkBonus || 0) + (raidMods.coreRetaliationBonus || 0);
+            DUNGEON_LORD_ATK +
+            (doctrineEffectsLocal.dungeonlordAtkBonus || 0) +
+            (raidMods.coreRetaliationBonus || 0) +
+            (artifactMods.coreRetaliationBonus || 0);
           const coreDmg = applyHeroDamage(h, coreCounter, h.x, h.y, true);
           push(
-            `${invaderLabel(h)} hits Core for ${heroAtk}. Core HP ${Math.max(0, coreHp)}. Core retaliates for ${coreDmg} (${DUNGEON_LORD_ATK}${doctrineEffectsLocal.dungeonlordAtkBonus ? `+${doctrineEffectsLocal.dungeonlordAtkBonus}` : ""}${raidMods.coreRetaliationBonus ? `+${raidMods.coreRetaliationBonus}` : ""}). ${invaderLabel(h)} HP ${Math.max(0, h.hp)}`
+            `${invaderLabel(h)} hits Core for ${heroAtk}. Core HP ${Math.max(0, coreHp)}. Core retaliates for ${coreDmg} (${DUNGEON_LORD_ATK}${doctrineEffectsLocal.dungeonlordAtkBonus ? `+${doctrineEffectsLocal.dungeonlordAtkBonus}` : ""}${raidMods.coreRetaliationBonus ? `+${raidMods.coreRetaliationBonus}` : ""}${artifactMods.coreRetaliationBonus ? `+${artifactMods.coreRetaliationBonus}` : ""}). ${invaderLabel(h)} HP ${Math.max(0, h.hp)}`
           );
 
           if (h.hp <= 0) {
@@ -4596,7 +4918,7 @@ function defaultState() {
         nextState.partyQueue = [];
         nextState.dailyEvent = rollDailyEvent();
         nextState.traderStock = generateTraderStock(nextState.turnsSurvived, nextState.day);
-        nextState.shadyStock = generateArtifactStock();
+        nextState.shadyStock = generateArtifactStock(nextState.day, nextState.artifacts);
         nextState.fleshMarketStock =
           nextState.fleshMarketUntilDay >= nextState.day && nextState.fleshMarketUntilDay > 0
             ? generateFleshMarketStock(nextState.day, nextState.boughtUniqueKeys || [])
@@ -4764,7 +5086,7 @@ function defaultState() {
       const startingParty = generateRaidParty(0, null, 1);
       const dailyEvent = rollDailyEvent();
       const traderStock = generateTraderStock(0, 1);
-      const shadyStock = generateArtifactStock();
+      const shadyStock = generateArtifactStock(1, []);
       let ns = {
         ...s,
         grid,
@@ -4904,9 +5226,19 @@ function defaultState() {
         let scoutQueue = [];
         const doctrineEffects = getDoctrineEffects(s.doctrines);
         const raidMods = buildRaidModifiers(s.nextRaidBoons);
-        const mirrorTier = maxUtilityTier(s.grid, "scout-mirror") + doctrineEffects.utilityScoutBonus;
-        if (mirrorTier > 0) {
-          const revealCount = Math.min(party.length, 2 + (mirrorTier - 1) + raidMods.scoutRevealBonus);
+        const artifactMods = calcArtifactMods(s.artifacts, s.day);
+        const baseMirrorTier = maxUtilityTier(s.grid, "scout-mirror");
+        const mirrorTier =
+          baseMirrorTier > 0
+            ? baseMirrorTier +
+              doctrineEffects.utilityPotencyBonus +
+              doctrineEffects.utilityPotencyBonusExtra +
+              doctrineEffects.utilityScoutBonus +
+              (artifactMods.utilityPotencyBonus || 0)
+            : 0;
+        const revealBase = artifactMods.scoutRevealBonus || 0;
+        if (mirrorTier > 0 || revealBase > 0) {
+          const revealCount = Math.min(party.length, revealBase + (mirrorTier > 0 ? 2 + (mirrorTier - 1) + raidMods.scoutRevealBonus : 0));
           scoutQueue = party.slice(0, revealCount).map((h) => ({ ...h }));
         }
         ns = {
@@ -4960,9 +5292,19 @@ function defaultState() {
         let scoutQueue = [];
         const doctrineEffects = getDoctrineEffects(s.doctrines);
         const raidMods = buildRaidModifiers(s.nextRaidBoons);
-        const mirrorTier = maxUtilityTier(s.grid, "scout-mirror") + doctrineEffects.utilityScoutBonus;
-        if (mirrorTier > 0) {
-          const revealCount = Math.min(party.length, 2 + (mirrorTier - 1) + raidMods.scoutRevealBonus);
+        const artifactMods = calcArtifactMods(s.artifacts, s.day);
+        const baseMirrorTier = maxUtilityTier(s.grid, "scout-mirror");
+        const mirrorTier =
+          baseMirrorTier > 0
+            ? baseMirrorTier +
+              doctrineEffects.utilityPotencyBonus +
+              doctrineEffects.utilityPotencyBonusExtra +
+              doctrineEffects.utilityScoutBonus +
+              (artifactMods.utilityPotencyBonus || 0)
+            : 0;
+        const revealBase = artifactMods.scoutRevealBonus || 0;
+        if (mirrorTier > 0 || revealBase > 0) {
+          const revealCount = Math.min(party.length, revealBase + (mirrorTier > 0 ? 2 + (mirrorTier - 1) + raidMods.scoutRevealBonus : 0));
           scoutQueue = party.slice(0, revealCount).map((h) => ({ ...h }));
         }
         ns = {
@@ -5092,11 +5434,14 @@ function defaultState() {
         if (!artifactDef) return addLog(s, "That unique artifact could not be found.");
         ns.artifacts = [
           ...s.artifacts,
-          {
+          hydrateArtifactDefinition({
             ...artifactDef,
             isUnique: true,
             cost: { currency: "darkcrystals", amount: offer.cost },
-          },
+            tags: ["unique", "flesh-market"],
+            maxCopies: 1,
+            unlockDay: 0,
+          }),
         ];
         ns = addLog(ns, `Bought ${artifactDef.name} for ${offer.cost} Darkcrystals.`);
       }
@@ -5260,8 +5605,14 @@ function defaultState() {
       const base = trap.baseDmg || 0;
       const star = clampMonsterStar(tile.trapStar ?? tile.trapStars ?? 1);
       const rank = Math.max(1, tile.trapRank ?? tier);
-      const scaled = Math.max(0, Math.round(base * (1 + 0.25 * (star - 1)) + (rank - 1) * 2 + doctrineEffects.trapFlatDamage));
-      const charges = trapChargesForStar(star, doctrineEffects);
+      const scaled = Math.max(
+        0,
+        Math.round(base * (1 + 0.25 * (star - 1)) + (rank - 1) * 2 + doctrineEffects.trapFlatDamage + (artifactMods.trapFlatDamage || 0))
+      );
+      const charges = trapChargesForStar(star, {
+        ...doctrineEffects,
+        trapChargeBonus: (doctrineEffects.trapChargeBonus || 0) + (artifactMods.trapChargeBonus || 0),
+      });
       const cooldown = trapCooldownAfterTrigger(tile.trapType, star, doctrineEffects);
       return `${trap.desc} Tier ${tier}. ${formatStars(star)} / Rank ${rank}. Trigger ${scaled} dmg, ${charges} charge(s), cooldown ${cooldown}.`;
     }
@@ -5277,7 +5628,11 @@ function defaultState() {
       return `${MONSTER_ROOM_MAP[tile.roomType]?.desc || "Monster Room"} Cap ${cap}.`;
     }
     if (tile.room === "utility") {
-      const tier = (tile.roomTier || 1) + doctrineEffects.utilityPotencyBonus + doctrineEffects.utilityPotencyBonusExtra;
+      const tier =
+        (tile.roomTier || 1) +
+        doctrineEffects.utilityPotencyBonus +
+        doctrineEffects.utilityPotencyBonusExtra +
+        (artifactMods.utilityPotencyBonus || 0);
       if (tile.roomType === "soul-altar") {
         return `Tier ${tier}: Hero dies within 1 tile: +${15 + (tier - 1) * 5} Essence.`;
       }
@@ -5371,7 +5726,7 @@ function defaultState() {
   function effectiveUtilityTierAt(x, y, key) {
     const baseTier = utilityTier(state.grid, x, y, key);
     if (baseTier <= 0) return 0;
-    return baseTier + doctrineEffects.utilityPotencyBonus + doctrineEffects.utilityPotencyBonusExtra;
+    return baseTier + doctrineEffects.utilityPotencyBonus + doctrineEffects.utilityPotencyBonusExtra + (artifactMods.utilityPotencyBonus || 0);
   }
 
   function describeTileAuras(x, y) {
@@ -5388,10 +5743,13 @@ function defaultState() {
     const rank = Math.max(1, tile.trapRank ?? tile.roomTier ?? 1);
     const wardTier = effectiveUtilityTierAt(x, y, "ward-lantern");
     let mult = 1 + (wardTier > 0 ? 0.25 + 0.05 * (wardTier - 1) : 0);
-    if (state.artifacts.some((artifact) => artifact.key === "wicked-gears")) mult += 0.15;
+    if (artifactMods.trapMult) mult += artifactMods.trapMult;
     return Math.max(
       0,
-      Math.round((trap.baseDmg * (1 + 0.25 * (star - 1)) + (rank - 1) * 2 + doctrineEffects.trapFlatDamage) * mult)
+      Math.round(
+        (trap.baseDmg * (1 + 0.25 * (star - 1)) + (rank - 1) * 2 + doctrineEffects.trapFlatDamage + (artifactMods.trapFlatDamage || 0)) *
+          mult
+      )
     );
   }
 
@@ -6512,16 +6870,6 @@ function defaultState() {
                 <div className="muted">Trap stars add charges. Rank adds damage. Cooldown refreshes every turn.</div>
               </div>
               <div className="row">
-                <button
-                  className="btn"
-                  onClick={addMonsterToRoom}
-                  disabled={locked || state.movePayload || !isBuildPhase || selectedTile.room !== "monster" || state.invMonsters.length === 0}
-                >
-                  Summon Monster
-                </button>
-                <div className="muted">Inv: {state.invMonsters.length}</div>
-              </div>
-              <div className="row">
                 <button className="btn danger" onClick={clearTile} disabled={locked || state.movePayload || !isBuildPhase || selectedTile.entrance || isAshBreachAt(state.ashTrial, state.selected.x, state.selected.y)}>Clear Tile</button>
                 <div className="muted">Clears room/flags. Monsters return to inventory. Entrance is fixed.</div>
               </div>
@@ -6552,6 +6900,80 @@ function defaultState() {
                     : "Select a room to upgrade."}
                 </div>
               </div>
+            </div>
+
+            <div className="card">
+              <div className="cardTitle">Room Staffing</div>
+              {selectedTile.room === "monster" ? (
+                <>
+                  <div className="row">
+                    <select
+                      className="select"
+                      value={selectedInventoryMonsterIndex}
+                      onChange={(e) => setSelectedInventoryMonsterIndex(e.target.value)}
+                      disabled={!canManageSelectedMonsterRoom || !state.invMonsters.length || !selectedMonsterRoomHasSpace}
+                    >
+                      <option value="">Choose inventory monster</option>
+                      {state.invMonsters.map((monster, idx) => (
+                        <option key={`room-staff-${idx}`} value={idx}>
+                          {monster.name} ({formatStars(safeEntityStars(monster))})
+                        </option>
+                      ))}
+                    </select>
+                    <div className="muted">
+                      Room {selectedTile.monsters.length}/{selectedMonsterRoomCapValue}
+                    </div>
+                  </div>
+                  <div className="row">
+                    <button
+                      className="btn"
+                      onClick={addMonsterToRoom}
+                      disabled={!canManageSelectedMonsterRoom || !selectedMonsterRoomHasSpace || selectedInventoryMonsterIndex === ""}
+                    >
+                      Place Selected Monster
+                    </button>
+                    <div className="muted">
+                      {artifactMods.roomWithdrawHealFull
+                        ? "Stable Hooks heals withdrawn monsters to full."
+                        : "Build phase only. Transfer uses return -> place."}
+                    </div>
+                  </div>
+                  {selectedTile.monsters.length ? (
+                    <div className="entityList">
+                      {selectedTile.monsters.map((monster, idx) => (
+                        <div className="entityItem" key={`room-monster-${idx}`}>
+                          <div className="entityName">{monster.name}</div>
+                          <div className="entityMeta">
+                            {safeEntityLabel(monster.race, "Monster")}
+                            <span className="badge class">{safeEntityLabel(monster.class, "Brute")}</span>
+                            {monster.isFused ? <span className="badge unique">Fused</span> : null} | {formatStars(safeEntityStars(monster))}
+                          </div>
+                          <div className="entityStats">
+                            HP {monster.hp}/{safeEntityMaxHp(monster)} | ATK {monster.atk} | DEF {monster.def || 0} | SPD {monsterSpeedValue(monster)}
+                          </div>
+                          <div className="muted">Status: {entityStatusSummary(monster)}</div>
+                          <div className="row">
+                            <button className="btn small" onClick={() => returnMonsterFromSelectedRoom(idx)} disabled={!canManageSelectedMonsterRoom}>
+                              Return to Inventory
+                            </button>
+                            <div className="muted small">{evolutionStageLabel(monster)}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="entityEmpty">No monsters stationed here.</div>
+                  )}
+                  <div className="row">
+                    <button className="btn danger" onClick={returnAllMonstersFromSelectedRoom} disabled={!canManageSelectedMonsterRoom || !selectedTile.monsters.length}>
+                      Withdraw All
+                    </button>
+                    <div className="muted">Return the room roster to inventory.</div>
+                  </div>
+                </>
+              ) : (
+                <div className="muted">Select a monster room to place or withdraw monsters.</div>
+              )}
             </div>
 
             <div className="card">
@@ -6586,18 +7008,32 @@ function defaultState() {
               <div className="cardTitle">Shady Dealer</div>
               {state.shadyStock && state.shadyStock.length > 0 ? (
                 <div className="entityList">
-                  {state.shadyStock.map((a, idx) => (
-                    <div className="entityItem" key={`artifact-${a.key}-${idx}`}>
-                      <div className="entityName">{a.name}</div>
-                      <div className="entityMeta">{a.desc}</div>
-                      <div className="row">
-                        <button className="btn" onClick={() => buyArtifact(idx)} disabled={!isBuildPhase}>
-                          Buy ({scaleByDay(a.cost.amount, state.day, 0.04, 2.5)} {a.cost.currency})
-                        </button>
-                        <div className="muted">Daily stock</div>
+                  {state.shadyStock.map((rawArtifact, idx) => {
+                    const artifact = hydrateArtifactDefinition(rawArtifact);
+                    const ownedCount = ownedArtifactCounts[artifact.key] || 0;
+                    const copyCap = artifactCopyCap(artifact);
+                    const atCap = ownedCount >= copyCap;
+                    return (
+                      <div className="entityItem" key={`artifact-${artifact.key}-${idx}`}>
+                        <div className="entityName">{artifact.name}</div>
+                        <div className="entityMeta">{artifact.desc}</div>
+                        <div className="dockBadgeRow">
+                          {artifactTagsForDisplay(artifact).map((tag) => (
+                            <span className="badge favorNeutral" key={`${artifact.key}-tag-${tag}`}>
+                              {tag}
+                            </span>
+                          ))}
+                          <span className="muted small">Owned {ownedCount}/{copyCap}</span>
+                        </div>
+                        <div className="row">
+                          <button className="btn" onClick={() => buyArtifact(idx)} disabled={!isBuildPhase || atCap}>
+                            Buy ({artifact.cost.amount} {artifact.cost.currency})
+                          </button>
+                          <div className="muted">{atCap ? "Copy cap reached" : "Daily stock"}</div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="muted">Dealer is out of stock.</div>
@@ -6758,12 +7194,20 @@ function defaultState() {
             </div>
             <div className="card">
               <div className="cardTitle">Artifacts</div>
-              {state.artifacts.length ? (
+              {ownedArtifactGroups.length ? (
                 <div className="entityList">
-                  {state.artifacts.map((a, idx) => (
-                    <div className="entityItem" key={`owned-${a.key}-${idx}`}>
-                      <div className="entityName">{a.name}</div>
-                      <div className="entityMeta">{a.desc}</div>
+                  {ownedArtifactGroups.map(({ artifact, count }) => (
+                    <div className="entityItem" key={`owned-${artifact.key}`}>
+                      <div className="entityName">{artifact.name}</div>
+                      <div className="entityMeta">{artifact.desc}</div>
+                      <div className="dockBadgeRow">
+                        {artifactTagsForDisplay(artifact).map((tag) => (
+                          <span className="badge favorNeutral" key={`${artifact.key}-owned-tag-${tag}`}>
+                            {tag}
+                          </span>
+                        ))}
+                        <span className="muted small">Owned {count}/{artifactCopyCap(artifact)}</span>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -6801,6 +7245,22 @@ function defaultState() {
                         </button>
                         <div className="muted">{evolutionStageLabel(m)}</div>
                       </div>
+                      {selectedTile.room === "monster" ? (
+                        <div className="row">
+                          <button
+                            className="btn small"
+                            onClick={() => placeInventoryMonsterInSelectedRoom(idx)}
+                            disabled={!canManageSelectedMonsterRoom || !selectedMonsterRoomHasSpace}
+                          >
+                            Assign to Selected Room
+                          </button>
+                          <div className="muted small">
+                            {selectedMonsterRoomHasSpace
+                              ? `Room ${selectedTile.monsters.length}/${selectedMonsterRoomCapValue}`
+                              : "Selected room is full."}
+                          </div>
+                        </div>
+                      ) : null}
                       {state.evolutionOffer &&
                         state.evolutionOffer.source?.type === "inv" &&
                         state.evolutionOffer.source?.index === idx && (
@@ -7249,10 +7709,19 @@ function defaultState() {
             <div className="card">
               <div className="cardTitle">Artifacts</div>
               <div className="entityList">
-                {ARTIFACTS.map((artifact) => (
+                {STANDARD_ARTIFACTS.map((artifact) => (
                   <div className="entityItem" key={artifact.key}>
                     <div className="entityName">{artifact.name}</div>
                     <div className="entityMeta">{artifact.desc}</div>
+                    <div className="dockBadgeRow">
+                      {artifactTagsForDisplay(artifact).map((tag) => (
+                        <span className="badge favorNeutral" key={`${artifact.key}-glossary-tag-${tag}`}>
+                          {tag}
+                        </span>
+                      ))}
+                      <span className="muted small">Unlock Day {artifact.unlockDay}</span>
+                      <span className="muted small">Max {artifact.maxCopies}</span>
+                    </div>
                     <div className="muted small">Cost: {artifact.cost.amount} {artifact.cost.currency}</div>
                   </div>
                 ))}
