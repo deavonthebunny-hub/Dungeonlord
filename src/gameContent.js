@@ -832,6 +832,121 @@ export const FLESH_MARKET_UNIQUE_MONSTERS = [
   },
 ];
 
+export const UTILITY_ROOMS = [
+  { key: "soul-altar", name: "Soul Altar", desc: "Hero dies within 1 tile: +15 Essence." },
+  { key: "siphon-pylon", name: "Essence Siphon Pylon", desc: "Hero takes damage within 1 tile: +1 Essence (cap 10 per hero)." },
+  { key: "reinforced-keystone", name: "Reinforced Keystone", desc: "Monsters within 1 tile gain +2 DEF." },
+  { key: "blood-sigil", name: "Blood Sigil", desc: "Monsters within 1 tile heal +2 HP at end of turn." },
+  { key: "war-drum", name: "War Drum Totem", desc: "Monsters within 1 tile gain +1 ATK." },
+  { key: "haste-glyph", name: "Haste Glyph", desc: "Monsters within 1 tile act first." },
+  { key: "fear-idol", name: "Fear Idol", desc: "Heroes entering adjacent tiles get -1 ATK for 2 turns." },
+  { key: "ward-lantern", name: "Ward Lantern", desc: "Traps within 1 tile deal +25% damage." },
+  { key: "seal-silence", name: "Seal of Silence", desc: "Heroes within 1 tile cannot gain buffs." },
+  { key: "scout-mirror", name: "Scout's Mirror", desc: "Raid start reveals next 2 hero spawns." },
+  {
+    key: "butchers-shrine",
+    name: "Butcher's Shrine",
+    desc: "Hero deaths within 1 tile grant +1 Essence. Linked: trap kills within 1 tile also grant +1 Soulshard.",
+    synergyTag: "Blood",
+    baseDesc: "Hero deaths within 1 tile grant +1 extra Essence.",
+    linkDesc: "Trap kills within 1 tile also grant +1 Soulshard.",
+  },
+  {
+    key: "aegis-lantern",
+    name: "Aegis Lantern",
+    desc: "Adjacent monster rooms start fights with Guard 1. Linked: traps within 1 tile start each raid with +1 charge.",
+    synergyTag: "Ward",
+    baseDesc: "Adjacent monster rooms start fights with Guard 1 on all defenders.",
+    linkDesc: "Traps within 1 tile start each raid with +1 charge.",
+  },
+  {
+    key: "scent-beacon",
+    name: "Scent Beacon",
+    desc: "Rooms within 1 tile gain +1 lure. Linked: raids reveal +1 extra invader at battle start.",
+    synergyTag: "Hunt",
+    baseDesc: "Rooms within 1 tile gain +1 lure.",
+    linkDesc: "Raids reveal +1 extra invader at battle start.",
+  },
+];
+
+export const MONSTER_ROOMS = [
+  { key: "training-den", name: "Training Den", desc: "Placed monsters gain +1 ATK (permanent)." },
+  { key: "thick-hide", name: "Thick Hide Pens", desc: "Placed monsters gain +3 Max HP (permanent)." },
+  { key: "rally-banner", name: "Rally Banner", desc: "If 2+ monsters, they gain +1 ATK." },
+  { key: "ambush-alcove", name: "Ambush Alcove", desc: "First hero entry triggers an extra monster strike." },
+  { key: "savage-kennels", name: "Savage Kennels", desc: "Monsters heal 2 when they deal damage." },
+  { key: "hex-circle", name: "Hex Circle", desc: "Monster hits apply Weaken (-1 DEF, 2 turns)." },
+  { key: "pack-tactics", name: "Pack Tactics Den", desc: "+1 ATK per other monster (max +2)." },
+  { key: "brawlers-ring", name: "Brawler's Ring", desc: "First hit each turn reduced by 2 damage." },
+  {
+    key: "carnage-pit",
+    name: "Carnage Pit",
+    desc: "Defenders gain Bloodlust after a kill. Linked: defenders heal 2 at end of turn if any hero in the room is wounded.",
+    synergyTag: "Blood",
+    baseDesc: "Defenders gain Bloodlust for 1 turn after killing a hero.",
+    linkDesc: "At end of turn, defenders heal 2 if any hero in the room is wounded.",
+  },
+  {
+    key: "bulwark-hall",
+    name: "Bulwark Hall",
+    desc: "The first defending monster to act each turn gains Guard 1. Linked: defenders in the room gain +1 DEF.",
+    synergyTag: "Ward",
+    baseDesc: "The first defending monster to act each turn gains Guard 1.",
+    linkDesc: "Defenders in the room gain +1 DEF.",
+  },
+  {
+    key: "pack-blind",
+    name: "Pack Blind",
+    desc: "Defenders in the room gain +1 SPD. Linked: wounded heroes in the room take +1 extra damage from monster strikes.",
+    synergyTag: "Hunt",
+    baseDesc: "Defenders in the room gain +1 SPD.",
+    linkDesc: "Wounded heroes in the room take +1 extra damage from monster strikes.",
+  },
+];
+
+export const TRAP_TYPES = [
+  { key: "spike-pit", name: "Spike Pit", desc: "On entry: 10 damage.", baseDmg: 10, baseCooldown: 1 },
+  { key: "poison-vent", name: "Poison Vent", desc: "On entry: 4 damage + Poison (2 dmg, 3 turns).", baseDmg: 4, baseCooldown: 1 },
+  { key: "frost-rune", name: "Frost Rune", desc: "On entry: 5 damage + Slow (2 turns).", baseDmg: 5, baseCooldown: 1 },
+  { key: "shock-coil", name: "Shock Coil", desc: "On entry: 6 damage + Stun (skip next move).", baseDmg: 6, baseCooldown: 2 },
+  { key: "snare-net", name: "Snare Net", desc: "On entry: Rooted (skip next move).", baseDmg: 0, baseCooldown: 1 },
+  { key: "flame-jet", name: "Flame Jet", desc: "On entry: 8 damage (+4 if already damaged) and Burn.", baseDmg: 8, baseCooldown: 1 },
+  { key: "cursed-brand", name: "Cursed Brand", desc: "On entry: Mark hero; on death +10 Essence.", baseDmg: 0, baseCooldown: 1 },
+  { key: "blink-trap", name: "Blink Trap", desc: "On entry: Teleport hero back 1 tile.", baseDmg: 0, baseCooldown: 2 },
+  { key: "shatter-floor", name: "Shatter Floor", desc: "First entry: 12 damage, then breaks.", baseDmg: 12, baseCooldown: 0 },
+  { key: "arrow-gallery", name: "Arrow Gallery", desc: "On entry: 3 damage + 3 damage next turn.", baseDmg: 3, baseCooldown: 1 },
+  {
+    key: "gore-channel",
+    name: "Gore Channel",
+    desc: "On entry: 5 damage, +4 vs wounded heroes. Linked: trap kills grant +10 Essence.",
+    baseDmg: 5,
+    baseCooldown: 1,
+    synergyTag: "Blood",
+    baseDesc: "On entry, deal 5 damage; if the invader is already below max HP, deal +4 damage.",
+    linkDesc: "Hero deaths caused by this trap grant +10 Essence.",
+  },
+  {
+    key: "warding-sigil",
+    name: "Warding Sigil",
+    desc: "On entry: 4 damage and Weaken for 2 turns. Linked: also applies Slow for 1 turn.",
+    baseDmg: 4,
+    baseCooldown: 1,
+    synergyTag: "Ward",
+    baseDesc: "On entry, deal 4 damage and apply Weaken for 2 turns.",
+    linkDesc: "Also apply Slow for 1 turn.",
+  },
+  {
+    key: "murder-holes",
+    name: "Murder Holes",
+    desc: "On entry: 4 damage and 3 delayed arrow damage next turn. Linked: also applies Marked 1.",
+    baseDmg: 4,
+    baseCooldown: 1,
+    synergyTag: "Hunt",
+    baseDesc: "On entry, deal 4 damage and apply delayed arrow damage for 3 next turn.",
+    linkDesc: "Also apply Marked with value 1.",
+  },
+];
+
 export const STANDARD_ARTIFACTS = [
   {
     key: "graven-coin",
@@ -982,6 +1097,66 @@ export const STANDARD_ARTIFACTS = [
     maxCopies: 1,
     unlockDay: 18,
     mods: { shadyStockBonus: 1 },
+  },
+  {
+    key: "blood-ledger",
+    name: "Blood Ledger",
+    desc: "Hero deaths in Blood-linked rooms grant +2 Essence.",
+    cost: { currency: "soulshards", amount: 26 },
+    tags: ["blood", "economy"],
+    maxCopies: 1,
+    unlockDay: 8,
+    mods: { bloodLinkedEssenceBonus: 2 },
+  },
+  {
+    key: "butchers-hooks",
+    name: "Butcher's Hooks",
+    desc: "Trap kills in Blood-linked rooms grant +1 Soulshard.",
+    cost: { currency: "soulshards", amount: 24 },
+    tags: ["blood", "trap"],
+    maxCopies: 1,
+    unlockDay: 14,
+    mods: { bloodLinkedTrapKillSoulshard: 1 },
+  },
+  {
+    key: "hunters-pennant",
+    name: "Hunter's Pennant",
+    desc: "Hunt-linked traps deal +1 flat damage.",
+    cost: { currency: "essence", amount: 24 },
+    tags: ["hunt", "trap"],
+    maxCopies: 1,
+    unlockDay: 8,
+    mods: { huntLinkedTrapFlatDamage: 1 },
+  },
+  {
+    key: "scent-map",
+    name: "Scent Map",
+    desc: "Hunt-linked rooms gain +1 extra lure and +1 extra invader reveal.",
+    cost: { currency: "soulshards", amount: 22 },
+    tags: ["hunt", "scouting"],
+    maxCopies: 1,
+    unlockDay: 14,
+    mods: { huntLinkedLureBonus: 1, huntLinkedScoutRevealBonus: 1 },
+  },
+  {
+    key: "aegis-nails",
+    name: "Aegis Nails",
+    desc: "Ward-linked monster rooms grant defenders +1 DEF.",
+    cost: { currency: "essence", amount: 28 },
+    tags: ["ward", "monster"],
+    maxCopies: 1,
+    unlockDay: 10,
+    mods: { wardLinkedMonsterDef: 1 },
+  },
+  {
+    key: "lantern-chain",
+    name: "Lantern Chain",
+    desc: "Ward-linked traps start each raid with +1 charge.",
+    cost: { currency: "essence", amount: 30 },
+    tags: ["ward", "trap"],
+    maxCopies: 1,
+    unlockDay: 18,
+    mods: { wardLinkedTrapChargeBonus: 1 },
   },
 ];
 
@@ -1226,6 +1401,33 @@ export function validateGameContent() {
       !artifact.mods
     ) {
       warnings.push(`Standard artifact "${artifact.key || "unknown"}" is missing key fields.`);
+    }
+  }
+
+  for (const room of UTILITY_ROOMS) {
+    if (!room.key || !room.name || !room.desc) {
+      warnings.push(`Utility room "${room.key || "unknown"}" is missing key fields.`);
+    }
+    if (room.synergyTag && (!room.baseDesc || !room.linkDesc)) {
+      warnings.push(`Utility room "${room.key}" needs base/link descriptions for its synergy tag.`);
+    }
+  }
+
+  for (const room of MONSTER_ROOMS) {
+    if (!room.key || !room.name || !room.desc) {
+      warnings.push(`Monster room "${room.key || "unknown"}" is missing key fields.`);
+    }
+    if (room.synergyTag && (!room.baseDesc || !room.linkDesc)) {
+      warnings.push(`Monster room "${room.key}" needs base/link descriptions for its synergy tag.`);
+    }
+  }
+
+  for (const trap of TRAP_TYPES) {
+    if (!trap.key || !trap.name || !trap.desc || !Number.isFinite(trap.baseDmg) || !Number.isFinite(trap.baseCooldown)) {
+      warnings.push(`Trap room "${trap.key || "unknown"}" is missing key fields.`);
+    }
+    if (trap.synergyTag && (!trap.baseDesc || !trap.linkDesc)) {
+      warnings.push(`Trap room "${trap.key}" needs base/link descriptions for its synergy tag.`);
     }
   }
 

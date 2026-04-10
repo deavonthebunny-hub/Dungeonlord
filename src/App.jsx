@@ -10,9 +10,12 @@ import {
   HERO_ARCHETYPE_RULES,
   RAID_DIRECTIVES,
   RAID_TYPE_META,
+  MONSTER_ROOMS,
   STANDARD_ARTIFACTS,
   STANDARD_MONSTERS,
   STATUS_RULES,
+  TRAP_TYPES,
+  UTILITY_ROOMS,
   validateGameContent,
 } from "./gameContent";
 
@@ -367,43 +370,6 @@ const AFFINITY_STAT_MODS = {
   Dark: { hp: 0, atk: 2, def: 0 },
 };
 
-const UTILITY_ROOMS = [
-  { key: "soul-altar", name: "Soul Altar", desc: "Hero dies within 1 tile: +15 Essence." },
-  { key: "siphon-pylon", name: "Essence Siphon Pylon", desc: "Hero takes damage within 1 tile: +1 Essence (cap 10 per hero)." },
-  { key: "reinforced-keystone", name: "Reinforced Keystone", desc: "Monsters within 1 tile gain +2 DEF." },
-  { key: "blood-sigil", name: "Blood Sigil", desc: "Monsters within 1 tile heal +2 HP at end of turn." },
-  { key: "war-drum", name: "War Drum Totem", desc: "Monsters within 1 tile gain +1 ATK." },
-  { key: "haste-glyph", name: "Haste Glyph", desc: "Monsters within 1 tile act first." },
-  { key: "fear-idol", name: "Fear Idol", desc: "Heroes entering adjacent tiles get -1 ATK for 2 turns." },
-  { key: "ward-lantern", name: "Ward Lantern", desc: "Traps within 1 tile deal +25% damage." },
-  { key: "seal-silence", name: "Seal of Silence", desc: "Heroes within 1 tile cannot gain buffs." },
-  { key: "scout-mirror", name: "Scout's Mirror", desc: "Raid start reveals next 2 hero spawns." },
-];
-
-const MONSTER_ROOMS = [
-  { key: "training-den", name: "Training Den", desc: "Placed monsters gain +1 ATK (permanent)." },
-  { key: "thick-hide", name: "Thick Hide Pens", desc: "Placed monsters gain +3 Max HP (permanent)." },
-  { key: "rally-banner", name: "Rally Banner", desc: "If 2+ monsters, they gain +1 ATK." },
-  { key: "ambush-alcove", name: "Ambush Alcove", desc: "First hero entry triggers an extra monster strike." },
-  { key: "savage-kennels", name: "Savage Kennels", desc: "Monsters heal 2 when they deal damage." },
-  { key: "hex-circle", name: "Hex Circle", desc: "Monster hits apply Weaken (-1 DEF, 2 turns)." },
-  { key: "pack-tactics", name: "Pack Tactics Den", desc: "+1 ATK per other monster (max +2)." },
-  { key: "brawlers-ring", name: "Brawler's Ring", desc: "First hit each turn reduced by 2 damage." },
-];
-
-const TRAP_TYPES = [
-  { key: "spike-pit", name: "Spike Pit", desc: "On entry: 10 damage.", baseDmg: 10, baseCooldown: 1 },
-  { key: "poison-vent", name: "Poison Vent", desc: "On entry: 4 damage + Poison (2 dmg, 3 turns).", baseDmg: 4, baseCooldown: 1 },
-  { key: "frost-rune", name: "Frost Rune", desc: "On entry: 5 damage + Slow (2 turns).", baseDmg: 5, baseCooldown: 1 },
-  { key: "shock-coil", name: "Shock Coil", desc: "On entry: 6 damage + Stun (skip next move).", baseDmg: 6, baseCooldown: 2 },
-  { key: "snare-net", name: "Snare Net", desc: "On entry: Rooted (skip next move).", baseDmg: 0, baseCooldown: 1 },
-  { key: "flame-jet", name: "Flame Jet", desc: "On entry: 8 damage (+4 if already damaged) and Burn.", baseDmg: 8, baseCooldown: 1 },
-  { key: "cursed-brand", name: "Cursed Brand", desc: "On entry: Mark hero; on death +10 Essence.", baseDmg: 0, baseCooldown: 1 },
-  { key: "blink-trap", name: "Blink Trap", desc: "On entry: Teleport hero back 1 tile.", baseDmg: 0, baseCooldown: 2 },
-  { key: "shatter-floor", name: "Shatter Floor", desc: "First entry: 12 damage, then breaks.", baseDmg: 12, baseCooldown: 0 },
-  { key: "arrow-gallery", name: "Arrow Gallery", desc: "On entry: 3 damage + 3 damage next turn.", baseDmg: 3, baseCooldown: 1 },
-];
-
 const UTILITY_ICONS = {
   "soul-altar": "SA",
   "siphon-pylon": "SP",
@@ -415,6 +381,9 @@ const UTILITY_ICONS = {
   "ward-lantern": "WL",
   "seal-silence": "SS",
   "scout-mirror": "SM",
+  "butchers-shrine": "BT",
+  "aegis-lantern": "AL",
+  "scent-beacon": "SB",
 };
 
 const MONSTER_ROOM_ICONS = {
@@ -426,6 +395,9 @@ const MONSTER_ROOM_ICONS = {
   "hex-circle": "HC",
   "pack-tactics": "PT",
   "brawlers-ring": "BR",
+  "carnage-pit": "CP",
+  "bulwark-hall": "BH",
+  "pack-blind": "PB",
 };
 
 const TRAP_ICONS = {
@@ -439,6 +411,9 @@ const TRAP_ICONS = {
   "blink-trap": "BT",
   "shatter-floor": "SF",
   "arrow-gallery": "AG",
+  "gore-channel": "GC",
+  "warding-sigil": "WS",
+  "murder-holes": "MH",
 };
 
 const TRAP_GLYPHS = {
@@ -452,6 +427,9 @@ const TRAP_GLYPHS = {
   "blink-trap": { unarmed: "\u25C9", armed: "\u25C9" },
   "shatter-floor": { unarmed: "\u25A7", armed: "\u25A7" },
   "arrow-gallery": { unarmed: "\u27B5", armed: "\u27B5" },
+  "gore-channel": { unarmed: "GC", armed: "GC" },
+  "warding-sigil": { unarmed: "WS", armed: "WS" },
+  "murder-holes": { unarmed: "MH", armed: "MH" },
 };
 
 const UTILITY_GLYPHS = {
@@ -465,11 +443,47 @@ const UTILITY_GLYPHS = {
   "ward-lantern": "\u263C",
   "seal-silence": "\u26D4",
   "scout-mirror": "\u25C8",
+  "butchers-shrine": "BT",
+  "aegis-lantern": "AL",
+  "scent-beacon": "SB",
 };
 
 const UTILITY_MAP = Object.fromEntries(UTILITY_ROOMS.map((r) => [r.key, r]));
 const MONSTER_ROOM_MAP = Object.fromEntries(MONSTER_ROOMS.map((r) => [r.key, r]));
 const TRAP_MAP = Object.fromEntries(TRAP_TYPES.map((r) => [r.key, r]));
+const SYNERGY_TAGS = new Set(["Blood", "Ward", "Hunt"]);
+
+function roomDefinitionForTile(tile) {
+  if (!tile?.room) return null;
+  if (tile.room === "trap") return TRAP_MAP[tile.trapType] || null;
+  if (tile.room === "monster") return MONSTER_ROOM_MAP[tile.roomType] || null;
+  if (tile.room === "utility") return UTILITY_MAP[tile.roomType] || null;
+  return null;
+}
+
+function roomSynergyTag(tile) {
+  const tag = roomDefinitionForTile(tile)?.synergyTag || null;
+  return SYNERGY_TAGS.has(tag) ? tag : null;
+}
+
+function isLinkedRoom(grid, x, y) {
+  const tile = grid?.[y]?.[x];
+  const tag = roomSynergyTag(tile);
+  if (!tag) return false;
+  return neighbors(x, y).some((pos) => roomSynergyTag(grid?.[pos.y]?.[pos.x]) === tag);
+}
+
+function roomLinkInfoAt(grid, x, y) {
+  const tile = grid?.[y]?.[x];
+  const def = roomDefinitionForTile(tile);
+  const tag = roomSynergyTag(tile);
+  return {
+    tag,
+    linked: tag ? isLinkedRoom(grid, x, y) : false,
+    baseDesc: def?.baseDesc || "",
+    linkDesc: def?.linkDesc || "",
+  };
+}
 
 const DAILY_EVENTS = [
   { key: "none", name: "Calm Day", desc: "No unusual effects today.", mods: {} },
@@ -1517,6 +1531,18 @@ function trapCooldownAfterTrigger(trapType, star, doctrineEffects = null) {
   return Math.max(0, baseCooldown - Math.floor((clampMonsterStar(star) - 1) / 2) - (doctrineEffects?.trapCooldownReduction || 0));
 }
 
+function trapChargesForTile(grid, tile, x, y, doctrineEffects = null, artifactMods = null) {
+  const star = clampMonsterStar(tile?.trapStar ?? tile?.trapStars ?? 1);
+  const bonus =
+    (doctrineEffects?.trapChargeBonus || 0) +
+    (artifactMods?.trapChargeBonus || 0) +
+    (Number.isFinite(x) && Number.isFinite(y) ? wardTrapChargeBonusAt(grid, x, y, artifactMods || {}) : 0);
+  return trapChargesForStar(star, {
+    ...(doctrineEffects || {}),
+    trapChargeBonus: bonus,
+  });
+}
+
 function scaleStat(base, stars) {
   return Math.max(1, Math.round(base * monsterStarMultiplier(stars)));
 }
@@ -2209,6 +2235,13 @@ function calcArtifactMods(artifacts, day = 1) {
     utilityPotencyBonus: 0,
     roomWithdrawHealFull: 0,
     shadyStockBonus: 0,
+    bloodLinkedEssenceBonus: 0,
+    bloodLinkedTrapKillSoulshard: 0,
+    huntLinkedTrapFlatDamage: 0,
+    huntLinkedLureBonus: 0,
+    huntLinkedScoutRevealBonus: 0,
+    wardLinkedMonsterDef: 0,
+    wardLinkedTrapChargeBonus: 0,
   };
   for (const artifact of artifacts || []) {
     const art = hydrateArtifactDefinition(artifact);
@@ -2367,6 +2400,106 @@ function utilityTier(grid, x, y, key) {
     }
   }
   return tier;
+}
+
+function linkedUtilityTier(grid, x, y, key) {
+  let tier = 0;
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+      const tile = grid[ny]?.[nx];
+      if (tile?.room === "utility" && tile.roomType === key && isLinkedRoom(grid, nx, ny)) {
+        tier = Math.max(tier, tile.roomTier || 1);
+      }
+    }
+  }
+  return tier;
+}
+
+function orthogonalUtilityTier(grid, x, y, key, linkedOnly = false) {
+  let tier = 0;
+  for (const pos of neighbors(x, y)) {
+    const tile = grid[pos.y]?.[pos.x];
+    if (tile?.room !== "utility" || tile.roomType !== key) continue;
+    if (linkedOnly && !isLinkedRoom(grid, pos.x, pos.y)) continue;
+    tier = Math.max(tier, tile.roomTier || 1);
+  }
+  return tier;
+}
+
+function anyLinkedUtilityRoom(grid, key) {
+  for (let y = 0; y < H; y += 1) {
+    for (let x = 0; x < W; x += 1) {
+      const tile = grid[y]?.[x];
+      if (tile?.room === "utility" && tile.roomType === key && isLinkedRoom(grid, x, y)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function roomLureBonusAt(grid, x, y, artifactMods = {}) {
+  const tile = grid?.[y]?.[x];
+  let bonus = utilityTier(grid, x, y, "scent-beacon") > 0 ? 1 : 0;
+  if (tile?.room && roomSynergyTag(tile) === "Hunt" && isLinkedRoom(grid, x, y)) {
+    bonus += artifactMods.huntLinkedLureBonus || 0;
+  }
+  return bonus;
+}
+
+function huntScoutRevealBonus(grid, artifactMods = {}) {
+  return anyLinkedUtilityRoom(grid, "scent-beacon") ? 1 + (artifactMods.huntLinkedScoutRevealBonus || 0) : 0;
+}
+
+function bloodDeathBonuses(grid, x, y, why, artifactMods = {}) {
+  const tile = grid?.[y]?.[x];
+  const trapKill = why === "trap" || why === "arrows";
+  const linkInfo = roomLinkInfoAt(grid, x, y);
+  let extraEssence = utilityTier(grid, x, y, "butchers-shrine") > 0 ? 1 : 0;
+  let extraSoulshards = trapKill && linkedUtilityTier(grid, x, y, "butchers-shrine") > 0 ? 1 : 0;
+  if (linkInfo.linked && linkInfo.tag === "Blood") {
+    extraEssence += artifactMods.bloodLinkedEssenceBonus || 0;
+    if (trapKill) {
+      extraSoulshards += artifactMods.bloodLinkedTrapKillSoulshard || 0;
+      if (tile?.room === "trap" && tile.trapType === "gore-channel") {
+        extraEssence += 10;
+      }
+    }
+  }
+  return { extraEssence, extraSoulshards };
+}
+
+function wardMonsterDefBonus(grid, x, y, artifactMods = {}) {
+  const tile = grid?.[y]?.[x];
+  if (tile?.room !== "monster") return 0;
+  let bonus = 0;
+  if (tile.roomType === "bulwark-hall" && isLinkedRoom(grid, x, y)) {
+    bonus += 1;
+  }
+  if (roomSynergyTag(tile) === "Ward" && isLinkedRoom(grid, x, y)) {
+    bonus += artifactMods.wardLinkedMonsterDef || 0;
+  }
+  return bonus;
+}
+
+function wardTrapChargeBonusAt(grid, x, y, artifactMods = {}) {
+  const tile = grid?.[y]?.[x];
+  let bonus = linkedUtilityTier(grid, x, y, "aegis-lantern") > 0 ? 1 : 0;
+  if (tile?.room === "trap" && roomSynergyTag(tile) === "Ward" && isLinkedRoom(grid, x, y)) {
+    bonus += artifactMods.wardLinkedTrapChargeBonus || 0;
+  }
+  return bonus;
+}
+
+function huntTrapFlatDamageBonus(grid, x, y, artifactMods = {}) {
+  const tile = grid?.[y]?.[x];
+  if (tile?.room === "trap" && roomSynergyTag(tile) === "Hunt" && isLinkedRoom(grid, x, y)) {
+    return artifactMods.huntLinkedTrapFlatDamage || 0;
+  }
+  return 0;
 }
 
 function hasUtilityAura(grid, x, y, key) {
@@ -2766,7 +2899,7 @@ function chooseObjectiveTarget(entity, grid, corePos, raidIntel = null) {
     : null;
 }
 
-function chooseInvaderMove(entity, grid, corePos, raidBoons = [], doctrineEffects = {}, raidIntel = null) {
+function chooseInvaderMove(entity, grid, corePos, raidBoons = [], doctrineEffects = {}, raidIntel = null, artifactMods = {}) {
   if (!entity || !corePos) return { next: null, options: [], intent: "No path" };
   const archetype = getHeroArchetypeRule(entity.archetypeKey);
   const directiveKey = entity.raidDirectiveKey || raidIntel?.directive || "rush-core";
@@ -2811,7 +2944,11 @@ function chooseInvaderMove(entity, grid, corePos, raidBoons = [], doctrineEffect
       const localDanger = currentMemory.danger?.[nextKey] || 0;
       const sharedDanger = raidIntel?.dangerTiles?.[nextKey] || 0;
       const threat = tileThreatScore(grid, next.x, next.y) + localDanger + (["cautious", "purifier", "scout"].includes(archetype.key) ? sharedDanger : sharedDanger * 0.35);
-      const lure = branchLureScore(grid, next, corePos) + (raidMods.lureBoost || 0) + (doctrineEffects.utilityScoutBonus || 0);
+      const lure =
+        branchLureScore(grid, next, corePos) +
+        roomLureBonusAt(grid, next.x, next.y, artifactMods) +
+        (raidMods.lureBoost || 0) +
+        (doctrineEffects.utilityScoutBonus || 0);
       const roomBias =
         (tile.room === "trap" ? archetype.weights.trap + (directive.weights?.trap || 0) : 0) +
         (tile.room === "monster" ? archetype.weights.monster + (directive.weights?.monster || 0) : 0) +
@@ -3442,7 +3579,9 @@ function defaultState() {
           t.trapStar = payload.trapStar ?? payload.trapStars ?? 1;
           t.trapStars = payload.trapStar ?? payload.trapStars ?? 1;
           t.trapRank = payload.trapRank ?? payload.roomTier ?? 1;
-          t.trapChargesRemaining = payload.trapChargesRemaining ?? (payload.trap ? trapChargesForStar(payload.trapStar ?? payload.trapStars ?? 1) : 0);
+          t.trapChargesRemaining = payload.trap
+            ? trapChargesForTile(grid, t, x, y, getDoctrineEffects(s.doctrines), calcArtifactMods(s.artifacts, s.day))
+            : 0;
           t.trapCooldownRemaining = payload.trapCooldownRemaining ?? 0;
           t.trapBroken = payload.trapBroken;
           t.ambushUsed = payload.ambushUsed;
@@ -3599,10 +3738,7 @@ function defaultState() {
       t.trapStar = trapStar;
       t.trapStars = trapStar;
       t.trapRank = 1;
-      t.trapChargesRemaining = trapChargesForStar(trapStar, {
-        ...getDoctrineEffects(s.doctrines),
-        trapChargeBonus: (getDoctrineEffects(s.doctrines).trapChargeBonus || 0) + (calcArtifactMods(s.artifacts, s.day).trapChargeBonus || 0),
-      });
+      t.trapChargesRemaining = trapChargesForTile(grid, t, s.selected.x, s.selected.y, getDoctrineEffects(s.doctrines), calcArtifactMods(s.artifacts, s.day));
       t.trapCooldownRemaining = 0;
       t.trapBroken = false;
       t.monsters = [];
@@ -3710,10 +3846,7 @@ function defaultState() {
         if (t.trapBroken) {
           t.trapBroken = false;
         }
-        t.trapChargesRemaining = trapChargesForStar(t.trapStar || t.trapStars || 1, {
-          ...getDoctrineEffects(s.doctrines),
-          trapChargeBonus: (getDoctrineEffects(s.doctrines).trapChargeBonus || 0) + (calcArtifactMods(s.artifacts, s.day).trapChargeBonus || 0),
-        });
+        t.trapChargesRemaining = trapChargesForTile(grid, t, s.selected.x, s.selected.y, getDoctrineEffects(s.doctrines), calcArtifactMods(s.artifacts, s.day));
         t.trapCooldownRemaining = 0;
         return addLog({ ...s, grid }, `Trap armed. ${t.trapChargesRemaining} charge(s) ready.`);
       }
@@ -4140,10 +4273,7 @@ function defaultState() {
       if (t.room === "trap") {
         t.trapRank = nextTier;
         if (t.trap) {
-          t.trapChargesRemaining = trapChargesForStar(t.trapStar || t.trapStars || 1, {
-            ...getDoctrineEffects(s.doctrines),
-            trapChargeBonus: (getDoctrineEffects(s.doctrines).trapChargeBonus || 0) + (calcArtifactMods(s.artifacts, s.day).trapChargeBonus || 0),
-          });
+          t.trapChargesRemaining = trapChargesForTile(grid, t, s.selected.x, s.selected.y, getDoctrineEffects(s.doctrines), calcArtifactMods(s.artifacts, s.day));
           t.trapCooldownRemaining = 0;
         }
       }
@@ -4257,7 +4387,7 @@ function defaultState() {
             doctrineEffects.utilityScoutBonus +
             (artifactMods.utilityPotencyBonus || 0)
           : 0;
-      const revealBase = artifactMods.scoutRevealBonus || 0;
+      const revealBase = (artifactMods.scoutRevealBonus || 0) + huntScoutRevealBonus(s.grid, artifactMods);
       if (mirrorTier > 0 || revealBase > 0) {
         const revealCount = Math.min(party.length, revealBase + (mirrorTier > 0 ? 2 + (mirrorTier - 1) + raidMods.scoutRevealBonus : 0));
         scoutQueue = party.slice(0, revealCount).map((h) => ({ ...h }));
@@ -4343,10 +4473,7 @@ function defaultState() {
             t.trapStars = trapStar;
             t.trapRank = Math.max(1, t.trapRank ?? t.roomTier ?? 1);
             if (t.trap && !t.trapBroken) {
-              t.trapChargesRemaining = trapChargesForStar(trapStar, {
-                ...getDoctrineEffects(s.doctrines),
-                trapChargeBonus: (getDoctrineEffects(s.doctrines).trapChargeBonus || 0) + (calcArtifactMods(s.artifacts, s.day).trapChargeBonus || 0),
-              });
+              t.trapChargesRemaining = trapChargesForTile(grid, t, x, y, getDoctrineEffects(s.doctrines), calcArtifactMods(s.artifacts, s.day));
               t.trapCooldownRemaining = 0;
             } else {
               t.trapChargesRemaining = 0;
@@ -4398,7 +4525,7 @@ function defaultState() {
           : 0;
       const doctrineShield = doctrineEffects.coreShieldBonus || 0;
       const fortifiedCoreShield = (s.coreShield || 0) + doctrineShield + (raidMods.coreShieldBonus || 0) + (artifactModsStart.coreStartShield || 0);
-      const revealBase = artifactModsStart.scoutRevealBonus || 0;
+      const revealBase = (artifactModsStart.scoutRevealBonus || 0) + huntScoutRevealBonus(s.grid, artifactModsStart);
       if (mirrorTier > 0 || revealBase > 0) {
         const revealCount = Math.min(
           partyQueue.length,
@@ -4665,8 +4792,10 @@ function defaultState() {
 
       const effectiveMonsterSpd = (monster, x, y) => {
         let spd = monsterSpeedValue(monster);
+        const room = grid[y]?.[x];
         const hasteTier = effectiveUtilityTier(x, y, "haste-glyph");
         if (hasteTier > 0) spd += hasteTier;
+        if (room?.room === "monster" && room.roomType === "pack-blind") spd += 1;
         if (dominionEffects.monsterFirstStrike) spd += 2;
         return Math.max(1, spd);
       };
@@ -4679,6 +4808,8 @@ function defaultState() {
         if (["tank", "warden", "knight"].some((tag) => classLabel.includes(tag))) guardValue += 1;
         if (monsterHasPassive(monster, "bulwark")) guardValue += monsterPassiveRank(monster, "bulwark");
         if (room.roomType === "brawlers-ring") guardValue += 2;
+        if (room.roomType === "bulwark-hall") guardValue += 1;
+        if (orthogonalUtilityTier(grid, x, y, "aegis-lantern") > 0) guardValue += 1;
         if (guardValue > 0) {
           monster.statuses.guard = {
             turns: 1,
@@ -4695,8 +4826,9 @@ function defaultState() {
         const extraShards = artifactMods.soulshardOnKill || 0;
         const ashTributeGain = isTimedBlessingActive(s.ashTributeUntilDay, s.day) ? 3 : 0;
         const trapKillEssence = why === "trap" || why === "arrows" ? artifactMods.trapKillEssence || 0 : 0;
-        essence += essenceGain + extraEssence + trapKillEssence;
-        soulshards += shardGain + extraShards;
+        const linkedBlood = bloodDeathBonuses(grid, h.x, h.y, why, artifactMods);
+        essence += essenceGain + extraEssence + trapKillEssence + linkedBlood.extraEssence;
+        soulshards += shardGain + extraShards + linkedBlood.extraSoulshards;
         kills += 1;
         const markedValue = getStatus(h, "marked").turns > 0 ? getStatus(h, "marked").value || 0 : h.counters?.cursedMark || 0;
         if (markedValue) {
@@ -4714,8 +4846,8 @@ function defaultState() {
           essence += ashTributeGain;
           push(`Ash Tribute consumes ${invaderLabel(h)}. +${ashTributeGain} Essence`);
         }
-        const totalEssence = essenceGain + extraEssence + trapKillEssence;
-        const totalShards = shardGain + extraShards;
+        const totalEssence = essenceGain + extraEssence + trapKillEssence + linkedBlood.extraEssence;
+        const totalShards = shardGain + extraShards + linkedBlood.extraSoulshards;
         const deathTile = grid[h.y]?.[h.x];
         if (why === "trap" || why === "arrows") {
           councilQuestCounters.trapKillCount += 1;
@@ -4840,6 +4972,7 @@ function defaultState() {
           bonus += roomPassiveRank(room, "warding");
         }
         bonus += artifactMods.monsterDef || 0;
+        bonus += wardMonsterDefBonus(grid, x, y, artifactMods);
         return bonus;
       }
 
@@ -4852,7 +4985,8 @@ function defaultState() {
           (trapRank - 1) * 2 +
           extraFlat +
           (doctrineEffectsLocal.trapFlatDamage || 0) +
-          (artifactMods.trapFlatDamage || 0);
+          (artifactMods.trapFlatDamage || 0) +
+          huntTrapFlatDamageBonus(grid, x, y, artifactMods);
         let mult = 1;
         const wardTier = effectiveUtilityTier(x, y, "ward-lantern");
         if (wardTier > 0) mult += 0.25 + 0.05 * (wardTier - 1);
@@ -4985,6 +5119,12 @@ function defaultState() {
             if (h.counters?.trapDamaged) {
               bonus += artifactMods.trapDamageVulnerability || 0;
             }
+            if (t.roomType === "pack-blind" && isLinkedRoom(grid, h.x, h.y) && h.hp < safeEntityMaxHp(h)) {
+              bonus += 1;
+            }
+            if (getStatus(m, "bloodlust").turns > 0) {
+              bonus += getStatus(m, "bloodlust").value || 1;
+            }
             const totalBase = monsterAtk + bonus;
             const defense = heroDefValue(h);
             const dmg = applyHeroDamage(h, totalBase, h.x, h.y, true);
@@ -5016,6 +5156,7 @@ function defaultState() {
             t.ambushUsed = true;
             push(`Ambush! ${m.name} -> ${invaderLabel(h)}: base ${ambush.base}, DEF ${ambush.defense}, final ${ambush.dmg}. HP ${Math.max(0, h.hp)}`);
             if (h.hp <= 0) {
+              if (t.roomType === "carnage-pit") setStatus(m, "bloodlust", 1, 1);
               heroDies(h, "ambushed");
               continue;
             }
@@ -5027,6 +5168,7 @@ function defaultState() {
               push(`${m.name} -> ${invaderLabel(h)}: base ${hitOnInvader.base}, DEF ${hitOnInvader.defense}, final ${hitOnInvader.dmg}. HP ${Math.max(0, h.hp)} | SPD ${monsterSpd} vs ${heroSpd}`);
             }
             if (h.hp <= 0) {
+              if (t.roomType === "carnage-pit") setStatus(m, "bloodlust", 1, 1);
               heroDies(h, "killed in battle");
               continue;
             }
@@ -5061,6 +5203,7 @@ function defaultState() {
           }
 
           if (h.hp <= 0) {
+            if (t.roomType === "carnage-pit") setStatus(m, "bloodlust", 1, 1);
             heroDies(h, "killed in battle");
             continue;
           }
@@ -5093,7 +5236,7 @@ function defaultState() {
         }
 
         if (!skipped) {
-          const moveChoice = chooseInvaderMove(h, grid, corePos, raidBoons, doctrineEffectsLocal, raidIntel);
+          const moveChoice = chooseInvaderMove(h, grid, corePos, raidBoons, doctrineEffectsLocal, raidIntel, artifactMods);
           if (moveChoice.decisionLog) {
             push(moveChoice.decisionLog);
           }
@@ -5168,7 +5311,12 @@ function defaultState() {
             const cooldown = Math.max(0, t2.trapCooldownRemaining ?? 0);
             if (charges > 0 && cooldown === 0) {
               const trapBase = TRAP_MAP[trapKey]?.baseDmg || 0;
-              const extraFlat = trapKey === "flame-jet" && h.counters.tookDamageThisRaid ? 4 : 0;
+              const extraFlat =
+                trapKey === "flame-jet" && h.counters.tookDamageThisRaid
+                  ? 4
+                  : trapKey === "gore-channel" && h.hp < safeEntityMaxHp(h)
+                  ? 4
+                  : 0;
               let trapDmg = trapDamage(t2, trapBase, h.x, h.y, extraFlat);
 
               if (heroHasPassive(h, "Keen")) {
@@ -5190,6 +5338,15 @@ function defaultState() {
                 if (tryApplyDebuff(h, "poison", poisonTurns, poisonValue)) {
                   shareRaidDanger(h.x, h.y, poisonValue);
                   push(`${invaderLabel(h)} is poisoned.`);
+                }
+              } else if (trapKey === "warding-sigil") {
+                if (tryApplyDebuff(h, "weaken", 2, 1)) {
+                  shareRaidDanger(h.x, h.y, 2);
+                  push(`${invaderLabel(h)} is weakened.`);
+                }
+                if (isLinkedRoom(grid, h.x, h.y) && tryApplyDebuff(h, "slow", 1, 1)) {
+                  shareRaidDanger(h.x, h.y, 1);
+                  push(`${invaderLabel(h)} is slowed by the linked sigil.`);
                 }
               } else if (trapKey === "flame-jet") {
                 const burnTurns = 2 + Math.floor((trapStar - 1) / 2);
@@ -5239,6 +5396,15 @@ function defaultState() {
                 setStatus(h, "arrow", 1, arrowDamage);
                 shareRaidDanger(h.x, h.y, Math.max(1, Math.round(arrowDamage / 2)));
                 push(`${invaderLabel(h)} is targeted by arrows.`);
+              } else if (trapKey === "murder-holes") {
+                const arrowDamage = trapDamage({ ...t2, trapType: "arrow-gallery" }, 3, h.x, h.y, 0);
+                setStatus(h, "arrow", 1, arrowDamage);
+                shareRaidDanger(h.x, h.y, Math.max(1, Math.round(arrowDamage / 2)));
+                push(`${invaderLabel(h)} is pinned for follow-up fire.`);
+                if (isLinkedRoom(grid, h.x, h.y)) {
+                  setStatus(h, "marked", 2, 1);
+                  push(`${invaderLabel(h)} is marked by the linked murder holes.`);
+                }
               }
 
               t2.trapChargesRemaining = Math.max(0, charges - 1);
@@ -5321,6 +5487,14 @@ function defaultState() {
                 m.hp = Math.min(monsterMaxHp(m), m.hp + heal);
               }
             }
+            if (t.roomType === "carnage-pit" && isLinkedRoom(grid, x, y)) {
+              const woundedHeroHere = heroesOut.some((hero) => hero.x === x && hero.y === y && hero.hp < safeEntityMaxHp(hero));
+              if (woundedHeroHere) {
+                for (const m of t.monsters) {
+                  m.hp = Math.min(monsterMaxHp(m), m.hp + 2);
+                }
+              }
+            }
             if (roomHasPassive(t, "bloodcall")) {
               for (const m of t.monsters) {
                 m.hp = Math.min(monsterMaxHp(m), m.hp + roomPassiveRank(t, "bloodcall"));
@@ -5334,6 +5508,9 @@ function defaultState() {
               if (lowest) {
                 lowest.hp = Math.min(monsterMaxHp(lowest), lowest.hp + roomPassiveRank(t, "mender"));
               }
+            }
+            for (const m of t.monsters) {
+              tickStatus(m, "bloodlust");
             }
           }
         }
@@ -5750,7 +5927,7 @@ function defaultState() {
               doctrineEffects.utilityScoutBonus +
               (artifactMods.utilityPotencyBonus || 0)
             : 0;
-        const revealBase = artifactMods.scoutRevealBonus || 0;
+        const revealBase = (artifactMods.scoutRevealBonus || 0) + huntScoutRevealBonus(s.grid, artifactMods);
         if (mirrorTier > 0 || revealBase > 0) {
           const revealCount = Math.min(party.length, revealBase + (mirrorTier > 0 ? 2 + (mirrorTier - 1) + raidMods.scoutRevealBonus : 0));
           scoutQueue = party.slice(0, revealCount).map((h) => ({ ...h }));
@@ -5819,7 +5996,7 @@ function defaultState() {
               doctrineEffects.utilityScoutBonus +
               (artifactMods.utilityPotencyBonus || 0)
             : 0;
-        const revealBase = artifactMods.scoutRevealBonus || 0;
+        const revealBase = (artifactMods.scoutRevealBonus || 0) + huntScoutRevealBonus(s.grid, artifactMods);
         if (mirrorTier > 0 || revealBase > 0) {
           const revealCount = Math.min(party.length, revealBase + (mirrorTier > 0 ? 2 + (mirrorTier - 1) + raidMods.scoutRevealBonus : 0));
           scoutQueue = party.slice(0, revealCount).map((h) => ({ ...h }));
@@ -6115,8 +6292,9 @@ function defaultState() {
     return tile.room;
   }
 
-  function roomTypeDesc(tile) {
+  function roomTypeDesc(tile, x = state.selected.x, y = state.selected.y) {
     if (!tile.room) return "";
+    const linkInfo = roomLinkInfoAt(state.grid, x, y);
     if (tile.room === "trap") {
       const tier = tile.roomTier || 1;
       const trap = TRAP_MAP[tile.trapType];
@@ -6126,14 +6304,17 @@ function defaultState() {
       const rank = Math.max(1, tile.trapRank ?? tier);
       const scaled = Math.max(
         0,
-        Math.round(base * (1 + 0.25 * (star - 1)) + (rank - 1) * 2 + doctrineEffects.trapFlatDamage + (artifactMods.trapFlatDamage || 0))
+        Math.round(
+          base * (1 + 0.25 * (star - 1)) +
+            (rank - 1) * 2 +
+            doctrineEffects.trapFlatDamage +
+            (artifactMods.trapFlatDamage || 0) +
+            huntTrapFlatDamageBonus(state.grid, x, y, artifactMods)
+        )
       );
-      const charges = trapChargesForStar(star, {
-        ...doctrineEffects,
-        trapChargeBonus: (doctrineEffects.trapChargeBonus || 0) + (artifactMods.trapChargeBonus || 0),
-      });
+      const charges = trapChargesForTile(state.grid, tile, x, y, doctrineEffects, artifactMods);
       const cooldown = trapCooldownAfterTrigger(tile.trapType, star, doctrineEffects);
-      return `${trap.desc} Tier ${tier}. ${formatStars(star)} / Rank ${rank}. Trigger ${scaled} dmg, ${charges} charge(s), cooldown ${cooldown}.`;
+      return `${trap.baseDesc || trap.desc} Tier ${tier}. ${formatStars(star)} / Rank ${rank}. Trigger ${scaled} dmg, ${charges} charge(s), cooldown ${cooldown}.${linkInfo.linked && trap.linkDesc ? ` Linked: ${trap.linkDesc}` : ""}`;
     }
     if (tile.room === "monster") {
       const tier = tile.roomTier || 1;
@@ -6144,9 +6325,14 @@ function defaultState() {
       if (tile.roomType === "thick-hide") {
         return `Tier ${tier}: Monsters placed here gain +${3 + (tier - 1) * 2} Max HP permanently. Cap ${cap}.`;
       }
-      return `${MONSTER_ROOM_MAP[tile.roomType]?.desc || "Monster Room"} Cap ${cap}.`;
+      const roomDef = MONSTER_ROOM_MAP[tile.roomType];
+      return `${roomDef?.baseDesc || roomDef?.desc || "Monster Room"} Cap ${cap}.${linkInfo.linked && roomDef?.linkDesc ? ` Linked: ${roomDef.linkDesc}` : ""}`;
     }
     if (tile.room === "utility") {
+      const roomDef = UTILITY_MAP[tile.roomType];
+      if (roomDef?.baseDesc) {
+        return `${roomDef.baseDesc}${linkInfo.linked && roomDef.linkDesc ? ` Linked: ${roomDef.linkDesc}` : ""}`;
+      }
       const tier =
         (tile.roomTier || 1) +
         doctrineEffects.utilityPotencyBonus +
@@ -6176,7 +6362,7 @@ function defaultState() {
       if (tile.roomType === "scout-mirror") {
         return `Tier ${tier}: Raid start reveals next ${2 + (tier - 1)} hero spawns.`;
       }
-      return UTILITY_MAP[tile.roomType]?.desc || "";
+      return roomDef?.desc || "";
     }
     return "";
   }
@@ -6266,7 +6452,11 @@ function defaultState() {
     return Math.max(
       0,
       Math.round(
-        (trap.baseDmg * (1 + 0.25 * (star - 1)) + (rank - 1) * 2 + doctrineEffects.trapFlatDamage + (artifactMods.trapFlatDamage || 0)) *
+        (trap.baseDmg * (1 + 0.25 * (star - 1)) +
+          (rank - 1) * 2 +
+          doctrineEffects.trapFlatDamage +
+          (artifactMods.trapFlatDamage || 0) +
+          huntTrapFlatDamageBonus(state.grid, x, y, artifactMods)) *
           mult
       )
     );
@@ -6293,7 +6483,9 @@ function defaultState() {
 
   const selectedTileAuras = describeTileAuras(state.selected.x, state.selected.y);
   const selectedHeroIntent =
-    selectedHeroes[0] && core ? chooseInvaderMove(selectedHeroes[0], state.grid, core, state.activeRaidBoons, doctrineEffects, state.raidIntel) : null;
+    selectedHeroes[0] && core
+      ? chooseInvaderMove(selectedHeroes[0], state.grid, core, state.activeRaidBoons, doctrineEffects, state.raidIntel, artifactMods)
+      : null;
   const focusedCouncilFavor = focusedCouncilMember ? state.councilFavor?.[focusedCouncilMember.key] || 0 : 0;
   const focusedCouncilSponsor =
     focusedCouncilMember && state.councilSession?.sponsors
@@ -6311,7 +6503,7 @@ function defaultState() {
 
   const previewPathKeys = useMemo(() => {
     if (selectedHeroes[0] && core) {
-      const choice = chooseInvaderMove(selectedHeroes[0], state.grid, core, state.activeRaidBoons, doctrineEffects, state.raidIntel);
+      const choice = chooseInvaderMove(selectedHeroes[0], state.grid, core, state.activeRaidBoons, doctrineEffects, state.raidIntel, artifactMods);
       const current = keyOf(selectedHeroes[0].x, selectedHeroes[0].y);
       const previewKeys = new Set([current]);
       const objectiveTarget = choice?.targetTile || core;
@@ -6341,7 +6533,7 @@ function defaultState() {
 
   const lureCandidateKeys = useMemo(() => {
     if (!selectedHeroes[0] || !core) return new Set();
-    const choice = chooseInvaderMove(selectedHeroes[0], state.grid, core, state.activeRaidBoons, doctrineEffects, state.raidIntel);
+    const choice = chooseInvaderMove(selectedHeroes[0], state.grid, core, state.activeRaidBoons, doctrineEffects, state.raidIntel, artifactMods);
     return new Set(
       (choice.options || [])
         .filter((option) => option.lure >= 4 && !option.tile.core)
@@ -6369,8 +6561,11 @@ function defaultState() {
   const canEndTurn = !locked && isBattlePhase && (state.raidActive || state.heroes.length > 0);
   const nextUpgradeCost = scaleByDay(25 + dungeonLevel * 15, state.day, 0.03, 3.0);
   const selectedIsAshBreach = isAshBreachAt(state.ashTrial, state.selected.x, state.selected.y);
+  const selectedLinkInfo = roomLinkInfoAt(state.grid, state.selected.x, state.selected.y);
   const selectedReadiness = tileStateChip(selectedTile, state.selected.x, state.selected.y) || "n/a";
-  const selectedTileEffect = roomTypeDesc(selectedTile) || "n/a";
+  const selectedTileEffect = roomTypeDesc(selectedTile, state.selected.x, state.selected.y) || "n/a";
+  const selectedLinkLabel = selectedLinkInfo.tag ? `${selectedLinkInfo.tag} | ${selectedLinkInfo.linked ? "Linked" : "Unlinked"}` : "none";
+  const selectedLinkBonus = selectedLinkInfo.linked ? selectedLinkInfo.linkDesc || "Active link bonus." : "n/a";
   const selectedTileFlags = [
     selectedTile.entrance ? "Entrance" : null,
     selectedTile.core ? "Core" : null,
@@ -6817,9 +7012,17 @@ function defaultState() {
                         Heroes {selectedHeroes.length} | Monsters {selectedTile.monsters.length}
                       </div>
                     </div>
+                    <div className="dockFact">
+                      <span className="dockLabel">Link</span>
+                      <div className="dockValue">{selectedLinkLabel}</div>
+                    </div>
                     <div className="dockFact dockFactWide">
                       <span className="dockLabel">Trap</span>
                       <div className="dockValue">{selectedTrapSummary}</div>
+                    </div>
+                    <div className="dockFact dockFactWide">
+                      <span className="dockLabel">Link Bonus</span>
+                      <div className="dockValue">{selectedLinkBonus}</div>
                     </div>
                     <div className="dockFact dockFactWide">
                       <span className="dockLabel">Effect</span>
@@ -6997,8 +7200,14 @@ function defaultState() {
                 <div>{selectedTile.room ? selectedTile.roomTier || 1 : "n/a"}</div>
                 <div>Monster Cap</div>
                 <div>{effectiveMonsterRoomCap(selectedTile)}</div>
+                <div>Synergy Tag</div>
+                <div>{selectedLinkInfo.tag || "none"}</div>
+                <div>Link State</div>
+                <div>{selectedLinkInfo.tag ? (selectedLinkInfo.linked ? "Linked" : "Unlinked") : "n/a"}</div>
+                <div>Linked Bonus</div>
+                <div>{selectedLinkBonus}</div>
                 <div>Room Effect</div>
-                <div>{roomTypeDesc(selectedTile) || "n/a"}</div>
+                <div>{roomTypeDesc(selectedTile, state.selected.x, state.selected.y) || "n/a"}</div>
                 <div>Readiness</div>
                 <div>{selectedReadiness}</div>
                 <div>Trap Armed</div>
@@ -8166,6 +8375,20 @@ function defaultState() {
             </div>
 
             <div className="card">
+              <div className="cardTitle">Room Links</div>
+              <div className="entityList">
+                <div className="entityItem">
+                  <div className="entityName">Link Rule</div>
+                  <div className="entityMeta">New Blood, Ward, and Hunt rooms become Linked when at least one orthogonally adjacent room shares the same tag.</div>
+                </div>
+                <div className="entityItem">
+                  <div className="entityName">No Stacking</div>
+                  <div className="entityMeta">A linked bonus only needs one matching neighbor and does not stack from multiple matching neighbors.</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="card">
               <div className="cardTitle">Utility Rooms</div>
               <div className="entityList">
                 {UTILITY_ROOMS.map((room) => (
@@ -8175,6 +8398,7 @@ function defaultState() {
                       {room.name}
                     </div>
                     <div className="entityMeta">{room.desc}</div>
+                    {room.synergyTag ? <div className="muted small">Tag {room.synergyTag} | Linked: {room.linkDesc}</div> : null}
                   </div>
                 ))}
               </div>
@@ -8190,6 +8414,7 @@ function defaultState() {
                       {room.name}
                     </div>
                     <div className="entityMeta">{room.desc}</div>
+                    {room.synergyTag ? <div className="muted small">Tag {room.synergyTag} | Linked: {room.linkDesc}</div> : null}
                   </div>
                 ))}
               </div>
@@ -8206,6 +8431,7 @@ function defaultState() {
                     </div>
                     <div className="entityMeta">{trap.desc}</div>
                     <div className="muted small">Base damage {trap.baseDmg} | Base cooldown {trap.baseCooldown}</div>
+                    {trap.synergyTag ? <div className="muted small">Tag {trap.synergyTag} | Linked: {trap.linkDesc}</div> : null}
                   </div>
                 ))}
               </div>
