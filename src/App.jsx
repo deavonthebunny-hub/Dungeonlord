@@ -482,6 +482,7 @@ const TILE_CENTER_MARKERS = {
   core: `${TILE_MARKER_BASE}core-crystal.png`,
   ash: `${TILE_MARKER_BASE}ash-breach-rift.png`,
 };
+const EMPTY_TILE_ART_SRC = `${import.meta.env.BASE_URL}assets/tiles/empty/unexcavated-stone.png`;
 
 const UTILITY_MAP = Object.fromEntries(UTILITY_ROOMS.map((r) => [r.key, r]));
 const MONSTER_ROOM_MAP = Object.fromEntries(MONSTER_ROOMS.map((r) => [r.key, r]));
@@ -2635,6 +2636,17 @@ function getUtilityArtSpec(tile, brokenSources = null) {
     baseSrc,
     centerpieceSrc,
     fallbackToGlyph,
+  };
+}
+
+function getEmptyTileArtSpec(tile, x, y, ashTrial, brokenSources = null) {
+  if (tile?.room || tile?.entrance || tile?.core || isAshBreachAt(ashTrial, x, y)) {
+    return { enabled: false, src: null, fallbackToGlyph: true };
+  }
+  return {
+    enabled: !!EMPTY_TILE_ART_SRC,
+    src: EMPTY_TILE_ART_SRC,
+    fallbackToGlyph: !EMPTY_TILE_ART_SRC || !!brokenSources?.[EMPTY_TILE_ART_SRC],
   };
 }
 
@@ -7193,10 +7205,12 @@ function defaultState() {
                         const stateChip = tileStateChip(t, x, y);
                         const artSpec = getTileArtSpec(t, x, y, state.grid, state.ashTrial, brokenTileArt);
                         const utilityArtSpec = getUtilityArtSpec(t, brokenTileArt);
+                        const emptyArtSpec = getEmptyTileArtSpec(t, x, y, state.ashTrial, brokenTileArt);
                         const centerMarkerSpec = getTileCenterMarkerSpec(t, x, y, state.ashTrial, brokenTileArt);
                         const usePathArt = artSpec.enabled && !artSpec.fallbackToGlyph;
                         const useUtilityArt = utilityArtSpec.enabled && !utilityArtSpec.fallbackToGlyph;
-                        const useArt = usePathArt || useUtilityArt;
+                        const useEmptyArt = emptyArtSpec.enabled && !emptyArtSpec.fallbackToGlyph;
+                        const useArt = usePathArt || useUtilityArt || useEmptyArt;
                         const typeBadge = isAshBreachAt(state.ashTrial, x, y)
                           ? "AE"
                           : t.entrance
@@ -7232,13 +7246,22 @@ function defaultState() {
                         return (
                           <button
                             key={keyOf(x, y)}
-                            className={tileClass(t, x, y) + (useArt ? " art-backed" : "")}
+                            className={tileClass(t, x, y) + (useArt ? " art-backed" : "") + (useEmptyArt ? " empty-art" : "")}
                             onClick={() => setSelected(x, y)}
                             title={`(${x + 1},${y + 1})`}
                             disabled={locked}
                           >
                             {useArt ? (
                               <>
+                                {useEmptyArt ? (
+                                  <img
+                                    className="tileArt tileArtEmpty"
+                                    src={emptyArtSpec.src}
+                                    alt=""
+                                    draggable="false"
+                                    onError={() => noteBrokenTileArt(emptyArtSpec.src)}
+                                  />
+                                ) : null}
                                 {usePathArt ? (
                                   <img
                                     className="tileArt"

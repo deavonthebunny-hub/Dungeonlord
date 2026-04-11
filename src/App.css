@@ -407,6 +407,11 @@ body::before {
   filter: drop-shadow(0 4px 8px rgba(10, 14, 22, 0.3));
 }
 
+.tileArtEmpty {
+  z-index: 0;
+  filter: brightness(0.82) saturate(0.82) contrast(1.06);
+}
+
 .tileCenterMarker {
   position: absolute;
   inset: 0;
