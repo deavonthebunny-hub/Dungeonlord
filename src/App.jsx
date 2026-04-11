@@ -448,13 +448,14 @@ const UTILITY_GLYPHS = {
   "scent-beacon": "SB",
 };
 
+const TILE_ART_BASE = `${import.meta.env.BASE_URL}assets/tiles/path/`;
 const TILE_ART_SOURCES = {
-  isolated: "/assets/tiles/path/isolated.png",
-  "dead-end": "/assets/tiles/path/dead-end.png",
-  straight: "/assets/tiles/path/straight.png",
-  corner: "/assets/tiles/path/corner.png",
-  tee: "/assets/tiles/path/tee.png",
-  cross: "/assets/tiles/path/cross.png",
+  isolated: `${TILE_ART_BASE}isolated.png`,
+  "dead-end": `${TILE_ART_BASE}dead-end.png`,
+  straight: `${TILE_ART_BASE}straight.png`,
+  corner: `${TILE_ART_BASE}corner.png`,
+  tee: `${TILE_ART_BASE}tee.png`,
+  cross: `${TILE_ART_BASE}cross.png`,
 };
 
 const UTILITY_MAP = Object.fromEntries(UTILITY_ROOMS.map((r) => [r.key, r]));
