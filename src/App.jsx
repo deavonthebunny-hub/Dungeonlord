@@ -346,6 +346,27 @@ const COUNCIL_MEMBERS = [
   },
 ];
 
+const COUNCIL_ART_BASE = `${import.meta.env.BASE_URL}assets/council/`;
+const COUNCIL_CHAMBER_ART = {
+  backdrop: `${COUNCIL_ART_BASE}council-hall-bg.png`,
+  sigil: `${COUNCIL_ART_BASE}council-center-sigil.png`,
+  absentSilhouette: `${COUNCIL_ART_BASE}absent-silhouette.png`,
+};
+const COUNCIL_MEMBER_CRESTS = {
+  malachar: `${COUNCIL_ART_BASE}malachar-crest.png`,
+  "crimson-twins": `${COUNCIL_ART_BASE}crimson-twins-crest.png`,
+  zephyra: `${COUNCIL_ART_BASE}zephyra-crest.png`,
+  grimjaw: `${COUNCIL_ART_BASE}grimjaw-crest.png`,
+  blackthorn: `${COUNCIL_ART_BASE}blackthorn-crest.png`,
+  lyralei: `${COUNCIL_ART_BASE}lyralei-crest.png`,
+  maltheron: `${COUNCIL_ART_BASE}maltheron-crest.png`,
+  vexira: `${COUNCIL_ART_BASE}vexira-crest.png`,
+  tharos: `${COUNCIL_ART_BASE}tharos-crest.png`,
+  xaldros: `${COUNCIL_ART_BASE}xaldros-crest.png`,
+  zurkhan: `${COUNCIL_ART_BASE}zurkhan-crest.png`,
+  nihaza: `${COUNCIL_ART_BASE}nihaza-crest.png`,
+};
+
 const CLASS_STAT_MODS = {
   Warrior: { hp: 4, atk: 1, def: 1 },
   Rogue: { hp: -1, atk: 2, def: 0 },
@@ -3292,6 +3313,7 @@ export default function App() {
   const [sacrificeIdx, setSacrificeIdx] = useState("");
   const [selectedInventoryMonsterIndex, setSelectedInventoryMonsterIndex] = useState("");
   const [brokenTileArt, setBrokenTileArt] = useState({});
+  const [brokenCouncilArt, setBrokenCouncilArt] = useState({});
 function defaultState() {
     const startingRaid = buildRaidPartyWithIntel(0, null, 1);
     const startingParty = startingRaid.party;
@@ -3594,6 +3616,11 @@ function defaultState() {
     setBrokenTileArt((prev) => (prev[src] ? prev : { ...prev, [src]: true }));
   }
 
+  function noteBrokenCouncilArt(src) {
+    if (!src) return;
+    setBrokenCouncilArt((prev) => (prev[src] ? prev : { ...prev, [src]: true }));
+  }
+
   function addCouncilQuestCounter(stateLike, metricKey, amount = 1) {
     if (!metricKey || !Number.isFinite(amount) || amount === 0) return stateLike;
     const counters = {
@@ -3644,6 +3671,9 @@ function defaultState() {
   const showCouncilPrompt = councilSessionActive && state.councilSession.status === "pending";
   const councilRoster = councilSessionActive ? state.council?.roster || [] : [];
   const focusedCouncilMember = councilRoster.find((m) => m.key === focusedCouncilKey) || councilRoster[0] || null;
+  const absentCouncilMembers = councilSessionActive
+    ? COUNCIL_MEMBERS.filter((member) => !councilRoster.some((attendee) => attendee.key === member.key))
+    : [];
 
   useEffect(() => {
     if (!councilRoster.length) return;
@@ -6650,6 +6680,12 @@ function defaultState() {
     focusedCouncilMember && state.councilSession?.sponsors
       ? state.councilSession.sponsors.find((sponsor) => sponsor.key === focusedCouncilMember.key) || null
       : null;
+  const focusedCouncilCrestSrc = focusedCouncilMember ? COUNCIL_MEMBER_CRESTS[focusedCouncilMember.key] || null : null;
+  const useFocusedCouncilCrest = !!focusedCouncilCrestSrc && !brokenCouncilArt[focusedCouncilCrestSrc];
+  const useCouncilBackdrop = !!COUNCIL_CHAMBER_ART.backdrop && !brokenCouncilArt[COUNCIL_CHAMBER_ART.backdrop];
+  const useCouncilSigil = !!COUNCIL_CHAMBER_ART.sigil && !brokenCouncilArt[COUNCIL_CHAMBER_ART.sigil];
+  const useCouncilAbsentSilhouette =
+    !!COUNCIL_CHAMBER_ART.absentSilhouette && !brokenCouncilArt[COUNCIL_CHAMBER_ART.absentSilhouette];
   const focusedCouncilBoons = focusedCouncilMember
     ? (state.nextRaidBoons || []).filter((boon) => boon.sponsorKey === focusedCouncilMember.key)
     : [];
@@ -6895,9 +6931,64 @@ function defaultState() {
           </div>
           <div className="councilScreenBody">
             <div className="councilRing">
+              {useCouncilBackdrop ? (
+                <img
+                  className="councilHallBackdrop"
+                  src={COUNCIL_CHAMBER_ART.backdrop}
+                  alt=""
+                  draggable="false"
+                  onError={() => noteBrokenCouncilArt(COUNCIL_CHAMBER_ART.backdrop)}
+                />
+              ) : null}
+              <div className="councilRingShade" />
+              {absentCouncilMembers.map((m, idx) => {
+                const count = Math.max(1, absentCouncilMembers.length);
+                const angle = (idx / count) * Math.PI * 2 - Math.PI / 2;
+                const radiusX = 330;
+                const radiusY = 212;
+                const x = Math.cos(angle) * radiusX;
+                const y = Math.sin(angle) * radiusY + 4;
+                const crestSrc = COUNCIL_MEMBER_CRESTS[m.key] || null;
+                const useCrest = !!crestSrc && !brokenCouncilArt[crestSrc];
+                return (
+                  <div
+                    className="councilAbsentPresence"
+                    key={`council-absent-${m.key}`}
+                    style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` }}
+                  >
+                    {useCouncilAbsentSilhouette ? (
+                      <img
+                        className="councilAbsentSilhouette"
+                        src={COUNCIL_CHAMBER_ART.absentSilhouette}
+                        alt=""
+                        draggable="false"
+                        onError={() => noteBrokenCouncilArt(COUNCIL_CHAMBER_ART.absentSilhouette)}
+                      />
+                    ) : null}
+                    {useCrest ? (
+                      <img
+                        className="councilAbsentCrest"
+                        src={crestSrc}
+                        alt=""
+                        draggable="false"
+                        onError={() => noteBrokenCouncilArt(crestSrc)}
+                      />
+                    ) : null}
+                  </div>
+                );
+              })}
               <div className="councilCenter">
+                {useCouncilSigil ? (
+                  <img
+                    className="councilCenterSigil"
+                    src={COUNCIL_CHAMBER_ART.sigil}
+                    alt=""
+                    draggable="false"
+                    onError={() => noteBrokenCouncilArt(COUNCIL_CHAMBER_ART.sigil)}
+                  />
+                ) : null}
                 <div className="councilCenterTitle">The Council Hall</div>
-                <div className="muted">Attending lords gather to plot, barter, and threaten.</div>
+                <div className="muted">A chamber of oaths, bargains, and measured threats.</div>
               </div>
               {councilRoster.map((m, idx) => {
                 const count = Math.max(1, councilRoster.length);
@@ -6906,13 +6997,24 @@ function defaultState() {
                 const radius = baseRadius + (idx % 2 === 0 ? 30 : -10);
                 const x = Math.cos(angle) * radius;
                 const y = Math.sin(angle) * radius;
+                const crestSrc = COUNCIL_MEMBER_CRESTS[m.key] || null;
+                const useCrest = !!crestSrc && !brokenCouncilArt[crestSrc];
                 return (
                   <div
-                    className={`councilNode ${focusedCouncilMember?.key === m.key ? "active" : ""}`}
+                    className={`councilNode ${focusedCouncilMember?.key === m.key ? "active" : ""} ${useCrest ? "hasCrest" : "fallback"}`}
                     key={`council-node-${m.key}`}
                     style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` }}
                     onClick={() => setFocusedCouncilKey(m.key)}
                   >
+                    {useCrest ? (
+                      <img
+                        className="councilNodeCrest"
+                        src={crestSrc}
+                        alt=""
+                        draggable="false"
+                        onError={() => noteBrokenCouncilArt(crestSrc)}
+                      />
+                    ) : null}
                     <div className="councilNodeName">{m.name}</div>
                     <div className="councilNodeMeta">{m.title}</div>
                   </div>
@@ -6921,13 +7023,26 @@ function defaultState() {
             </div>
 
             <div className="councilDetails">
-              <div className="card">
+              <div className="card councilCard councilFocusedCard">
                 <div className="cardTitle">Focused Dungeonlord</div>
                 {focusedCouncilMember ? (
                   <>
-                    <div className="entityName">{focusedCouncilMember.name}</div>
-                    <div className="entityMeta">
-                      {focusedCouncilMember.title} - {focusedCouncilMember.theme}
+                    <div className="councilFocusedHeader">
+                      {useFocusedCouncilCrest ? (
+                        <img
+                          className="councilFocusedCrest"
+                          src={focusedCouncilCrestSrc}
+                          alt=""
+                          draggable="false"
+                          onError={() => noteBrokenCouncilArt(focusedCouncilCrestSrc)}
+                        />
+                      ) : null}
+                      <div className="councilFocusedText">
+                        <div className="entityName">{focusedCouncilMember.name}</div>
+                        <div className="entityMeta">
+                          {focusedCouncilMember.title} - {focusedCouncilMember.theme}
+                        </div>
+                      </div>
                     </div>
                     <div className="row">
                       <span className={`badge ${focusedCouncilFavor > 0 ? "favorGood" : focusedCouncilFavor < 0 ? "favorBad" : "favorNeutral"}`}>
@@ -6961,7 +7076,7 @@ function defaultState() {
                   <div className="entityEmpty">Select a Dungeonlord.</div>
                 )}
               </div>
-              <div className="card">
+              <div className="card councilCard">
                 <div className="cardTitle">Council Discourse</div>
                 <div className="entityList">
                   {state.councilSession.dialogue.map((line, idx) => (
@@ -6971,7 +7086,7 @@ function defaultState() {
                   ))}
                 </div>
               </div>
-              <div className="card">
+              <div className="card councilCard">
                 <div className="cardTitle">Rumors & Intelligence</div>
                 <div className="entityList">
                   {state.councilSession.rumors.map((line, idx) => (
@@ -6981,7 +7096,7 @@ function defaultState() {
                   ))}
                 </div>
               </div>
-              <div className="card">
+              <div className="card councilCard">
                 <div className="cardTitle">Sponsor Boon</div>
                 {focusedCouncilSponsor?.boon ? (
                   <>
@@ -7022,7 +7137,7 @@ function defaultState() {
                   <div className="entityEmpty">Select a Dungeonlord.</div>
                 )}
               </div>
-              <div className="card">
+              <div className="card councilCard">
                 <div className="cardTitle">Active Council Quest</div>
                 {state.councilQuest?.active ? (
                   <>
@@ -7037,7 +7152,7 @@ function defaultState() {
                   <div className="entityEmpty">No active quest.</div>
                 )}
               </div>
-              <div className="card">
+              <div className="card councilCard">
                 <div className="cardTitle">Sponsor Quests</div>
                 {focusedCouncilSponsor ? (
                   <div className="entityList">
