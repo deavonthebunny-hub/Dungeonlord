@@ -448,6 +448,15 @@ const UTILITY_GLYPHS = {
   "scent-beacon": "SB",
 };
 
+const TILE_ART_SOURCES = {
+  isolated: "/assets/tiles/path/isolated.png",
+  "dead-end": "/assets/tiles/path/dead-end.png",
+  straight: "/assets/tiles/path/straight.png",
+  corner: "/assets/tiles/path/corner.png",
+  tee: "/assets/tiles/path/tee.png",
+  cross: "/assets/tiles/path/cross.png",
+};
+
 const UTILITY_MAP = Object.fromEntries(UTILITY_ROOMS.map((r) => [r.key, r]));
 const MONSTER_ROOM_MAP = Object.fromEntries(MONSTER_ROOMS.map((r) => [r.key, r]));
 const TRAP_MAP = Object.fromEntries(TRAP_TYPES.map((r) => [r.key, r]));
@@ -2510,6 +2519,80 @@ function tileWalkable(t) {
   return t.entrance || t.core || t.room === "trap" || t.room === "monster";
 }
 
+function isArtPathTile(grid, ashTrial, x, y) {
+  const tile = grid?.[y]?.[x];
+  if (!tile) return false;
+  return isAshBreachAt(ashTrial, x, y) || tile.entrance || tile.core || tile.room === "trap" || tile.room === "monster";
+}
+
+function getTraversableExitMask(grid, ashTrial, x, y) {
+  return {
+    up: y > 0 && isArtPathTile(grid, ashTrial, x, y - 1),
+    right: x < W - 1 && isArtPathTile(grid, ashTrial, x + 1, y),
+    down: y < H - 1 && isArtPathTile(grid, ashTrial, x, y + 1),
+    left: x > 0 && isArtPathTile(grid, ashTrial, x - 1, y),
+  };
+}
+
+function exitCount(mask) {
+  return (mask.up ? 1 : 0) + (mask.right ? 1 : 0) + (mask.down ? 1 : 0) + (mask.left ? 1 : 0);
+}
+
+function topologyFromExitMask(mask) {
+  const count = exitCount(mask);
+  if (count <= 0) return "isolated";
+  if (count === 1) return "dead-end";
+  if (count === 2) {
+    if ((mask.up && mask.down) || (mask.left && mask.right)) return "straight";
+    return "corner";
+  }
+  if (count === 3) return "tee";
+  return "cross";
+}
+
+function rotationFromExitMask(mask, topology) {
+  if (topology === "isolated" || topology === "cross") return 0;
+  if (topology === "dead-end") {
+    if (mask.up) return 0;
+    if (mask.right) return 90;
+    if (mask.down) return 180;
+    return 270;
+  }
+  if (topology === "straight") {
+    return mask.up && mask.down ? 0 : 90;
+  }
+  if (topology === "corner") {
+    if (mask.up && mask.right) return 0;
+    if (mask.right && mask.down) return 90;
+    if (mask.down && mask.left) return 180;
+    return 270;
+  }
+  if (topology === "tee") {
+    if (!mask.down) return 0;
+    if (!mask.left) return 90;
+    if (!mask.up) return 180;
+    return 270;
+  }
+  return 0;
+}
+
+function getTileArtSpec(tile, x, y, grid, ashTrial, brokenSources = null) {
+  if (!isArtPathTile(grid, ashTrial, x, y)) {
+    return { enabled: false, topology: null, rotationDeg: 0, src: null, fallbackToGlyph: true };
+  }
+  const mask = getTraversableExitMask(grid, ashTrial, x, y);
+  const topology = topologyFromExitMask(mask);
+  const src = TILE_ART_SOURCES[topology] || null;
+  const fallbackToGlyph = !src || !!brokenSources?.[src];
+  return {
+    enabled: !!src,
+    topology,
+    rotationDeg: rotationFromExitMask(mask, topology),
+    src,
+    fallbackToGlyph,
+  };
+}
+
 function findEntranceAndCore(grid) {
   let entrance = null;
   let core = null;
@@ -3137,6 +3220,7 @@ export default function App() {
   const [fuseB, setFuseB] = useState("");
   const [sacrificeIdx, setSacrificeIdx] = useState("");
   const [selectedInventoryMonsterIndex, setSelectedInventoryMonsterIndex] = useState("");
+  const [brokenTileArt, setBrokenTileArt] = useState({});
 function defaultState() {
     const startingRaid = buildRaidPartyWithIntel(0, null, 1);
     const startingParty = startingRaid.party;
@@ -3433,6 +3517,11 @@ function defaultState() {
   }
 
   const [state, setState] = useState(() => loadSavedState() || defaultState());
+
+  function noteBrokenTileArt(src) {
+    if (!src) return;
+    setBrokenTileArt((prev) => (prev[src] ? prev : { ...prev, [src]: true }));
+  }
 
   function addCouncilQuestCounter(stateLike, metricKey, amount = 1) {
     if (!metricKey || !Number.isFinite(amount) || amount === 0) return stateLike;
@@ -6472,7 +6561,6 @@ function defaultState() {
     }
     if (tile.room === "monster") {
       if ((tile.monsters || []).some((monster) => monster.hp < safeEntityMaxHp(monster))) return "W";
-      if ((tile.monsters || []).length > 0) return `M${tile.monsters.length}`;
     }
     return "";
   }
@@ -7039,28 +7127,71 @@ function defaultState() {
                 <div className="grid">
                   {state.grid.map((row, y) =>
                     row.map((t, x) => (
-                      <button
-                        key={keyOf(x, y)}
-                        className={tileClass(t, x, y)}
-                        onClick={() => setSelected(x, y)}
-                        title={`(${x + 1},${y + 1})`}
-                        disabled={locked}
-                      >
-                        {(() => {
-                          const heroesHere = heroesByTile.get(keyOf(x, y)) || [];
-                          const monstersHere = t.room === "monster" ? t.monsters.length : 0;
-                          const glyph = getTileGlyph(t, x, y, heroesHere.length, monstersHere);
-                          const stateChip = tileStateChip(t, x, y);
-                          if (!glyph.text && !glyph.subtext && !stateChip) return null;
-                          return (
-                            <>
-                              {stateChip ? <span className="tileChip tileChipState">{stateChip}</span> : null}
-                              {glyph.text ? <span className={`tileGlyph ${glyph.tone || ""}`}>{glyph.text}</span> : null}
-                              {glyph.subtext ? <span className="tileGlyphSub">{glyph.subtext}</span> : null}
-                            </>
-                          );
-                        })()}
-                      </button>
+                      (() => {
+                        const heroesHere = heroesByTile.get(keyOf(x, y)) || [];
+                        const monstersHere = t.room === "monster" ? t.monsters.length : 0;
+                        const glyph = getTileGlyph(t, x, y, heroesHere.length, monstersHere);
+                        const stateChip = tileStateChip(t, x, y);
+                        const artSpec = getTileArtSpec(t, x, y, state.grid, state.ashTrial, brokenTileArt);
+                        const useArt = artSpec.enabled && !artSpec.fallbackToGlyph;
+                        const typeBadge = isAshBreachAt(state.ashTrial, x, y)
+                          ? "AE"
+                          : t.entrance
+                          ? "E"
+                          : t.core
+                          ? "C"
+                          : t.room === "trap"
+                          ? TRAP_ICONS[t.trapType] || "TR"
+                          : t.room === "monster"
+                          ? MONSTER_ROOM_ICONS[t.roomType] || "MR"
+                          : "";
+                        const typeTone = isAshBreachAt(state.ashTrial, x, y)
+                          ? "ash"
+                          : t.entrance
+                          ? "entrance"
+                          : t.core
+                          ? "core"
+                          : t.room === "trap"
+                          ? "trap"
+                          : t.room === "monster"
+                          ? "monster"
+                          : "neutral";
+                        const heroChip = heroesHere.length > 0 ? (heroesHere.length > 1 ? `H${heroesHere.length}` : "H") : "";
+                        const occupantChip = t.room === "monster" && monstersHere > 0 ? `M${monstersHere}` : "";
+                        return (
+                          <button
+                            key={keyOf(x, y)}
+                            className={tileClass(t, x, y) + (useArt ? " art-backed" : "")}
+                            onClick={() => setSelected(x, y)}
+                            title={`(${x + 1},${y + 1})`}
+                            disabled={locked}
+                          >
+                            {useArt ? (
+                              <>
+                                <img
+                                  className="tileArt"
+                                  src={artSpec.src}
+                                  alt=""
+                                  draggable="false"
+                                  style={{ transform: `rotate(${artSpec.rotationDeg}deg)` }}
+                                  onError={() => noteBrokenTileArt(artSpec.src)}
+                                />
+                                {tileHasAura(x, y) ? <span className="tileArtAura" /> : null}
+                                {heroChip ? <span className="tileChip tileChipHero">{heroChip}</span> : null}
+                                {stateChip ? <span className="tileChip tileChipState">{stateChip}</span> : null}
+                                {typeBadge ? <span className={`tileChip tileChipType ${typeTone}`}>{typeBadge}</span> : null}
+                                {occupantChip ? <span className="tileChip tileChipOccupants">{occupantChip}</span> : null}
+                              </>
+                            ) : (
+                              <>
+                                {stateChip ? <span className="tileChip tileChipState">{stateChip}</span> : null}
+                                {glyph.text ? <span className={`tileGlyph ${glyph.tone || ""}`}>{glyph.text}</span> : null}
+                                {glyph.subtext ? <span className="tileGlyphSub">{glyph.subtext}</span> : null}
+                              </>
+                            )}
+                          </button>
+                        );
+                      })()
                     ))
                   )}
                 </div>

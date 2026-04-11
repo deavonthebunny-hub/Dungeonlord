@@ -326,6 +326,7 @@ body::before {
   cursor: pointer;
   transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  overflow: hidden;
 }
 
 .tile.aura-affected {
@@ -382,6 +383,29 @@ body::before {
 
 .tile.tier-3 {
   box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.5), inset 0 0 0 1px rgba(255, 215, 0, 0.2);
+}
+
+.tileArt {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  border-radius: inherit;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+}
+
+.tileArtAura {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+  background:
+    radial-gradient(circle at center, rgba(52, 211, 153, 0.18), rgba(52, 211, 153, 0.07) 42%, rgba(52, 211, 153, 0.02) 64%, rgba(52, 211, 153, 0) 76%);
 }
 
 .tileGlyph {
@@ -474,6 +498,60 @@ body::before {
   background: rgba(15, 23, 42, 0.92);
   border: 1px solid rgba(148, 163, 184, 0.38);
   color: var(--ink-0);
+}
+
+.tileChipHero {
+  top: 6px;
+  left: 6px;
+  background: rgba(30, 41, 59, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  color: #eff6ff;
+}
+
+.tileChipType {
+  left: 6px;
+  bottom: 6px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  color: var(--ink-0);
+}
+
+.tileChipType.trap {
+  background: rgba(124, 45, 18, 0.88);
+  border-color: rgba(249, 115, 22, 0.45);
+  color: #ffedd5;
+}
+
+.tileChipType.monster {
+  background: rgba(136, 19, 55, 0.88);
+  border-color: rgba(244, 63, 94, 0.42);
+  color: #ffe4e6;
+}
+
+.tileChipType.entrance {
+  background: rgba(21, 128, 61, 0.86);
+  border-color: rgba(74, 222, 128, 0.4);
+  color: #dcfce7;
+}
+
+.tileChipType.core {
+  background: rgba(30, 64, 175, 0.86);
+  border-color: rgba(96, 165, 250, 0.42);
+  color: #dbeafe;
+}
+
+.tileChipType.ash {
+  background: rgba(146, 64, 14, 0.88);
+  border-color: rgba(251, 191, 36, 0.44);
+  color: #fef3c7;
+}
+
+.tileChipOccupants {
+  right: 6px;
+  bottom: 6px;
+  background: rgba(17, 24, 39, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--ink-1);
 }
 
 .tileChipAura {
