@@ -480,6 +480,7 @@ const TILE_MARKER_BASE = `${import.meta.env.BASE_URL}assets/tiles/markers/`;
 const TILE_CENTER_MARKERS = {
   entrance: `${TILE_MARKER_BASE}entrance-door.png`,
   core: `${TILE_MARKER_BASE}core-crystal.png`,
+  ash: `${TILE_MARKER_BASE}ash-breach-rift.png`,
 };
 
 const UTILITY_MAP = Object.fromEntries(UTILITY_ROOMS.map((r) => [r.key, r]));
@@ -2637,8 +2638,14 @@ function getUtilityArtSpec(tile, brokenSources = null) {
   };
 }
 
-function getTileCenterMarkerSpec(tile, brokenSources = null) {
-  const src = tile?.entrance ? TILE_CENTER_MARKERS.entrance : tile?.core ? TILE_CENTER_MARKERS.core : null;
+function getTileCenterMarkerSpec(tile, x, y, ashTrial, brokenSources = null) {
+  const src = isAshBreachAt(ashTrial, x, y)
+    ? TILE_CENTER_MARKERS.ash
+    : tile?.entrance
+    ? TILE_CENTER_MARKERS.entrance
+    : tile?.core
+    ? TILE_CENTER_MARKERS.core
+    : null;
   return {
     enabled: !!src && !brokenSources?.[src],
     src,
@@ -7186,7 +7193,7 @@ function defaultState() {
                         const stateChip = tileStateChip(t, x, y);
                         const artSpec = getTileArtSpec(t, x, y, state.grid, state.ashTrial, brokenTileArt);
                         const utilityArtSpec = getUtilityArtSpec(t, brokenTileArt);
-                        const centerMarkerSpec = getTileCenterMarkerSpec(t, brokenTileArt);
+                        const centerMarkerSpec = getTileCenterMarkerSpec(t, x, y, state.ashTrial, brokenTileArt);
                         const usePathArt = artSpec.enabled && !artSpec.fallbackToGlyph;
                         const useUtilityArt = utilityArtSpec.enabled && !utilityArtSpec.fallbackToGlyph;
                         const useArt = usePathArt || useUtilityArt;
