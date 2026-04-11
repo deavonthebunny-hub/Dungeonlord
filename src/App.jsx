@@ -476,6 +476,11 @@ const SUPPORT_TILE_ART_SOURCES = {
     "scent-beacon": `${SUPPORT_TILE_ART_BASE}scent-beacon.png`,
   },
 };
+const TILE_MARKER_BASE = `${import.meta.env.BASE_URL}assets/tiles/markers/`;
+const TILE_CENTER_MARKERS = {
+  entrance: `${TILE_MARKER_BASE}entrance-door.png`,
+  core: `${TILE_MARKER_BASE}core-crystal.png`,
+};
 
 const UTILITY_MAP = Object.fromEntries(UTILITY_ROOMS.map((r) => [r.key, r]));
 const MONSTER_ROOM_MAP = Object.fromEntries(MONSTER_ROOMS.map((r) => [r.key, r]));
@@ -2629,6 +2634,14 @@ function getUtilityArtSpec(tile, brokenSources = null) {
     baseSrc,
     centerpieceSrc,
     fallbackToGlyph,
+  };
+}
+
+function getTileCenterMarkerSpec(tile, brokenSources = null) {
+  const src = tile?.entrance ? TILE_CENTER_MARKERS.entrance : tile?.core ? TILE_CENTER_MARKERS.core : null;
+  return {
+    enabled: !!src && !brokenSources?.[src],
+    src,
   };
 }
 
@@ -7173,6 +7186,7 @@ function defaultState() {
                         const stateChip = tileStateChip(t, x, y);
                         const artSpec = getTileArtSpec(t, x, y, state.grid, state.ashTrial, brokenTileArt);
                         const utilityArtSpec = getUtilityArtSpec(t, brokenTileArt);
+                        const centerMarkerSpec = getTileCenterMarkerSpec(t, brokenTileArt);
                         const usePathArt = artSpec.enabled && !artSpec.fallbackToGlyph;
                         const useUtilityArt = utilityArtSpec.enabled && !utilityArtSpec.fallbackToGlyph;
                         const useArt = usePathArt || useUtilityArt;
@@ -7226,6 +7240,15 @@ function defaultState() {
                                     draggable="false"
                                     style={{ transform: `rotate(${artSpec.rotationDeg}deg)` }}
                                     onError={() => noteBrokenTileArt(artSpec.src)}
+                                  />
+                                ) : null}
+                                {centerMarkerSpec.enabled ? (
+                                  <img
+                                    className="tileCenterMarker"
+                                    src={centerMarkerSpec.src}
+                                    alt=""
+                                    draggable="false"
+                                    onError={() => noteBrokenTileArt(centerMarkerSpec.src)}
                                   />
                                 ) : null}
                                 {useUtilityArt ? (

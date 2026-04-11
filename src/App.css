@@ -407,6 +407,20 @@ body::before {
   filter: drop-shadow(0 4px 8px rgba(10, 14, 22, 0.3));
 }
 
+.tileCenterMarker {
+  position: absolute;
+  inset: 0;
+  width: 56%;
+  height: 56%;
+  left: 22%;
+  top: 20%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  z-index: 1;
+  filter: drop-shadow(0 4px 10px rgba(8, 12, 18, 0.36));
+}
+
 .tileArtAura {
   position: absolute;
   inset: 0;
