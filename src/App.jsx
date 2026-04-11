@@ -457,6 +457,25 @@ const TILE_ART_SOURCES = {
   tee: `${TILE_ART_BASE}tee.png`,
   cross: `${TILE_ART_BASE}cross.png`,
 };
+const SUPPORT_TILE_ART_BASE = `${import.meta.env.BASE_URL}assets/tiles/support/`;
+const SUPPORT_TILE_ART_SOURCES = {
+  base: `${SUPPORT_TILE_ART_BASE}sanctum-base.png`,
+  centerpiece: {
+    "soul-altar": `${SUPPORT_TILE_ART_BASE}soul-altar.png`,
+    "siphon-pylon": `${SUPPORT_TILE_ART_BASE}siphon-pylon.png`,
+    "reinforced-keystone": `${SUPPORT_TILE_ART_BASE}reinforced-keystone.png`,
+    "blood-sigil": `${SUPPORT_TILE_ART_BASE}blood-sigil.png`,
+    "war-drum": `${SUPPORT_TILE_ART_BASE}war-drum.png`,
+    "haste-glyph": `${SUPPORT_TILE_ART_BASE}haste-glyph.png`,
+    "fear-idol": `${SUPPORT_TILE_ART_BASE}fear-idol.png`,
+    "ward-lantern": `${SUPPORT_TILE_ART_BASE}ward-lantern.png`,
+    "seal-silence": `${SUPPORT_TILE_ART_BASE}seal-silence.png`,
+    "scout-mirror": `${SUPPORT_TILE_ART_BASE}scout-mirror.png`,
+    "butchers-shrine": `${SUPPORT_TILE_ART_BASE}butchers-shrine.png`,
+    "aegis-lantern": `${SUPPORT_TILE_ART_BASE}aegis-lantern.png`,
+    "scent-beacon": `${SUPPORT_TILE_ART_BASE}scent-beacon.png`,
+  },
+};
 
 const UTILITY_MAP = Object.fromEntries(UTILITY_ROOMS.map((r) => [r.key, r]));
 const MONSTER_ROOM_MAP = Object.fromEntries(MONSTER_ROOMS.map((r) => [r.key, r]));
@@ -2590,6 +2609,25 @@ function getTileArtSpec(tile, x, y, grid, ashTrial, brokenSources = null) {
     topology,
     rotationDeg: rotationFromExitMask(mask, topology),
     src,
+    fallbackToGlyph,
+  };
+}
+
+function getUtilityArtSpec(tile, brokenSources = null) {
+  if (tile?.room !== "utility") {
+    return { enabled: false, baseSrc: null, centerpieceSrc: null, fallbackToGlyph: true };
+  }
+  const baseSrc = SUPPORT_TILE_ART_SOURCES.base || null;
+  const centerpieceSrc = SUPPORT_TILE_ART_SOURCES.centerpiece?.[tile.roomType] || null;
+  const fallbackToGlyph =
+    !baseSrc ||
+    !centerpieceSrc ||
+    !!brokenSources?.[baseSrc] ||
+    !!brokenSources?.[centerpieceSrc];
+  return {
+    enabled: !!baseSrc && !!centerpieceSrc,
+    baseSrc,
+    centerpieceSrc,
     fallbackToGlyph,
   };
 }
@@ -7134,7 +7172,10 @@ function defaultState() {
                         const glyph = getTileGlyph(t, x, y, heroesHere.length, monstersHere);
                         const stateChip = tileStateChip(t, x, y);
                         const artSpec = getTileArtSpec(t, x, y, state.grid, state.ashTrial, brokenTileArt);
-                        const useArt = artSpec.enabled && !artSpec.fallbackToGlyph;
+                        const utilityArtSpec = getUtilityArtSpec(t, brokenTileArt);
+                        const usePathArt = artSpec.enabled && !artSpec.fallbackToGlyph;
+                        const useUtilityArt = utilityArtSpec.enabled && !utilityArtSpec.fallbackToGlyph;
+                        const useArt = usePathArt || useUtilityArt;
                         const typeBadge = isAshBreachAt(state.ashTrial, x, y)
                           ? "AE"
                           : t.entrance
@@ -7145,6 +7186,8 @@ function defaultState() {
                           ? TRAP_ICONS[t.trapType] || "TR"
                           : t.room === "monster"
                           ? MONSTER_ROOM_ICONS[t.roomType] || "MR"
+                          : t.room === "utility"
+                          ? UTILITY_ICONS[t.roomType] || "UR"
                           : "";
                         const typeTone = isAshBreachAt(state.ashTrial, x, y)
                           ? "ash"
@@ -7156,9 +7199,15 @@ function defaultState() {
                           ? "trap"
                           : t.room === "monster"
                           ? "monster"
+                          : t.room === "utility"
+                          ? "utility"
                           : "neutral";
                         const heroChip = heroesHere.length > 0 ? (heroesHere.length > 1 ? `H${heroesHere.length}` : "H") : "";
                         const occupantChip = t.room === "monster" && monstersHere > 0 ? `M${monstersHere}` : "";
+                        const linkedUtilityTone =
+                          useUtilityArt && t.room === "utility" && roomSynergyTag(t) && isLinkedRoom(state.grid, x, y)
+                            ? roomSynergyTag(t).toLowerCase()
+                            : "";
                         return (
                           <button
                             key={keyOf(x, y)}
@@ -7169,19 +7218,40 @@ function defaultState() {
                           >
                             {useArt ? (
                               <>
-                                <img
-                                  className="tileArt"
-                                  src={artSpec.src}
-                                  alt=""
-                                  draggable="false"
-                                  style={{ transform: `rotate(${artSpec.rotationDeg}deg)` }}
-                                  onError={() => noteBrokenTileArt(artSpec.src)}
-                                />
+                                {usePathArt ? (
+                                  <img
+                                    className="tileArt"
+                                    src={artSpec.src}
+                                    alt=""
+                                    draggable="false"
+                                    style={{ transform: `rotate(${artSpec.rotationDeg}deg)` }}
+                                    onError={() => noteBrokenTileArt(artSpec.src)}
+                                  />
+                                ) : null}
+                                {useUtilityArt ? (
+                                  <>
+                                    <img
+                                      className="tileArt tileArtSupportBase"
+                                      src={utilityArtSpec.baseSrc}
+                                      alt=""
+                                      draggable="false"
+                                      onError={() => noteBrokenTileArt(utilityArtSpec.baseSrc)}
+                                    />
+                                    <img
+                                      className="tileArt tileArtSupportFeature"
+                                      src={utilityArtSpec.centerpieceSrc}
+                                      alt=""
+                                      draggable="false"
+                                      onError={() => noteBrokenTileArt(utilityArtSpec.centerpieceSrc)}
+                                    />
+                                  </>
+                                ) : null}
                                 {tileHasAura(x, y) ? <span className="tileArtAura" /> : null}
                                 {heroChip ? <span className="tileChip tileChipHero">{heroChip}</span> : null}
                                 {stateChip ? <span className="tileChip tileChipState">{stateChip}</span> : null}
                                 {typeBadge ? <span className={`tileChip tileChipType ${typeTone}`}>{typeBadge}</span> : null}
                                 {occupantChip ? <span className="tileChip tileChipOccupants">{occupantChip}</span> : null}
+                                {linkedUtilityTone ? <span className={`tileChipLink ${linkedUtilityTone}`} /> : null}
                               </>
                             ) : (
                               <>
