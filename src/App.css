@@ -1597,9 +1597,10 @@ button.entityItem {
 .councilScreenBody {
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(320px, 1fr) minmax(280px, 420px);
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 500px);
   gap: 24px;
   min-height: 0;
+  align-items: start;
 }
 
 .councilRing {
@@ -1777,14 +1778,14 @@ button.entityItem {
 
 .councilCard {
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   padding: 16px 12px 14px;
   gap: 10px;
   background:
     linear-gradient(180deg, rgba(16, 12, 10, 0.34), rgba(10, 8, 8, 0.2)),
     var(--council-scroll-url),
     linear-gradient(180deg, rgba(88, 68, 50, 0.96), rgba(66, 50, 38, 0.96));
-  background-size: cover;
+  background-size: 100% 100%;
   background-position: center;
   border: 1px solid rgba(154, 118, 76, 0.38);
   box-shadow:
@@ -1824,14 +1825,14 @@ button.entityItem {
 
 .panel--council .card {
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   padding: 16px 12px 14px;
   gap: 10px;
   background:
     linear-gradient(180deg, rgba(16, 12, 10, 0.34), rgba(10, 8, 8, 0.2)),
     var(--council-scroll-url),
     linear-gradient(180deg, rgba(88, 68, 50, 0.96), rgba(66, 50, 38, 0.96));
-  background-size: cover;
+  background-size: 100% 100%;
   background-position: center;
   border: 1px solid rgba(154, 118, 76, 0.38);
   box-shadow:
@@ -1917,11 +1918,30 @@ button.entityItem {
 }
 
 .councilDetails {
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 2px 8px 2px 2px;
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-width: 0;
+}
+
+.councilCard .row,
+.panel--council .card .row {
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.councilCard .entityItem,
+.panel--council .card .entityItem,
+.councilCard .entityMeta,
+.councilCard .entityName,
+.councilCard .muted,
+.panel--council .card .entityMeta,
+.panel--council .card .entityName,
+.panel--council .card .muted {
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 980px) {
