@@ -25,6 +25,7 @@ const H = 8;
 
 const MAX_ROOMS_BASE = 4;
 const ROOMS_PER_LEVEL = 2;
+const MAX_DUNGEON_LEVEL = 10;
 
 const CORE_MAX_HP = 250;
 const DAY_START_PARTY_MIN = 2;
@@ -64,6 +65,10 @@ const EVOLUTION_COSTS = {
   0: 20,
   1: 50,
 };
+
+function clampDungeonLevel(level = 1) {
+  return clamp(Math.round(level || 1), 1, MAX_DUNGEON_LEVEL);
+}
 
 const MONSTERS = Object.fromEntries(STANDARD_MONSTERS.map((monster) => [monster.key, { ...monster }]));
 const MONSTER_KEYS = STANDARD_MONSTERS.map((monster) => monster.key);
@@ -1495,7 +1500,7 @@ function getCoreMaxHp(stateLike) {
 }
 
 function getDungeonRoomCap(stateLike) {
-  const level = Math.max(1, Number.isFinite(stateLike?.dungeonLevel) ? stateLike.dungeonLevel : 1);
+  const level = clampDungeonLevel(Number.isFinite(stateLike?.dungeonLevel) ? stateLike.dungeonLevel : 1);
   const bonus = Math.max(0, stateLike?.bonusRoomCapPermanent || 0);
   return MAX_ROOMS_BASE + (level - 1) * ROOMS_PER_LEVEL + bonus;
 }
@@ -3674,6 +3679,7 @@ function defaultState() {
       const dominionEffects = parsed.dominionEffects || base.dominionEffects;
       const evolutionOffer = parsed.evolutionOffer || base.evolutionOffer;
       const coreShield = Number.isFinite(parsed.coreShield) ? parsed.coreShield : base.coreShield;
+      const dungeonLevel = clampDungeonLevel(parsed.dungeonLevel ?? base.dungeonLevel ?? 1);
       const councilRaw = parsed.council || base.council;
       const council = {
         active: !!councilRaw.active,
@@ -3765,6 +3771,7 @@ function defaultState() {
         evolutionOffer,
         coreHp,
         coreShield,
+        dungeonLevel,
         council,
         councilFavor,
         councilSession,
@@ -3877,7 +3884,7 @@ function defaultState() {
   const ownedArtifactCounts = useMemo(() => countOwnedArtifacts(state.artifacts), [state.artifacts]);
   const contentWarnings = useMemo(() => validateGameContent(), []);
   const coreMaxHp = useMemo(() => getCoreMaxHp(state), [state.doctrines, state.nihazaCurseUntilDay, state.day]);
-  const dungeonLevel = Number.isFinite(state.dungeonLevel) ? state.dungeonLevel : 1;
+  const dungeonLevel = clampDungeonLevel(state.dungeonLevel);
   const maxRooms = getDungeonRoomCap(state);
 
   const heroesByTile = useMemo(() => {
@@ -4579,7 +4586,10 @@ function defaultState() {
     }
     setState((s) => {
       if (s.raidActive) return addLog(s, "Cannot upgrade during a raid.");
-      const currentLevel = Number.isFinite(s.dungeonLevel) ? s.dungeonLevel : 1;
+      const currentLevel = clampDungeonLevel(s.dungeonLevel);
+      if (currentLevel >= MAX_DUNGEON_LEVEL) {
+        return addLog(s, `Dungeon already at maximum level (${MAX_DUNGEON_LEVEL}).`);
+      }
       const cost = scaleByDay(25 + currentLevel * 15, s.day, 0.03, 3.0);
       if (s.currency.essence < cost) return addLog(s, `Not enough Essence to upgrade (${cost}).`);
       const dungeonLevel = currentLevel + 1;
@@ -6992,7 +7002,8 @@ function defaultState() {
 
   const canStartRaid = !locked && isBattlePhase && !state.raidActive && validation.ok;
   const canEndTurn = !locked && isBattlePhase && (state.raidActive || state.heroes.length > 0);
-  const nextUpgradeCost = scaleByDay(25 + dungeonLevel * 15, state.day, 0.03, 3.0);
+  const atDungeonLevelCap = dungeonLevel >= MAX_DUNGEON_LEVEL;
+  const nextUpgradeCost = atDungeonLevelCap ? null : scaleByDay(25 + dungeonLevel * 15, state.day, 0.03, 3.0);
   const selectedIsAshBreach = isAshBreachAt(state.ashTrial, state.selected.x, state.selected.y);
   const selectedLinkInfo = roomLinkInfoAt(state.grid, state.selected.x, state.selected.y);
   const selectedReadiness = tileStateChip(selectedTile, state.selected.x, state.selected.y) || "n/a";
@@ -7021,6 +7032,8 @@ function defaultState() {
     : `Build phase. Next raid: ${pendingRaidMeta.label}.`;
   const dungeonRailSupport = state.movePayload
     ? "Moving a room or the Core does not consume a turn."
+    : atDungeonLevelCap
+    ? `Dungeon level capped at ${MAX_DUNGEON_LEVEL}. ${validation.ok ? "Dungeon route is ready." : "Connect every entrance to the Core."}`
     : `Upgrade cost: ${nextUpgradeCost} Essence. ${validation.ok ? "Dungeon route is ready." : "Connect every entrance to the Core."}`;
 
   function evolutionButtonLabel(monster) {
@@ -7469,7 +7482,7 @@ function defaultState() {
                 <div className="dungeonFrameSubtitle">Place up to {maxRooms} rooms</div>
               </div>
               <div className="capMeta dungeonCapMeta">
-                Remaining: {Math.max(0, maxRooms - roomsPlaced)} | Next cap: {maxRooms + ROOMS_PER_LEVEL}
+                Remaining: {Math.max(0, maxRooms - roomsPlaced)} | Next cap: {atDungeonLevelCap ? "MAX" : maxRooms + ROOMS_PER_LEVEL}
               </div>
             </div>
             <div className="dungeonHudRail">
@@ -7708,9 +7721,9 @@ function defaultState() {
               <button
                 className="btn"
                 onClick={upgradeDungeon}
-                disabled={locked || state.movePayload || !isBuildPhase || state.raidActive}
+                disabled={locked || state.movePayload || !isBuildPhase || state.raidActive || atDungeonLevelCap}
               >
-                Upgrade Dungeon
+                {atDungeonLevelCap ? "Dungeon Maxed" : "Upgrade Dungeon"}
               </button>
               <button className="btn" onClick={startMove} disabled={locked || !!state.movePayload || !isBuildPhase}>
                 Move Selected
