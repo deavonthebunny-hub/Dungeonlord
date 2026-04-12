@@ -1778,6 +1778,8 @@ button.entityItem {
 .councilCard {
   position: relative;
   overflow: hidden;
+  padding: 16px 12px 14px;
+  gap: 10px;
   background:
     linear-gradient(180deg, rgba(16, 12, 10, 0.34), rgba(10, 8, 8, 0.2)),
     var(--council-scroll-url),
@@ -1795,15 +1797,16 @@ button.entityItem {
 .panel--council .card::before {
   content: "";
   position: absolute;
-  left: 16px;
-  right: 16px;
-  top: 10px;
-  height: 8px;
+  left: 14px;
+  right: 14px;
+  top: 8px;
+  height: 6px;
   border-radius: 999px;
   background: linear-gradient(180deg, rgba(62, 38, 20, 0.95), rgba(102, 72, 42, 0.82));
   box-shadow: 0 1px 0 rgba(248, 214, 162, 0.18);
-  opacity: 0.9;
+  opacity: 0.78;
   pointer-events: none;
+  z-index: 0;
 }
 
 .councilCard::after,
@@ -1812,15 +1815,18 @@ button.entityItem {
   position: absolute;
   left: 18px;
   right: 18px;
-  bottom: 10px;
+  bottom: 8px;
   height: 1px;
   background: linear-gradient(90deg, rgba(244, 212, 168, 0), rgba(244, 212, 168, 0.4), rgba(244, 212, 168, 0));
   pointer-events: none;
+  z-index: 0;
 }
 
 .panel--council .card {
   position: relative;
   overflow: hidden;
+  padding: 16px 12px 14px;
+  gap: 10px;
   background:
     linear-gradient(180deg, rgba(16, 12, 10, 0.34), rgba(10, 8, 8, 0.2)),
     var(--council-scroll-url),
@@ -1834,12 +1840,19 @@ button.entityItem {
     inset 0 -18px 26px rgba(26, 16, 10, 0.16);
 }
 
+.councilCard > *,
+.panel--council .card > * {
+  position: relative;
+  z-index: 1;
+}
+
 .councilCard .cardTitle {
   color: #f5e6ca;
   font-family: "Cinzel", "Georgia", serif;
   letter-spacing: 0.08em;
   position: relative;
-  padding-top: 10px;
+  padding-top: 2px;
+  line-height: 1.2;
 }
 
 .panel--council .card .cardTitle {
@@ -1847,7 +1860,8 @@ button.entityItem {
   font-family: "Cinzel", "Georgia", serif;
   letter-spacing: 0.08em;
   position: relative;
-  padding-top: 10px;
+  padding-top: 2px;
+  line-height: 1.2;
 }
 
 .councilCard .entityItem,
@@ -1904,7 +1918,7 @@ button.entityItem {
 
 .councilDetails {
   overflow: auto;
-  padding-right: 4px;
+  padding: 2px 8px 2px 2px;
   display: flex;
   flex-direction: column;
   gap: 16px;
