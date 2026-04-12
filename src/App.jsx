@@ -7231,10 +7231,11 @@ function defaultState() {
               {councilRoster.map((m, idx) => {
                 const count = Math.max(1, councilRoster.length);
                 const angle = (idx / count) * Math.PI * 2 - Math.PI / 2;
-                const baseRadius = 210 + (count > 5 ? 30 : 0);
-                const radius = baseRadius + (idx % 2 === 0 ? 30 : -10);
-                const x = Math.cos(angle) * radius;
-                const y = Math.sin(angle) * radius;
+                const baseRadiusX = count > 5 ? 240 : 220;
+                const baseRadiusY = count > 5 ? 168 : 156;
+                const radialOffset = idx % 2 === 0 ? 12 : -8;
+                const x = Math.cos(angle) * Math.max(150, baseRadiusX + radialOffset);
+                const y = Math.sin(angle) * Math.max(116, baseRadiusY + radialOffset * 0.55);
                 const crestSrc = COUNCIL_MEMBER_CRESTS[m.key] || null;
                 const useCrest = !!crestSrc && !brokenCouncilArt[crestSrc];
                 return (
