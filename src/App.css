@@ -1779,6 +1779,7 @@ button.entityItem {
 .councilCard {
   position: relative;
   overflow: visible;
+  flex: 0 0 auto;
   padding: 16px 12px 14px;
   gap: 10px;
   background:
@@ -1826,6 +1827,7 @@ button.entityItem {
 .panel--council .card {
   position: relative;
   overflow: visible;
+  flex: 0 0 auto;
   padding: 16px 12px 14px;
   gap: 10px;
   background:
@@ -1881,15 +1883,25 @@ button.entityItem {
 .councilCard .entityMeta,
 .councilCard .entityStats,
 .councilCard .muted,
+.councilCard .entityEmpty,
+.councilCard .entityName,
 .panel--council .card .entityMeta,
 .panel--council .card .entityStats,
-.panel--council .card .muted {
+.panel--council .card .muted,
+.panel--council .card .entityEmpty,
+.panel--council .card .entityName {
   color: #d8c3a7;
+  flex: 0 0 auto;
 }
 
 .councilCard .entityName,
 .panel--council .card .entityName {
   color: #fff4e2;
+}
+
+.councilDetails > .councilCard,
+.panel--council .toolboxScroll > .card {
+  flex-shrink: 0;
 }
 
 .panel--council .panelTitle {
