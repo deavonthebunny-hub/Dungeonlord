@@ -1752,13 +1752,111 @@ button.entityItem {
 }
 
 .councilCard {
-  background: linear-gradient(180deg, rgba(26, 22, 24, 0.96), rgba(16, 16, 22, 0.96));
-  border: 1px solid rgba(158, 122, 84, 0.24);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 224, 182, 0.03);
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(16, 12, 10, 0.34), rgba(10, 8, 8, 0.2)),
+    var(--council-scroll-url),
+    linear-gradient(180deg, rgba(88, 68, 50, 0.96), rgba(66, 50, 38, 0.96));
+  background-size: cover;
+  background-position: center;
+  border: 1px solid rgba(154, 118, 76, 0.38);
+  box-shadow:
+    0 14px 28px rgba(0, 0, 0, 0.26),
+    inset 0 1px 0 rgba(248, 222, 178, 0.08),
+    inset 0 -18px 26px rgba(26, 16, 10, 0.16);
+}
+
+.councilCard::before,
+.panel--council .card::before {
+  content: "";
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 10px;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(62, 38, 20, 0.95), rgba(102, 72, 42, 0.82));
+  box-shadow: 0 1px 0 rgba(248, 214, 162, 0.18);
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.councilCard::after,
+.panel--council .card::after {
+  content: "";
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 10px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(244, 212, 168, 0), rgba(244, 212, 168, 0.4), rgba(244, 212, 168, 0));
+  pointer-events: none;
+}
+
+.panel--council .card {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(16, 12, 10, 0.34), rgba(10, 8, 8, 0.2)),
+    var(--council-scroll-url),
+    linear-gradient(180deg, rgba(88, 68, 50, 0.96), rgba(66, 50, 38, 0.96));
+  background-size: cover;
+  background-position: center;
+  border: 1px solid rgba(154, 118, 76, 0.38);
+  box-shadow:
+    0 14px 28px rgba(0, 0, 0, 0.26),
+    inset 0 1px 0 rgba(248, 222, 178, 0.08),
+    inset 0 -18px 26px rgba(26, 16, 10, 0.16);
 }
 
 .councilCard .cardTitle {
-  color: #f0dfc8;
+  color: #f5e6ca;
+  font-family: "Cinzel", "Georgia", serif;
+  letter-spacing: 0.08em;
+  position: relative;
+  padding-top: 10px;
+}
+
+.panel--council .card .cardTitle {
+  color: #f5e6ca;
+  font-family: "Cinzel", "Georgia", serif;
+  letter-spacing: 0.08em;
+  position: relative;
+  padding-top: 10px;
+}
+
+.councilCard .entityItem,
+.panel--council .card .entityItem {
+  background: rgba(34, 22, 16, 0.28);
+  border-color: rgba(120, 88, 58, 0.36);
+  box-shadow: inset 0 1px 0 rgba(244, 220, 176, 0.04);
+}
+
+.councilCard .entityItem.active,
+.panel--council .card .entityItem.active {
+  border-color: rgba(236, 180, 94, 0.6);
+  box-shadow: 0 0 0 1px rgba(236, 180, 94, 0.18), inset 0 1px 0 rgba(252, 226, 186, 0.06);
+}
+
+.councilCard .entityMeta,
+.councilCard .entityStats,
+.councilCard .muted,
+.panel--council .card .entityMeta,
+.panel--council .card .entityStats,
+.panel--council .card .muted {
+  color: #d8c3a7;
+}
+
+.councilCard .entityName,
+.panel--council .card .entityName {
+  color: #fff4e2;
+}
+
+.panel--council .panelTitle {
+  color: #f2dfc0;
+  border-bottom-color: rgba(154, 118, 76, 0.28);
+  background: linear-gradient(180deg, rgba(32, 22, 16, 0.88), rgba(18, 14, 14, 0.88));
 }
 
 .councilFocusedHeader {

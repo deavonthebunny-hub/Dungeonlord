@@ -351,6 +351,7 @@ const COUNCIL_CHAMBER_ART = {
   backdrop: `${COUNCIL_ART_BASE}council-hall-bg.png`,
   sigil: `${COUNCIL_ART_BASE}council-center-sigil.png`,
   absentSilhouette: `${COUNCIL_ART_BASE}absent-silhouette.png`,
+  scrollTexture: `${COUNCIL_ART_BASE}dark-decree-scroll.png`,
 };
 const COUNCIL_MEMBER_CRESTS = {
   malachar: `${COUNCIL_ART_BASE}malachar-crest.png`,
@@ -7022,7 +7023,7 @@ function defaultState() {
               })}
             </div>
 
-            <div className="councilDetails">
+            <div className="councilDetails" style={{ "--council-scroll-url": `url(${COUNCIL_CHAMBER_ART.scrollTexture})` }}>
               <div className="card councilCard councilFocusedCard">
                 <div className="cardTitle">Focused Dungeonlord</div>
                 {focusedCouncilMember ? (
@@ -8517,7 +8518,7 @@ function defaultState() {
           </div>
         </section>
 
-        <section className="panel panel--council">
+        <section className="panel panel--council" style={{ "--council-scroll-url": `url(${COUNCIL_CHAMBER_ART.scrollTexture})` }}>
           <div className="panelTitle">Council of the Dungeonlords</div>
           <div className="toolboxScroll">
             {state.councilSession && state.councilSession.day === state.day ? (
