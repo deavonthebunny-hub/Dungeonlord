@@ -916,6 +916,30 @@ body::before {
   border: 1px solid rgba(34, 197, 94, 0.35);
 }
 
+.badge.favorAllied {
+  background: rgba(217, 119, 6, 0.18);
+  color: #fde68a;
+  border: 1px solid rgba(217, 119, 6, 0.4);
+}
+
+.badge.favorFavored {
+  background: rgba(22, 163, 74, 0.18);
+  color: #dcfce7;
+  border: 1px solid rgba(22, 163, 74, 0.38);
+}
+
+.badge.favorWary {
+  background: rgba(217, 119, 6, 0.14);
+  color: #fcd34d;
+  border: 1px solid rgba(217, 119, 6, 0.32);
+}
+
+.badge.favorHostile {
+  background: rgba(185, 28, 28, 0.18);
+  color: #fecaca;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
 .badge.favorBad {
   background: rgba(239, 68, 68, 0.16);
   color: #fecaca;

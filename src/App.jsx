@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import "./App.css";
 import {
+  COUNCIL_FAVOR_BANDS,
   COUNCIL_RAID_FACTIONS,
   COUNCIL_SPONSOR_CONTENT,
   DOCTRINE_RULES,
@@ -367,6 +368,17 @@ const COUNCIL_MEMBER_CRESTS = {
   zurkhan: `${COUNCIL_ART_BASE}zurkhan-crest.png`,
   nihaza: `${COUNCIL_ART_BASE}nihaza-crest.png`,
 };
+const COUNCIL_MEMBER_MAP = Object.fromEntries(COUNCIL_MEMBERS.map((member) => [member.key, member]));
+const COUNCIL_FAVOR_RULES = [
+  "Attend Council: +1 with each attendee.",
+  "Decline Council: -1 with each attendee.",
+  "Accept a boon: +2 with that sponsor.",
+  "Accept a quest: +1 with that sponsor.",
+  "Complete a Council quest: +2 with that sponsor.",
+  "Fail or let a Council quest expire: -2 with that sponsor.",
+  "Each Council drifts all favor 1 step toward neutral.",
+  "Rivalries pull enemies 1 point in the opposite direction.",
+];
 
 const CLASS_STAT_MODS = {
   Warrior: { hp: 4, atk: 1, def: 1 },
@@ -739,9 +751,149 @@ function councilBandValue(bands, day, fallback = 0) {
   return bands[idx] ?? fallback;
 }
 
-function buildCouncilReward(reward, day) {
+function clampCouncilFavor(score = 0) {
+  return clamp(Math.round(score || 0), -6, 6);
+}
+
+function normalizeCouncilFavorMap(favorMap = {}) {
+  const next = {};
+  for (const member of COUNCIL_MEMBERS) {
+    const value = favorMap?.[member.key];
+    if (!Number.isFinite(value)) continue;
+    const clamped = clampCouncilFavor(value);
+    if (clamped !== 0) next[member.key] = clamped;
+  }
+  return next;
+}
+
+function decayCouncilFavorTowardNeutral(favorMap = {}) {
+  const next = {};
+  let changed = false;
+  for (const member of COUNCIL_MEMBERS) {
+    const current = clampCouncilFavor(favorMap?.[member.key] || 0);
+    const decayed = current > 0 ? current - 1 : current < 0 ? current + 1 : 0;
+    if (decayed !== current) changed = true;
+    if (decayed !== 0) next[member.key] = decayed;
+  }
+  return { favorMap: next, changed };
+}
+
+function getCouncilFavorInfo(score = 0) {
+  const clamped = clampCouncilFavor(score);
+  const band =
+    COUNCIL_FAVOR_BANDS.find((entry) => clamped >= entry.min && clamped <= entry.max) ||
+    COUNCIL_FAVOR_BANDS.find((entry) => entry.key === "neutral") ||
+    COUNCIL_FAVOR_BANDS[0];
+  return {
+    ...band,
+    score: clamped,
+  };
+}
+
+function councilFavorBadgeTone(favorInfo) {
+  switch (favorInfo?.key) {
+    case "hostile":
+      return "favorHostile";
+    case "wary":
+      return "favorWary";
+    case "favored":
+      return "favorFavored";
+    case "allied":
+      return "favorAllied";
+    default:
+      return "favorNeutral";
+  }
+}
+
+function formatCouncilFavorLabel(scoreOrInfo) {
+  const info = typeof scoreOrInfo === "object" && scoreOrInfo ? scoreOrInfo : getCouncilFavorInfo(scoreOrInfo);
+  return `Favor ${info.score >= 0 ? `+${info.score}` : info.score} • ${info.name}`;
+}
+
+function resolveCouncilSponsorAccess(memberKey, score, day, baseContent = {}) {
+  const favorInfo = getCouncilFavorInfo(score);
+  const baseLocked = !!baseContent?.locked;
+  const baseLockedReason = baseContent?.lockedReason || "";
+  const hostileReason = "Hostile toward your rule.";
+  const waryReason = "Wary. Earn more favor to receive contracts.";
+  const hardQuestReason = "Favored standing required for hard contracts.";
+  if (baseLocked) {
+    return {
+      favorInfo,
+      rewardBandShift: 0,
+      available: false,
+      lockedReason: baseLockedReason,
+      boon: { available: false, lockedReason: baseLockedReason },
+      quests: {
+        standard: { available: false, lockedReason: baseLockedReason },
+        hard: { available: false, lockedReason: baseLockedReason },
+      },
+    };
+  }
+  if (favorInfo.key === "hostile") {
+    return {
+      favorInfo,
+      rewardBandShift: 0,
+      available: false,
+      lockedReason: hostileReason,
+      boon: { available: false, lockedReason: hostileReason },
+      quests: {
+        standard: { available: false, lockedReason: hostileReason },
+        hard: { available: false, lockedReason: hostileReason },
+      },
+    };
+  }
+  if (favorInfo.key === "wary") {
+    return {
+      favorInfo,
+      rewardBandShift: 0,
+      available: true,
+      lockedReason: "",
+      boon: { available: true, lockedReason: "" },
+      quests: {
+        standard: { available: false, lockedReason: waryReason },
+        hard: { available: false, lockedReason: waryReason },
+      },
+    };
+  }
+  if (favorInfo.key === "neutral") {
+    return {
+      favorInfo,
+      rewardBandShift: 0,
+      available: true,
+      lockedReason: "",
+      boon: { available: true, lockedReason: "" },
+      quests: {
+        standard: { available: true, lockedReason: "" },
+        hard: { available: false, lockedReason: hardQuestReason },
+      },
+    };
+  }
+  const allied = favorInfo.key === "allied";
+  return {
+    favorInfo,
+    rewardBandShift: allied ? 1 : 0,
+    available: true,
+    lockedReason: "",
+    boon: { available: true, lockedReason: "" },
+    quests: {
+      standard: { available: true, lockedReason: "" },
+      hard: { available: true, lockedReason: "" },
+    },
+  };
+}
+
+function buildCouncilReward(reward, day, rewardBandShift = 0) {
   if (!reward) return null;
   if (Number.isFinite(reward.amount)) return { ...reward };
+  if (Array.isArray(reward.bands) && reward.bands.length > 0) {
+    const baseIdx = Math.max(0, Math.min(councilEraIndex(day), reward.bands.length - 1));
+    const shiftedIdx = Math.max(0, Math.min(baseIdx + rewardBandShift, reward.bands.length - 1));
+    return {
+      ...reward,
+      amount: reward.bands[shiftedIdx] ?? reward.bands[baseIdx] ?? 0,
+    };
+  }
   return {
     ...reward,
     amount: councilBandValue(reward.bands, day, 0),
@@ -757,7 +909,7 @@ function councilRewardLabel(reward) {
   return `+${reward.amount} ${reward.type}`;
 }
 
-function buildCouncilBoon(member, day) {
+function buildCouncilBoon(member, day, sponsorAccess) {
   const content = COUNCIL_SPONSOR_CONTENT[member.key] || null;
   const boon = content?.boon || null;
   if (!boon) return null;
@@ -765,13 +917,13 @@ function buildCouncilBoon(member, day) {
     ...boon,
     sponsorKey: member.key,
     sponsorName: member.name,
-    reward: buildCouncilReward(boon.reward, day),
-    available: !content?.locked,
-    lockedReason: content?.lockedReason || "",
+    reward: buildCouncilReward(boon.reward, day, sponsorAccess?.rewardBandShift || 0),
+    available: !!sponsorAccess?.boon?.available,
+    lockedReason: sponsorAccess?.boon?.lockedReason || "",
   };
 }
 
-function buildCouncilQuestVariant(member, day, difficulty) {
+function buildCouncilQuestVariant(member, day, difficulty, sponsorAccess) {
   const content = COUNCIL_SPONSOR_CONTENT[member.key] || null;
   const quest = content?.quests?.[difficulty] || null;
   if (!quest) return null;
@@ -782,27 +934,29 @@ function buildCouncilQuestVariant(member, day, difficulty) {
     difficulty,
     goal: councilBandValue(quest.goalBands, day, 0),
     progress: 0,
-    reward: buildCouncilReward(quest.reward, day),
-    available: !content?.locked,
-    lockedReason: content?.lockedReason || "",
+    reward: buildCouncilReward(quest.reward, day, sponsorAccess?.rewardBandShift || 0),
+    available: !!sponsorAccess?.quests?.[difficulty]?.available,
+    lockedReason: sponsorAccess?.quests?.[difficulty]?.lockedReason || "",
   };
 }
 
-function buildCouncilSponsorEntry(member, day) {
+function buildCouncilSponsorEntry(member, day, favorMap = {}) {
   const content = COUNCIL_SPONSOR_CONTENT[member.key] || {};
+  const sponsorAccess = resolveCouncilSponsorAccess(member.key, favorMap?.[member.key] || 0, day, content);
   return {
     key: member.key,
-    available: !content.locked,
-    lockedReason: content.lockedReason || "",
-    boon: buildCouncilBoon(member, day),
+    available: sponsorAccess.available,
+    lockedReason: sponsorAccess.lockedReason,
+    favorInfo: sponsorAccess.favorInfo,
+    boon: buildCouncilBoon(member, day, sponsorAccess),
     quests: {
-      standard: buildCouncilQuestVariant(member, day, "standard"),
-      hard: buildCouncilQuestVariant(member, day, "hard"),
+      standard: buildCouncilQuestVariant(member, day, "standard", sponsorAccess),
+      hard: buildCouncilQuestVariant(member, day, "hard", sponsorAccess),
     },
   };
 }
 
-function buildCouncilSession(roster, day) {
+function buildCouncilSession(roster, day, favorMap = {}) {
   const speakers = pickUnique(roster, Math.min(4, roster.length));
   const dialogue = speakers.map((s) => pick(COUNCIL_DIALOGUE).replace("{name}", s.name));
   if (roster.length >= 2) {
@@ -811,7 +965,7 @@ function buildCouncilSession(roster, day) {
     dialogue.push(`${a.name} and ${b.name} clash over strategy, but no blood is spilled... this time.`);
   }
   const rumors = pickUnique(COUNCIL_RUMORS, 2);
-  const sponsors = roster.map((member) => buildCouncilSponsorEntry(member, day));
+  const sponsors = roster.map((member) => buildCouncilSponsorEntry(member, day, favorMap));
   return {
     day,
     status: "pending",
@@ -822,6 +976,21 @@ function buildCouncilSession(roster, day) {
     acceptedCouncilBoonKey: null,
     acceptedCouncilQuestId: null,
     acceptedCouncilQuestDifficulty: null,
+  };
+}
+
+function rebuildCouncilSessionWithFavor(session, roster, day, favorMap = {}) {
+  if (!session || !Array.isArray(roster) || roster.length === 0) return session;
+  const rebuilt = buildCouncilSession(roster, day, favorMap);
+  return {
+    ...rebuilt,
+    dialogue: Array.isArray(session.dialogue) && session.dialogue.length ? session.dialogue : rebuilt.dialogue,
+    rumors: Array.isArray(session.rumors) && session.rumors.length ? session.rumors : rebuilt.rumors,
+    status: session.status || rebuilt.status,
+    courtedSponsorKey: session.courtedSponsorKey || null,
+    acceptedCouncilBoonKey: session.acceptedCouncilBoonKey || null,
+    acceptedCouncilQuestId: session.acceptedCouncilQuestId || null,
+    acceptedCouncilQuestDifficulty: session.acceptedCouncilQuestDifficulty || null,
   };
 }
 
@@ -938,22 +1107,46 @@ function applyCouncilRewardToState(stateLike, reward, sponsorName = "", day = 1)
   return { nextState, rewardText: "Reward granted." };
 }
 
-function applyCouncilFavorShift(favorMap, memberKey, delta) {
-  if (!memberKey) return favorMap || {};
-  const next = { ...(favorMap || {}) };
-  next[memberKey] = (next[memberKey] || 0) + delta;
-  const member = COUNCIL_MEMBERS.find((m) => m.key === memberKey);
-  for (const rivalKey of member?.rivalries || []) {
-    next[rivalKey] = (next[rivalKey] || 0) - Math.sign(delta || 0);
+function addLogLines(stateLike, lines = []) {
+  let nextState = stateLike;
+  for (let idx = lines.length - 1; idx >= 0; idx -= 1) {
+    nextState = addLog(nextState, lines[idx]);
   }
-  return next;
+  return nextState;
+}
+
+function applyCouncilFavorShiftDetailed(favorMap, memberKey, delta, reason = "Council politics") {
+  const next = normalizeCouncilFavorMap(favorMap || {});
+  const logLines = [];
+  if (!memberKey || !delta) return { favorMap: next, logLines };
+  const member = COUNCIL_MEMBER_MAP[memberKey];
+  const applySingleShift = (targetKey, shift, why) => {
+    if (!targetKey || !shift) return;
+    const before = clampCouncilFavor(next[targetKey] || 0);
+    const after = clampCouncilFavor(before + shift);
+    if (after === before) return;
+    if (after === 0) delete next[targetKey];
+    else next[targetKey] = after;
+    const appliedDelta = after - before;
+    const targetMember = COUNCIL_MEMBER_MAP[targetKey];
+    logLines.push(`Favor: ${targetMember?.name || targetKey} ${appliedDelta >= 0 ? `+${appliedDelta}` : appliedDelta} (${why}).`);
+  };
+  applySingleShift(memberKey, delta, reason);
+  for (const rivalKey of member?.rivalries || []) {
+    applySingleShift(rivalKey, -Math.sign(delta), `Rivalry with ${member?.name || memberKey}`);
+  }
+  return { favorMap: next, logLines };
 }
 
 function buildCouncilRaidFromRoster(roster = [], day = 1, favorMap = {}) {
   const sorted = [...roster].sort((a, b) => {
-    const aScore = (favorMap[a.key] || 0) + Math.random() * 0.35;
-    const bScore = (favorMap[b.key] || 0) + Math.random() * 0.35;
-    return aScore - bScore;
+    const aFavor = getCouncilFavorInfo(favorMap[a.key] || 0);
+    const bFavor = getCouncilFavorInfo(favorMap[b.key] || 0);
+    if (aFavor.score !== bFavor.score) return aFavor.score - bFavor.score;
+    const aBandIdx = COUNCIL_FAVOR_BANDS.findIndex((band) => band.key === aFavor.key);
+    const bBandIdx = COUNCIL_FAVOR_BANDS.findIndex((band) => band.key === bFavor.key);
+    if (aBandIdx !== bBandIdx) return aBandIdx - bBandIdx;
+    return a.key.localeCompare(b.key);
   });
   const attackerCount = sorted.length > 1 && day >= 40 ? 2 : 1;
   const attackers = sorted.slice(0, attackerCount).map((member) => {
@@ -3489,7 +3682,7 @@ function defaultState() {
         lastRoster: Array.isArray(councilRaw.lastRoster) ? councilRaw.lastRoster : [],
         declinedStreak: Number.isFinite(councilRaw.declinedStreak) ? councilRaw.declinedStreak : 0,
       };
-      const councilFavor = parsed.councilFavor && typeof parsed.councilFavor === "object" ? parsed.councilFavor : {};
+      const councilFavor = normalizeCouncilFavorMap(parsed.councilFavor && typeof parsed.councilFavor === "object" ? parsed.councilFavor : {});
       const ashTrial = normalizeAshTrial(parsed.ashTrial, savedDay);
       const ashTributeUntilDay = Number.isFinite(parsed.ashTributeUntilDay) ? parsed.ashTributeUntilDay : 0;
       const ashMonsterRoomCapUntilDay = Number.isFinite(parsed.ashMonsterRoomCapUntilDay) ? parsed.ashMonsterRoomCapUntilDay : 0;
@@ -3513,15 +3706,7 @@ function defaultState() {
       }
       let councilSession = parsed.councilSession || base.councilSession;
       if (councilSession && Array.isArray(council.roster) && council.roster.length > 0) {
-        const rebuilt = buildCouncilSession(council.roster, councilSession.day || savedDay);
-        councilSession = {
-          ...rebuilt,
-          status: councilSession.status || rebuilt.status,
-          courtedSponsorKey: councilSession.courtedSponsorKey || null,
-          acceptedCouncilBoonKey: councilSession.acceptedCouncilBoonKey || null,
-          acceptedCouncilQuestId: councilSession.acceptedCouncilQuestId || null,
-          acceptedCouncilQuestDifficulty: councilSession.acceptedCouncilQuestDifficulty || null,
-        };
+        councilSession = rebuildCouncilSessionWithFavor(councilSession, council.roster, councilSession.day || savedDay, councilFavor);
       } else if (!Array.isArray(councilSession?.sponsors)) {
         councilSession = null;
       }
@@ -5857,6 +6042,9 @@ function defaultState() {
           if (progressedTrial.raidsCompleted >= (progressedTrial.requiredRaids || 2) && nextState.councilQuest?.questType === "ash-breach-trial") {
             const rewardResult = applyCouncilRewardToState(nextState, nextState.councilQuest.reward, nextState.councilQuest.sponsorName, nextState.day);
             nextState = rewardResult.nextState;
+            const favorShift = applyCouncilFavorShiftDetailed(nextState.councilFavor || {}, nextState.councilQuest.sponsorKey, 2, "Council quest completed");
+            nextState.councilFavor = favorShift.favorMap;
+            nextState = addLogLines(nextState, favorShift.logLines);
             nextState = addLog(nextState, `Council quest completed: ${nextState.councilQuest.title}. ${rewardResult.rewardText || "Reward claimed."}`);
             nextState.ashTrial = createEmptyAshTrial();
             nextState = addLog(nextState, `Ash Breach${progressedTrial.breaches?.length > 1 ? "es" : ""} collapse${progressedTrial.breaches?.length > 1 ? "" : "s"} into cinders.`);
@@ -5872,6 +6060,9 @@ function defaultState() {
           if (progress >= goal) {
             const rewardResult = applyCouncilRewardToState(nextState, nextState.councilQuest.reward, nextState.councilQuest.sponsorName, nextState.day);
             nextState = rewardResult.nextState;
+            const favorShift = applyCouncilFavorShiftDetailed(nextState.councilFavor || {}, nextState.councilQuest.sponsorKey, 2, "Council quest completed");
+            nextState.councilFavor = favorShift.favorMap;
+            nextState = addLogLines(nextState, favorShift.logLines);
             nextState = addLog(nextState, `Council quest completed: ${nextState.councilQuest.title}. ${rewardResult.rewardText || "Reward claimed."}`);
             nextState.councilQuest = { ...nextState.councilQuest, active: false, progress: goal };
           } else {
@@ -5882,7 +6073,9 @@ function defaultState() {
         if (councilDue) {
           const council = nextState.council || { active: false, day: null, roster: [], lastRoster: [], declinedStreak: 0 };
           const roster = buildCouncilRoster(council.lastRoster || []);
-          const councilFavor = nextState.councilFavor || {};
+          let councilFavor = normalizeCouncilFavorMap(nextState.councilFavor || {});
+          councilFavor = decayCouncilFavorTowardNeutral(councilFavor).favorMap;
+          nextState.councilFavor = councilFavor;
           nextState.council = {
             ...council,
             active: true,
@@ -5897,6 +6090,15 @@ function defaultState() {
             nextState = addLog(nextState, `Ash spreads. Nihaza's judgment stands. Core max HP -25 until Day ${nextState.nihazaCurseUntilDay}.`);
           }
           if (nextState.councilQuest?.active) {
+            const favorPenalty = applyCouncilFavorShiftDetailed(
+              councilFavor,
+              nextState.councilQuest.sponsorKey,
+              -2,
+              nextState.councilQuest.questType === "ash-breach-trial" ? "Council quest failed" : "Council quest expired"
+            );
+            councilFavor = favorPenalty.favorMap;
+            nextState.councilFavor = councilFavor;
+            nextState = addLogLines(nextState, favorPenalty.logLines);
             if (nextState.councilQuest.questType === "ash-breach-trial") {
               nextState = addLog(nextState, `Council quest failed: ${nextState.councilQuest.title}.`);
             } else {
@@ -5909,7 +6111,7 @@ function defaultState() {
           nextState.nextRaidType = punitive ? "council" : "elite";
           nextState.pendingPunitiveRaid = punitive;
           nextState.pendingCouncilRaid = punitive ? buildCouncilRaidFromRoster(roster, nextState.day, councilFavor) : null;
-          nextState.councilSession = buildCouncilSession(roster, nextState.day);
+          nextState.councilSession = buildCouncilSession(roster, nextState.day, councilFavor);
           nextState = addLog(nextState, "Council of the Dungeonlords convenes. Attend or decline.");
         }
         if (nextState.councilSession && nextState.councilSession.day !== nextState.day) {
@@ -6080,11 +6282,15 @@ function defaultState() {
     setState((s) => {
       const council = { ...s.council, active: false, declinedStreak: 0 };
       const nextRaidType = "elite";
-      const councilSession = s.councilSession ? { ...s.councilSession, status: "attended" } : s.councilSession;
-      let councilFavor = { ...(s.councilFavor || {}) };
+      let councilSession = s.councilSession ? { ...s.councilSession, status: "attended" } : s.councilSession;
+      let councilFavor = normalizeCouncilFavorMap(s.councilFavor || {});
+      const favorLogLines = [];
       for (const member of council.roster || []) {
-        councilFavor = applyCouncilFavorShift(councilFavor, member.key, 1);
+        const favorShift = applyCouncilFavorShiftDetailed(councilFavor, member.key, 1, "Council attended");
+        councilFavor = favorShift.favorMap;
+        favorLogLines.push(...favorShift.logLines);
       }
+      councilSession = rebuildCouncilSessionWithFavor(councilSession, council.roster || [], s.day, councilFavor);
       let ns = {
         ...s,
         council,
@@ -6094,6 +6300,7 @@ function defaultState() {
         pendingCouncilRaid: null,
         councilSession,
       };
+      ns = addLogLines(ns, favorLogLines);
       ns = addLog(ns, "You attended the Council.");
       if (council.roster?.length) {
         const names = council.roster.map((m) => m.name).join(", ");
@@ -6149,11 +6356,15 @@ function defaultState() {
       const declinedStreak = (s.council?.declinedStreak || 0) + 1;
       const council = { ...s.council, active: false, declinedStreak };
       const nextRaidType = declinedStreak >= 2 ? "council" : "elite";
-      const councilSession = s.councilSession ? { ...s.councilSession, status: "declined" } : s.councilSession;
-      let councilFavor = { ...(s.councilFavor || {}) };
+      let councilSession = s.councilSession ? { ...s.councilSession, status: "declined" } : s.councilSession;
+      let councilFavor = normalizeCouncilFavorMap(s.councilFavor || {});
+      const favorLogLines = [];
       for (const member of council.roster || []) {
-        councilFavor = applyCouncilFavorShift(councilFavor, member.key, -1);
+        const favorShift = applyCouncilFavorShiftDetailed(councilFavor, member.key, -1, "Council declined");
+        councilFavor = favorShift.favorMap;
+        favorLogLines.push(...favorShift.logLines);
       }
+      councilSession = rebuildCouncilSessionWithFavor(councilSession, council.roster || [], s.day, councilFavor);
       const pendingCouncilRaid = declinedStreak >= 2 ? buildCouncilRaidFromRoster(council.roster, s.day, councilFavor) : null;
       let ns = {
         ...s,
@@ -6164,6 +6375,7 @@ function defaultState() {
         pendingCouncilRaid,
         councilSession,
       };
+      ns = addLogLines(ns, favorLogLines);
       ns = addLog(ns, "You declined the Council.");
       if (declinedStreak >= 2) {
         ns = addLog(ns, `The Council prepares a punitive raid. ${pendingCouncilRaid?.label || ""}`.trim());
@@ -6231,19 +6443,26 @@ function defaultState() {
         ns.fleshMarketStock = generateFleshMarketStock(s.day, ns.boughtUniqueKeys || []);
         rewardText += ` Flesh Market open until Day ${untilDay}.`;
       }
-      ns.councilFavor = applyCouncilFavorShift(s.councilFavor || {}, sponsorKey, 2);
+      const favorShift = applyCouncilFavorShiftDetailed(s.councilFavor || {}, sponsorKey, 2, "Council boon accepted");
+      ns.councilFavor = favorShift.favorMap;
       if (boon.raidEffect) {
         ns.nextRaidBoons = [
           ...(s.nextRaidBoons || []),
           { ...boon.raidEffect, sponsorKey: boon.sponsorKey, sponsorName: boon.sponsorName },
         ].filter(Boolean);
       }
-      ns.councilSession = {
-        ...s.councilSession,
-        courtedSponsorKey: s.councilSession.courtedSponsorKey || sponsorKey,
-        acceptedCouncilBoonKey: sponsorKey,
-      };
+      ns.councilSession = rebuildCouncilSessionWithFavor(
+        {
+          ...s.councilSession,
+          courtedSponsorKey: s.councilSession.courtedSponsorKey || sponsorKey,
+          acceptedCouncilBoonKey: sponsorKey,
+        },
+        s.council?.roster || [],
+        s.day,
+        ns.councilFavor
+      );
       const leverageText = boon.raidEffect?.desc ? ` ${boon.raidEffect.desc}` : "";
+      ns = addLogLines(ns, favorShift.logLines);
       return addLog(ns, `Council boon received: ${boon.title} from ${boon.sponsorName}.${rewardText}${leverageText}`.trim());
     });
   }
@@ -6286,14 +6505,23 @@ function defaultState() {
         active: true,
         progress: councilQuestProgressValue(nextState, quest),
       };
-      const councilSession = {
-        ...nextState.councilSession,
-        courtedSponsorKey: nextState.councilSession.courtedSponsorKey || sponsorKey,
-        acceptedCouncilQuestId: quest.id,
-        acceptedCouncilQuestDifficulty: difficulty,
-      };
-      const councilFavor = applyCouncilFavorShift(nextState.councilFavor || {}, sponsorKey, 1);
-      return addLog({ ...nextState, councilQuest, councilSession, councilFavor }, `Council quest accepted: ${quest.title} (${quest.sponsorName}, ${difficulty}).`);
+      const favorShift = applyCouncilFavorShiftDetailed(nextState.councilFavor || {}, sponsorKey, 1, "Council quest accepted");
+      const councilFavor = favorShift.favorMap;
+      const councilSession = rebuildCouncilSessionWithFavor(
+        {
+          ...nextState.councilSession,
+          courtedSponsorKey: nextState.councilSession.courtedSponsorKey || sponsorKey,
+          acceptedCouncilQuestId: quest.id,
+          acceptedCouncilQuestDifficulty: difficulty,
+        },
+        nextState.council?.roster || [],
+        nextState.day,
+        councilFavor
+      );
+      return addLog(
+        addLogLines({ ...nextState, councilQuest, councilSession, councilFavor }, favorShift.logLines),
+        `Council quest accepted: ${quest.title} (${quest.sponsorName}, ${difficulty}).`
+      );
     });
   }
 
@@ -6677,10 +6905,12 @@ function defaultState() {
       ? chooseInvaderMove(selectedHeroes[0], state.grid, core, state.activeRaidBoons, doctrineEffects, state.raidIntel, artifactMods)
       : null;
   const focusedCouncilFavor = focusedCouncilMember ? state.councilFavor?.[focusedCouncilMember.key] || 0 : 0;
+  const focusedCouncilFavorInfo = focusedCouncilMember ? getCouncilFavorInfo(focusedCouncilFavor) : getCouncilFavorInfo(0);
   const focusedCouncilSponsor =
     focusedCouncilMember && state.councilSession?.sponsors
       ? state.councilSession.sponsors.find((sponsor) => sponsor.key === focusedCouncilMember.key) || null
       : null;
+  const focusedCouncilStanding = focusedCouncilSponsor?.favorInfo || focusedCouncilFavorInfo;
   const focusedCouncilCrestSrc = focusedCouncilMember ? COUNCIL_MEMBER_CRESTS[focusedCouncilMember.key] || null : null;
   const useFocusedCouncilCrest = !!focusedCouncilCrestSrc && !brokenCouncilArt[focusedCouncilCrestSrc];
   const useCouncilBackdrop = !!COUNCIL_CHAMBER_ART.backdrop && !brokenCouncilArt[COUNCIL_CHAMBER_ART.backdrop];
@@ -6696,6 +6926,13 @@ function defaultState() {
     const breachCount = Math.max(1, quest.breachCount || 1);
     return canPlaceAshBreaches(state.grid, breachCount) ? "" : ashBreachRequirementText(breachCount);
   };
+  const focusedCouncilSponsorStatus = focusedCouncilSponsor
+    ? !focusedCouncilSponsor.available
+      ? focusedCouncilSponsor.lockedReason || "Unavailable"
+      : state.councilSession?.courtedSponsorKey === focusedCouncilSponsor.key
+        ? "Courted"
+        : `${focusedCouncilStanding.name} standing`
+    : "Unavailable";
 
   const previewPathKeys = useMemo(() => {
     if (selectedHeroes[0] && core) {
@@ -7046,28 +7283,18 @@ function defaultState() {
                       </div>
                     </div>
                     <div className="row">
-                      <span className={`badge ${focusedCouncilFavor > 0 ? "favorGood" : focusedCouncilFavor < 0 ? "favorBad" : "favorNeutral"}`}>
-                        Favor {focusedCouncilFavor >= 0 ? `+${focusedCouncilFavor}` : focusedCouncilFavor}
+                      <span className={`badge ${councilFavorBadgeTone(focusedCouncilStanding)}`}>
+                        {formatCouncilFavorLabel(focusedCouncilStanding)}
                       </span>
                       <div className="muted">{focusedCouncilMember.role}</div>
                     </div>
+                    <div className="muted">Standing Effect: {focusedCouncilStanding.summary}</div>
                     <div className="muted">Personality: {focusedCouncilMember.personality}</div>
                     <div className="muted">Current Deal: {focusedCouncilMember.deal}</div>
-                    <div className="muted">
-                      Sponsor Status:{" "}
-                      {focusedCouncilSponsor
-                        ? focusedCouncilSponsor.available
-                          ? state.councilSession.courtedSponsorKey === focusedCouncilSponsor.key
-                            ? "Courted"
-                            : "Available"
-                          : "Coming Later"
-                        : "Unavailable"}
-                    </div>
+                    <div className="muted">Sponsor Status: {focusedCouncilSponsorStatus}</div>
                     <div className="muted">
                       Rivalries:{" "}
-                      {(focusedCouncilMember.rivalries || [])
-                        .map((r) => COUNCIL_MEMBERS.find((m) => m.key === r)?.name || r)
-                        .join(", ")}
+                      {(focusedCouncilMember.rivalries || []).map((r) => COUNCIL_MEMBER_MAP[r]?.name || r).join(", ")}
                     </div>
                     <div className="muted">
                       Leverage in next raid: {focusedCouncilBoons.length ? focusedCouncilBoons.map((boon) => boon.label).join(", ") : "none"}
@@ -7076,6 +7303,16 @@ function defaultState() {
                 ) : (
                   <div className="entityEmpty">Select a Dungeonlord.</div>
                 )}
+              </div>
+              <div className="card councilCard">
+                <div className="cardTitle">Favor Rules</div>
+                <div className="entityList">
+                  {COUNCIL_FAVOR_RULES.map((line) => (
+                    <div className="entityItem" key={`favor-rule-full-${line}`}>
+                      <div className="entityMeta">{line}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
               <div className="card councilCard">
                 <div className="cardTitle">Council Discourse</div>
@@ -7105,6 +7342,7 @@ function defaultState() {
                     <div className="entityMeta">{focusedCouncilSponsor.boon.desc}</div>
                     <div className="muted">{councilRewardLabel(focusedCouncilSponsor.boon.reward)}</div>
                     <div className="muted small">{focusedCouncilSponsor.boon.raidEffect?.desc || "No next-raid leverage."}</div>
+                    <div className="muted small">{formatCouncilFavorLabel(focusedCouncilSponsor.favorInfo || focusedCouncilStanding)}</div>
                     {!focusedCouncilSponsor.available ? <div className="muted small">{focusedCouncilSponsor.lockedReason}</div> : null}
                     <div className="row">
                       {state.councilSession.status !== "attended" ? (
@@ -7113,7 +7351,7 @@ function defaultState() {
                         </button>
                       ) : !focusedCouncilSponsor.available ? (
                         <button className="btn" disabled>
-                          Coming Later
+                          Unavailable
                         </button>
                       ) : state.councilSession.acceptedCouncilBoonKey === focusedCouncilSponsor.key ? (
                         <button className="btn" disabled>
@@ -7173,6 +7411,7 @@ function defaultState() {
                           <div className="muted">{councilQuestGoalLabel(quest)}</div>
                           <div className="muted">Current Progress: {councilQuestProgressLabel(state, quest)}</div>
                           <div className="muted">Reward: {councilRewardLabel(quest.reward)}</div>
+                          <div className="muted small">{formatCouncilFavorLabel(focusedCouncilSponsor.favorInfo || focusedCouncilStanding)}</div>
                           {quest.failurePenalty ? <div className="muted small">Failure: {quest.failurePenalty}</div> : null}
                           {!quest.available ? <div className="muted small">{quest.lockedReason}</div> : null}
                           {placementBlockedReason ? <div className="muted small">{placementBlockedReason}</div> : null}
@@ -7183,7 +7422,7 @@ function defaultState() {
                               </button>
                             ) : !quest.available ? (
                               <button className="btn" disabled>
-                                Coming Later
+                                Unavailable
                               </button>
                             ) : placementBlockedReason ? (
                               <button className="btn" disabled>
@@ -7715,14 +7954,27 @@ function defaultState() {
                   <div className="muted">Day {state.council.day} Council is in session.</div>
                   <div className="entityList">
                     {(state.council?.roster || []).map((m) => (
-                      <div className="entityItem" key={m.key}>
-                        <div className="entityName">
-                          {m.name} - {m.title}
-                        </div>
-                        <div className="entityMeta">{m.theme}</div>
-                        <div className="muted">
-                          Favor {(state.councilFavor?.[m.key] || 0) >= 0 ? `+${state.councilFavor?.[m.key] || 0}` : state.councilFavor?.[m.key] || 0} | {m.role}
-                        </div>
+                      (() => {
+                        const favorInfo = getCouncilFavorInfo(state.councilFavor?.[m.key] || 0);
+                        return (
+                          <div className="entityItem" key={m.key}>
+                            <div className="entityName">
+                              {m.name} - {m.title}
+                            </div>
+                            <div className="entityMeta">{m.theme}</div>
+                            <div className="row">
+                              <span className={`badge ${councilFavorBadgeTone(favorInfo)}`}>{formatCouncilFavorLabel(favorInfo)}</span>
+                              <div className="muted">{m.role}</div>
+                            </div>
+                          </div>
+                        );
+                      })()
+                    ))}
+                  </div>
+                  <div className="entityList">
+                    {COUNCIL_FAVOR_RULES.map((line) => (
+                      <div className="entityItem" key={`toolbox-favor-rule-${line}`}>
+                        <div className="entityMeta">{line}</div>
                       </div>
                     ))}
                   </div>
@@ -8527,18 +8779,26 @@ function defaultState() {
                   <div className="cardTitle">Attending Lords</div>
                   <div className="entityList">
                     {(state.council?.roster || []).map((m) => (
-                      <button
-                        className={`entityItem ${focusedCouncilMember?.key === m.key ? "active" : ""}`}
-                        key={`council-${m.key}`}
-                        onClick={() => setFocusedCouncilKey(m.key)}
-                        type="button"
-                      >
-                        <div className="entityName">
-                          {m.name} - {m.title}
-                        </div>
-                        <div className="entityMeta">{m.theme}</div>
-                        <div className="muted">{m.role}</div>
-                      </button>
+                      (() => {
+                        const favorInfo = getCouncilFavorInfo(state.councilFavor?.[m.key] || 0);
+                        return (
+                          <button
+                            className={`entityItem ${focusedCouncilMember?.key === m.key ? "active" : ""}`}
+                            key={`council-${m.key}`}
+                            onClick={() => setFocusedCouncilKey(m.key)}
+                            type="button"
+                          >
+                            <div className="entityName">
+                              {m.name} - {m.title}
+                            </div>
+                            <div className="entityMeta">{m.theme}</div>
+                            <div className="row">
+                              <span className={`badge ${councilFavorBadgeTone(favorInfo)}`}>{formatCouncilFavorLabel(favorInfo)}</span>
+                              <div className="muted">{m.role}</div>
+                            </div>
+                          </button>
+                        );
+                      })()
                     ))}
                   </div>
                   {state.councilSession.status === "pending" && (
@@ -8553,6 +8813,17 @@ function defaultState() {
                   )}
                   {state.councilSession.status === "attended" && <div className="muted">Status: Attended</div>}
                   {state.councilSession.status === "declined" && <div className="muted">Status: Declined</div>}
+                </div>
+
+                <div className="card">
+                  <div className="cardTitle">Favor Rules</div>
+                  <div className="entityList">
+                    {COUNCIL_FAVOR_RULES.map((line) => (
+                      <div className="entityItem" key={`favor-rule-side-${line}`}>
+                        <div className="entityMeta">{line}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="card">
@@ -8585,6 +8856,7 @@ function defaultState() {
                       <div className="entityMeta">{focusedCouncilSponsor.boon.desc}</div>
                       <div className="muted">{councilRewardLabel(focusedCouncilSponsor.boon.reward)}</div>
                       <div className="muted small">{focusedCouncilSponsor.boon.raidEffect?.desc || "No next-raid leverage."}</div>
+                      <div className="muted small">{formatCouncilFavorLabel(focusedCouncilSponsor.favorInfo || focusedCouncilStanding)}</div>
                       {!focusedCouncilSponsor.available ? <div className="muted small">{focusedCouncilSponsor.lockedReason}</div> : null}
                       <div className="row">
                         {state.councilSession.status !== "attended" ? (
@@ -8593,7 +8865,7 @@ function defaultState() {
                           </button>
                         ) : !focusedCouncilSponsor.available ? (
                           <button className="btn" disabled>
-                            Coming Later
+                            Unavailable
                           </button>
                         ) : state.councilSession.acceptedCouncilBoonKey === focusedCouncilSponsor.key ? (
                           <button className="btn" disabled>
@@ -8657,6 +8929,7 @@ function defaultState() {
                           <div className="muted">{councilQuestGoalLabel(quest)}</div>
                           <div className="muted">Progress: {councilQuestProgressLabel(state, quest)}</div>
                           <div className="muted">Reward: {councilRewardLabel(quest.reward)}</div>
+                          <div className="muted small">{formatCouncilFavorLabel(focusedCouncilSponsor.favorInfo || focusedCouncilStanding)}</div>
                           {quest.failurePenalty ? <div className="muted small">Failure: {quest.failurePenalty}</div> : null}
                           {!quest.available ? <div className="muted small">{quest.lockedReason}</div> : null}
                           {placementBlockedReason ? <div className="muted small">{placementBlockedReason}</div> : null}
@@ -8667,7 +8940,7 @@ function defaultState() {
                               </button>
                             ) : !quest.available ? (
                               <button className="btn" disabled>
-                                Coming Later
+                                Unavailable
                               </button>
                             ) : placementBlockedReason ? (
                               <button className="btn" disabled>

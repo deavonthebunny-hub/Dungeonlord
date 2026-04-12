@@ -276,6 +276,44 @@ export const COUNCIL_RAID_FACTIONS = {
   },
 };
 
+export const COUNCIL_FAVOR_BANDS = [
+  {
+    key: "hostile",
+    name: "Hostile",
+    min: -6,
+    max: -4,
+    summary: "Boons and quests withheld.",
+  },
+  {
+    key: "wary",
+    name: "Wary",
+    min: -3,
+    max: -1,
+    summary: "Boons allowed, contracts withheld.",
+  },
+  {
+    key: "neutral",
+    name: "Neutral",
+    min: 0,
+    max: 1,
+    summary: "Standard contracts available.",
+  },
+  {
+    key: "favored",
+    name: "Favored",
+    min: 2,
+    max: 4,
+    summary: "Hard contracts unlocked.",
+  },
+  {
+    key: "allied",
+    name: "Allied",
+    min: 5,
+    max: 6,
+    summary: "Hard contracts unlocked, banded rewards improved.",
+  },
+];
+
 export const COUNCIL_SPONSOR_CONTENT = {
   malachar: {
     boon: {
