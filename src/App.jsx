@@ -522,6 +522,21 @@ const TILE_CENTER_MARKERS = {
   ash: `${TILE_MARKER_BASE}ash-breach-rift.png`,
 };
 const EMPTY_TILE_ART_SRC = `${import.meta.env.BASE_URL}assets/tiles/empty/unexcavated-stone.png`;
+const TILE_RADAR_MAX_DOTS = 4;
+const TILE_RADAR_SLOTS = {
+  monster: [
+    { x: 26, y: 28 },
+    { x: 20, y: 46 },
+    { x: 40, y: 56 },
+    { x: 58, y: 34 },
+  ],
+  hero: [
+    { x: 72, y: 30 },
+    { x: 78, y: 46 },
+    { x: 60, y: 54 },
+    { x: 68, y: 66 },
+  ],
+};
 
 const UTILITY_MAP = Object.fromEntries(UTILITY_ROOMS.map((r) => [r.key, r]));
 const MONSTER_ROOM_MAP = Object.fromEntries(MONSTER_ROOMS.map((r) => [r.key, r]));
@@ -534,6 +549,11 @@ function roomDefinitionForTile(tile) {
   if (tile.room === "monster") return MONSTER_ROOM_MAP[tile.roomType] || null;
   if (tile.room === "utility") return UTILITY_MAP[tile.roomType] || null;
   return null;
+}
+
+function radarNoise(seed) {
+  const value = Math.sin(seed * 12.9898) * 43758.5453;
+  return value - Math.floor(value);
 }
 
 function roomSynergyTag(tile) {
@@ -6661,23 +6681,15 @@ function defaultState() {
   }
 
   function tileLabel(x, y, t) {
-    const hs = heroesByTile.get(keyOf(x, y));
-    if (hs && hs.length > 0) return "H";
     if (t.entrance) return "E";
     if (t.core) return "C";
     if (t.room === "trap") return TRAP_ICONS[t.trapType] || "TR";
-    if (t.room === "monster") {
-      const icon = MONSTER_ROOM_ICONS[t.roomType] || "MR";
-      return t.monsters.length ? `${icon}${t.monsters.length}` : icon;
-    }
+    if (t.room === "monster") return MONSTER_ROOM_ICONS[t.roomType] || "MR";
     if (t.room === "utility") return UTILITY_ICONS[t.roomType] || "UR";
     return "";
   }
 
   function getTileGlyph(tile, x, y, heroesOnTileCount, monstersOnTileCount) {
-    if (heroesOnTileCount > 0) {
-      return { text: "H", subtext: heroesOnTileCount > 1 ? `Hx${heroesOnTileCount}` : "", tone: "hero" };
-    }
     if (isAshBreachAt(state.ashTrial, x, y)) {
       return { text: "AE", tone: "ash-breach" };
     }
@@ -6689,13 +6701,62 @@ function defaultState() {
     }
     if (tile.room === "monster") {
       const icon = MONSTER_ROOM_ICONS[tile.roomType] || "MR";
-      const sub = monstersOnTileCount > 0 ? `mx${monstersOnTileCount}` : "";
-      return { text: icon, subtext: sub, tone: "monster" };
+      return { text: icon, tone: "monster" };
     }
     if (tile.room === "utility") {
       return { text: UTILITY_GLYPHS[tile.roomType] || "+", tone: "utility" };
     }
     return { text: "" };
+  }
+
+  function getTileRadarSpec(tile, x, y, heroesHere = [], monstersHere = 0, turnsSurvived = 0, raidActive = false) {
+    if (tile?.room !== "monster") {
+      return { enabled: false, dots: [], engaged: false };
+    }
+    const heroCount = Math.min(TILE_RADAR_MAX_DOTS, Array.isArray(heroesHere) ? heroesHere.length : 0);
+    const monsterCount = Math.min(TILE_RADAR_MAX_DOTS, Number.isFinite(monstersHere) ? monstersHere : 0);
+    if (heroCount <= 0 && monsterCount <= 0) {
+      return { enabled: false, dots: [], engaged: false };
+    }
+    const engaged = heroCount > 0 && monsterCount > 0;
+    const baseDuration = engaged ? 2.75 : raidActive ? 3.15 : 3.8;
+    const motionBoost = engaged ? 1.2 : raidActive ? 0.8 : 0.45;
+    const buildDots = (side, count) => {
+      const slots = TILE_RADAR_SLOTS[side];
+      const sideBias = side === "hero" ? 71 : 29;
+      return Array.from({ length: count }, (_, idx) => {
+        const slot = slots[idx % slots.length];
+        const seedBase = x * 101 + y * 59 + idx * 23 + sideBias;
+        const phaseSeed = seedBase + (raidActive ? turnsSurvived * 7 : 0);
+        const jitterX = (radarNoise(seedBase + 0.1) - 0.5) * 5.4;
+        const jitterY = (radarNoise(seedBase + 0.7) - 0.5) * 4.8;
+        const driftX = (radarNoise(seedBase + 1.3) - 0.5) * (2.4 + motionBoost);
+        const driftY = (radarNoise(seedBase + 2.1) - 0.5) * (2.1 + motionBoost);
+        const duration = `${(baseDuration + radarNoise(seedBase + 2.7) * 0.85).toFixed(2)}s`;
+        const delay = `-${(radarNoise(phaseSeed + 3.5) * 4.2).toFixed(2)}s`;
+        const scaleA = (0.92 + radarNoise(seedBase + 4.1) * 0.08).toFixed(2);
+        const scaleB = (1.02 + radarNoise(seedBase + 5.3) * 0.16).toFixed(2);
+        return {
+          key: `${side}-${x}-${y}-${idx}`,
+          side,
+          style: {
+            left: `${slot.x + jitterX}%`,
+            top: `${slot.y + jitterY}%`,
+            "--radar-dx": `${driftX.toFixed(2)}px`,
+            "--radar-dy": `${driftY.toFixed(2)}px`,
+            "--radar-duration": duration,
+            "--radar-delay": delay,
+            "--radar-scale-a": scaleA,
+            "--radar-scale-b": scaleB,
+          },
+        };
+      });
+    };
+    return {
+      enabled: true,
+      engaged,
+      dots: [...buildDots("monster", monsterCount), ...buildDots("hero", heroCount)],
+    };
   }
 
   function tileClass(t, x, y) {
@@ -7576,6 +7637,7 @@ function defaultState() {
                         const utilityArtSpec = getUtilityArtSpec(t, brokenTileArt);
                         const emptyArtSpec = getEmptyTileArtSpec(t, x, y, state.ashTrial, brokenTileArt);
                         const centerMarkerSpec = getTileCenterMarkerSpec(t, x, y, state.ashTrial, brokenTileArt);
+                        const radarSpec = getTileRadarSpec(t, x, y, heroesHere, monstersHere, state.turnsSurvived, state.raidActive);
                         const usePathArt = artSpec.enabled && !artSpec.fallbackToGlyph;
                         const useUtilityArt = utilityArtSpec.enabled && !utilityArtSpec.fallbackToGlyph;
                         const useEmptyArt = emptyArtSpec.enabled && !emptyArtSpec.fallbackToGlyph;
@@ -7606,8 +7668,6 @@ function defaultState() {
                           : t.room === "utility"
                           ? "utility"
                           : "neutral";
-                        const heroChip = heroesHere.length > 0 ? (heroesHere.length > 1 ? `H${heroesHere.length}` : "H") : "";
-                        const occupantChip = t.room === "monster" && monstersHere > 0 ? `M${monstersHere}` : "";
                         const linkedUtilityTone =
                           useUtilityArt && t.room === "utility" && roomSynergyTag(t) && isLinkedRoom(state.grid, x, y)
                             ? roomSynergyTag(t).toLowerCase()
@@ -7669,14 +7729,34 @@ function defaultState() {
                                   </>
                                 ) : null}
                                 {tileHasAura(x, y) ? <span className="tileArtAura" /> : null}
-                                {heroChip ? <span className="tileChip tileChipHero">{heroChip}</span> : null}
+                                {radarSpec.enabled ? (
+                                  <span className={`tileRadar ${radarSpec.engaged ? "engaged" : ""}`}>
+                                    {radarSpec.dots.map((dot) => (
+                                      <span
+                                        key={dot.key}
+                                        className={`tileRadarDot ${dot.side}`}
+                                        style={dot.style}
+                                      />
+                                    ))}
+                                  </span>
+                                ) : null}
                                 {stateChip ? <span className="tileChip tileChipState">{stateChip}</span> : null}
                                 {typeBadge ? <span className={`tileChip tileChipType ${typeTone}`}>{typeBadge}</span> : null}
-                                {occupantChip ? <span className="tileChip tileChipOccupants">{occupantChip}</span> : null}
                                 {linkedUtilityTone ? <span className={`tileChipLink ${linkedUtilityTone}`} /> : null}
                               </>
                             ) : (
                               <>
+                                {radarSpec.enabled ? (
+                                  <span className={`tileRadar ${radarSpec.engaged ? "engaged" : ""}`}>
+                                    {radarSpec.dots.map((dot) => (
+                                      <span
+                                        key={dot.key}
+                                        className={`tileRadarDot ${dot.side}`}
+                                        style={dot.style}
+                                      />
+                                    ))}
+                                  </span>
+                                ) : null}
                                 {stateChip ? <span className="tileChip tileChipState">{stateChip}</span> : null}
                                 {glyph.text ? <span className={`tileGlyph ${glyph.tone || ""}`}>{glyph.text}</span> : null}
                                 {glyph.subtext ? <span className="tileGlyphSub">{glyph.subtext}</span> : null}

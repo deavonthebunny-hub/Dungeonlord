@@ -436,6 +436,53 @@ body::before {
     radial-gradient(circle at center, rgba(52, 211, 153, 0.18), rgba(52, 211, 153, 0.07) 42%, rgba(52, 211, 153, 0.02) 64%, rgba(52, 211, 153, 0) 76%);
 }
 
+.tileRadar {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.tileRadarDot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  margin-top: -4px;
+  border-radius: 999px;
+  opacity: 0.94;
+  animation: tileRadarOrbit var(--radar-duration, 3.6s) ease-in-out infinite;
+  animation-delay: var(--radar-delay, 0s);
+  box-shadow:
+    0 0 0 1px rgba(15, 23, 42, 0.72),
+    0 0 8px currentColor;
+}
+
+.tileRadarDot::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.28);
+  opacity: 0.4;
+}
+
+.tileRadarDot.monster {
+  color: #22c55e;
+  background: radial-gradient(circle at 35% 35%, #dcfce7, #22c55e 60%, #15803d 100%);
+}
+
+.tileRadarDot.hero {
+  color: #ef4444;
+  background: radial-gradient(circle at 35% 35%, #fee2e2, #ef4444 60%, #b91c1c 100%);
+}
+
+.tileRadar.engaged .tileRadarDot {
+  box-shadow:
+    0 0 0 1px rgba(15, 23, 42, 0.78),
+    0 0 10px currentColor;
+}
+
 .tileGlyph {
   position: absolute;
   inset: 0;
@@ -1090,10 +1137,26 @@ button.entityItem {
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes tileRadarOrbit {
+  0% {
+    transform: translate(calc(-50% - var(--radar-dx, 0px)), calc(-50% - var(--radar-dy, 0px))) scale(var(--radar-scale-a, 0.94));
+    opacity: 0.76;
+  }
+  50% {
+    transform: translate(calc(-50% + var(--radar-dx, 0px)), calc(-50% + var(--radar-dy, 0px))) scale(var(--radar-scale-b, 1.08));
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(-50% - var(--radar-dx, 0px)), calc(-50% - var(--radar-dy, 0px))) scale(var(--radar-scale-a, 0.94));
+    opacity: 0.76;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .panel,
   .card,
   .tile,
+  .tileRadarDot,
   .btn {
     animation: none;
     transition: none;
