@@ -105,6 +105,160 @@ export const RAID_TYPE_META = {
   },
 };
 
+export const HERO_ORDERS = {
+  "iron-crusade": {
+    key: "iron-crusade",
+    name: "Iron Crusade",
+    desc: "Heavy martial expeditions that trust armor, discipline, and frontal pressure.",
+    directiveKey: "break-frontline",
+    archetypeWeights: { zealot: 4, breaker: 4, cautious: 1, scout: 1, purifier: 1 },
+    modifier: "Front-line martial pressure.",
+  },
+  "veiled-rangers": {
+    key: "veiled-rangers",
+    name: "Veiled Rangers",
+    desc: "Scouting companies that stretch the route, test flanks, and punish weak branches.",
+    directiveKey: "probe-flanks",
+    archetypeWeights: { scout: 5, cautious: 3, purifier: 1, breaker: 1, zealot: 1 },
+    modifier: "Flank and scouting pressure.",
+  },
+  "rift-collegium": {
+    key: "rift-collegium",
+    name: "Rift Collegium",
+    desc: "Spellbound expeditions that probe support networks before committing the kill.",
+    directiveKey: "purge-support",
+    archetypeWeights: { purifier: 5, scout: 3, cautious: 2, breaker: 1, zealot: 1 },
+    modifier: "Magic and support disruption.",
+  },
+  "grave-wardens": {
+    key: "grave-wardens",
+    name: "Grave Wardens",
+    desc: "Steady attrition specialists built to endure status pressure and bad trades.",
+    directiveKey: "rush-core",
+    archetypeWeights: { cautious: 5, purifier: 3, breaker: 2, scout: 1, zealot: 1 },
+    modifier: "Attrition and status resistance.",
+  },
+};
+
+export const STANDARD_HERO_PROFILES = [
+  {
+    key: "templar",
+    name: "Templar",
+    orderKey: "iron-crusade",
+    unlockDay: 1,
+    weight: 4,
+    racePool: ["Human", "Dwarf"],
+    className: "Warrior",
+    passivePool: ["brave", "stoic", "warded", "unyielding"],
+    archetypeWeights: { zealot: 4, breaker: 3, cautious: 2, scout: 1, purifier: 1 },
+  },
+  {
+    key: "trail-scout",
+    name: "Trail Scout",
+    orderKey: "veiled-rangers",
+    unlockDay: 1,
+    weight: 4,
+    racePool: ["Human", "Elf", "Halfling"],
+    className: "Rogue",
+    passivePool: ["quick", "cunning", "focused", "keen"],
+    archetypeWeights: { scout: 5, cautious: 2, purifier: 1, breaker: 1, zealot: 1 },
+  },
+  {
+    key: "arcanist",
+    name: "Arcanist",
+    orderKey: "rift-collegium",
+    unlockDay: 1,
+    weight: 4,
+    racePool: ["Human", "Elf", "Tiefling"],
+    className: "Mage",
+    passivePool: ["focused", "warded", "quick", "cunning"],
+    archetypeWeights: { purifier: 4, scout: 3, cautious: 2, breaker: 1, zealot: 1 },
+  },
+  {
+    key: "grave-monk",
+    name: "Grave Monk",
+    orderKey: "grave-wardens",
+    unlockDay: 1,
+    weight: 4,
+    racePool: ["Human", "Dwarf", "Orc"],
+    className: "Monk",
+    passivePool: ["stoic", "resolute", "vigorous", "brave"],
+    archetypeWeights: { cautious: 4, purifier: 2, breaker: 2, scout: 1, zealot: 1 },
+  },
+  {
+    key: "crusader-archer",
+    name: "Crusader Archer",
+    orderKey: "iron-crusade",
+    unlockDay: 10,
+    weight: 3,
+    racePool: ["Human", "Elf"],
+    className: "Ranger",
+    passivePool: ["keen", "focused", "brave", "quick"],
+    archetypeWeights: { breaker: 4, zealot: 3, scout: 2, cautious: 1, purifier: 1 },
+  },
+  {
+    key: "ranger-captain",
+    name: "Ranger Captain",
+    orderKey: "veiled-rangers",
+    unlockDay: 12,
+    weight: 3,
+    racePool: ["Human", "Elf", "Halfling"],
+    className: "Ranger",
+    passivePool: ["quick", "cunning", "focused", "resolute"],
+    archetypeWeights: { scout: 4, cautious: 3, purifier: 2, breaker: 1, zealot: 1 },
+  },
+  {
+    key: "rift-seer",
+    name: "Rift Seer",
+    orderKey: "rift-collegium",
+    unlockDay: 16,
+    weight: 3,
+    racePool: ["Elf", "Tiefling", "Human"],
+    className: "Cleric",
+    passivePool: ["focused", "warded", "resolute", "vigorous"],
+    archetypeWeights: { purifier: 4, scout: 3, cautious: 3, breaker: 1, zealot: 1 },
+  },
+  {
+    key: "witch-hunter",
+    name: "Witch Hunter",
+    orderKey: "grave-wardens",
+    unlockDay: 18,
+    weight: 3,
+    racePool: ["Human", "Dwarf", "Tiefling"],
+    className: "Warrior",
+    passivePool: ["keen", "resolute", "brave", "focused"],
+    archetypeWeights: { cautious: 3, purifier: 3, breaker: 3, scout: 1, zealot: 1 },
+  },
+];
+
+export const HERO_LEADER_TRAITS = {
+  bulwark: {
+    key: "bulwark",
+    name: "Bulwark",
+    desc: "Leader gains +2 DEF.",
+  },
+  fanatic: {
+    key: "fanatic",
+    name: "Fanatic",
+    desc: "Leader gains +2 ATK.",
+  },
+  trailmaster: {
+    key: "trailmaster",
+    name: "Trailmaster",
+    desc: "Raid starts with +1 extra reveal.",
+  },
+  scryer: {
+    key: "scryer",
+    name: "Scryer",
+    desc: "Raid begins with preloaded support-hub intel.",
+  },
+  purger: {
+    key: "purger",
+    name: "Purger",
+    desc: "Party deals +1 damage while pressing trap lanes and utility-influenced tiles.",
+  },
+};
+
 export const COUNCIL_RAID_FACTIONS = {
   malachar: {
     key: "malachar",
@@ -1361,6 +1515,48 @@ export const FUSION_ARCHETYPE_RULES = {
 
 export function validateGameContent() {
   const warnings = [];
+
+  for (const [key, order] of Object.entries(HERO_ORDERS)) {
+    if (!order.name || !order.desc || !order.directiveKey || !RAID_DIRECTIVES[order.directiveKey]) {
+      warnings.push(`Hero order "${key}" is missing name, description, or a valid directive.`);
+    }
+    if (!order.archetypeWeights || !Object.keys(order.archetypeWeights).length) {
+      warnings.push(`Hero order "${key}" is missing archetype weights.`);
+    }
+  }
+
+  const seenHeroProfiles = new Set();
+  for (const profile of STANDARD_HERO_PROFILES) {
+    if (
+      !profile.key ||
+      !profile.name ||
+      !profile.orderKey ||
+      !HERO_ORDERS[profile.orderKey] ||
+      !Number.isFinite(profile.unlockDay) ||
+      !Number.isFinite(profile.weight) ||
+      !profile.className ||
+      !Array.isArray(profile.passivePool) ||
+      !profile.passivePool.length
+    ) {
+      warnings.push(`Hero profile "${profile.key || "unknown"}" is missing key fields.`);
+    }
+    if (!Array.isArray(profile.racePool) || !profile.racePool.length) {
+      warnings.push(`Hero profile "${profile.key || "unknown"}" needs a race pool.`);
+    }
+    if (profile.archetypeWeights && !Object.keys(profile.archetypeWeights).length) {
+      warnings.push(`Hero profile "${profile.key}" has an empty archetype weight map.`);
+    }
+    if (seenHeroProfiles.has(profile.key)) {
+      warnings.push(`Hero profile "${profile.key}" is duplicated.`);
+    }
+    seenHeroProfiles.add(profile.key);
+  }
+
+  for (const [key, trait] of Object.entries(HERO_LEADER_TRAITS)) {
+    if (!trait.name || !trait.desc) {
+      warnings.push(`Hero leader trait "${key}" is missing name or description.`);
+    }
+  }
 
   for (const [key, rule] of Object.entries(HERO_ARCHETYPE_RULES)) {
     if (!rule.weights || typeof rule.weights.core !== "number") {

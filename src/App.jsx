@@ -9,10 +9,13 @@ import {
   FLESH_MARKET_UNIQUE_MONSTERS,
   FUSION_ARCHETYPE_RULES,
   HERO_ARCHETYPE_RULES,
+  HERO_LEADER_TRAITS,
+  HERO_ORDERS,
   RAID_DIRECTIVES,
   RAID_TYPE_META,
   MONSTER_ROOMS,
   STANDARD_ARTIFACTS,
+  STANDARD_HERO_PROFILES,
   STANDARD_MONSTERS,
   STATUS_RULES,
   TRAP_TYPES,
@@ -163,8 +166,6 @@ function normalizeArtifactStock(stock = [], day = 1, ownedArtifacts = []) {
   return generateArtifactStock(day, ownedArtifacts);
 }
 
-const HERO_RACES = ["Human", "Elf", "Dwarf", "Orc", "Tiefling", "Halfling"];
-const HERO_CLASSES = ["Warrior", "Rogue", "Mage", "Ranger", "Cleric", "Monk"];
 const HERO_NAMES = ["Arin", "Bela", "Cora", "Dain", "Eris", "Fenn", "Garr", "Hale", "Iria", "Joss"];
 const HERO_PASSIVE_RULES = [
   { key: "brave", name: "Brave", desc: "Holds the line; resists fear effects." },
@@ -182,6 +183,24 @@ const HERO_PASSIVE_RULES = [
 ];
 const HERO_PASSIVES = HERO_PASSIVE_RULES.map((p) => p.name);
 const HERO_PASSIVE_MAP = Object.fromEntries(HERO_PASSIVE_RULES.map((p) => [p.key, p]));
+const HERO_ORDER_MAP = HERO_ORDERS;
+const HERO_ORDER_LIST = Object.values(HERO_ORDERS);
+const HERO_PROFILE_MAP = Object.fromEntries(STANDARD_HERO_PROFILES.map((profile) => [profile.key, profile]));
+const HERO_LEADER_TRAIT_MAP = HERO_LEADER_TRAITS;
+const EXPEDITION_ART_BASE = `${import.meta.env.BASE_URL}assets/expeditions/`;
+const EXPEDITION_ORDER_CRESTS = {
+  "iron-crusade": `${EXPEDITION_ART_BASE}iron-crusade-crest.png`,
+  "veiled-rangers": `${EXPEDITION_ART_BASE}veiled-rangers-crest.png`,
+  "rift-collegium": `${EXPEDITION_ART_BASE}rift-collegium-crest.png`,
+  "grave-wardens": `${EXPEDITION_ART_BASE}grave-wardens-crest.png`,
+};
+const MARKET_ART_BASE = `${import.meta.env.BASE_URL}assets/markets/`;
+const MARKET_ART = {
+  trader: `${MARKET_ART_BASE}monster-trader.png`,
+  dealer: `${MARKET_ART_BASE}shady-dealer.png`,
+  flesh: `${MARKET_ART_BASE}flesh-market.png`,
+  crucible: `${MARKET_ART_BASE}fusion-crucible.png`,
+};
 
 const MONSTER_ARCHETYPES = ["Brute", "Skirmisher", "Hexer", "Packlord", "Tyrant", "Stalker"];
 const MONSTER_PASSIVE_RULES = [
@@ -655,6 +674,93 @@ function pickRewardMonsterEntry(day = 1, poolKeys = null) {
     if (roll <= 0) return entry;
   }
   return entries[entries.length - 1];
+}
+
+function availableHeroProfiles(day = 1, orderKey = null) {
+  const unlocked = STANDARD_HERO_PROFILES.filter((profile) => (profile.unlockDay || 1) <= day);
+  const pool = unlocked.length ? unlocked : STANDARD_HERO_PROFILES;
+  const filtered = orderKey ? pool.filter((profile) => profile.orderKey === orderKey) : pool;
+  return filtered.length ? filtered : pool;
+}
+
+function weightedPickHeroProfile(day = 1, orderKey = null) {
+  const profiles = availableHeroProfiles(day, orderKey);
+  if (!profiles.length) return STANDARD_HERO_PROFILES[0] || null;
+  const totalWeight = profiles.reduce((sum, profile) => sum + Math.max(1, profile.weight || 1), 0);
+  let roll = Math.random() * totalWeight;
+  for (const profile of profiles) {
+    roll -= Math.max(1, profile.weight || 1);
+    if (roll <= 0) return profile;
+  }
+  return profiles[profiles.length - 1];
+}
+
+function availableHeroOrders(day = 1) {
+  const unlockedProfiles = availableHeroProfiles(day);
+  const orderKeys = [...new Set(unlockedProfiles.map((profile) => profile.orderKey).filter(Boolean))];
+  const orders = orderKeys.map((key) => HERO_ORDER_MAP[key]).filter(Boolean);
+  return orders.length ? orders : HERO_ORDER_LIST;
+}
+
+function pickHeroOrder(day = 1, preferredKey = null) {
+  if (preferredKey && HERO_ORDER_MAP[preferredKey]) return HERO_ORDER_MAP[preferredKey];
+  const orders = availableHeroOrders(day);
+  return pick(orders);
+}
+
+function pickLeaderTraitKey(orderKey = null) {
+  const all = Object.keys(HERO_LEADER_TRAIT_MAP);
+  if (!all.length) return null;
+  if (orderKey === "iron-crusade") return pick(["bulwark", "fanatic", "trailmaster"]);
+  if (orderKey === "veiled-rangers") return pick(["trailmaster", "purger", "bulwark"]);
+  if (orderKey === "rift-collegium") return pick(["scryer", "purger", "fanatic"]);
+  if (orderKey === "grave-wardens") return pick(["bulwark", "scryer", "purger"]);
+  return pick(all);
+}
+
+function planRaidEncounter(raidType = null, day = 1, options = {}) {
+  if (raidType === "council") {
+    return {
+      orderKey: null,
+      orderName: null,
+      leaderTraitKey: null,
+      leaderTraitName: null,
+      directiveKey: resolveRaidDirectiveKey(raidType, options.councilRaid, day),
+    };
+  }
+  const order = pickHeroOrder(day, options.orderKey);
+  const leaderTraitKey =
+    raidType === "elite" ? options.leaderTraitKey || pickLeaderTraitKey(order?.key) : null;
+  return {
+    orderKey: order?.key || null,
+    orderName: order?.name || null,
+    leaderTraitKey,
+    leaderTraitName: leaderTraitKey ? HERO_LEADER_TRAIT_MAP[leaderTraitKey]?.name || null : null,
+    directiveKey: options.directiveKey || order?.directiveKey || resolveRaidDirectiveKey(raidType, options.councilRaid, day),
+  };
+}
+
+function raidPlanningState(plannedRaid = null) {
+  return {
+    pendingRaidOrderKey: plannedRaid?.orderKey || null,
+    pendingRaidOrderName: plannedRaid?.orderName || null,
+    pendingRaidLeaderTraitKey: plannedRaid?.leaderTraitKey || null,
+  };
+}
+
+function plannedRaidFromState(stateLike, raidType = null, councilRaid = null, day = null) {
+  const safeDay = Math.max(1, day || stateLike?.day || 1);
+  if (raidType === "council") {
+    return planRaidEncounter(raidType, safeDay, { councilRaid });
+  }
+  const pendingOrderKey = stateLike?.pendingRaidOrderKey || null;
+  const pendingLeaderTraitKey = stateLike?.pendingRaidLeaderTraitKey || null;
+  return planRaidEncounter(raidType, safeDay, {
+    councilRaid,
+    orderKey: pendingOrderKey || undefined,
+    leaderTraitKey: pendingLeaderTraitKey || undefined,
+    directiveKey: pendingOrderKey ? HERO_ORDER_MAP[pendingOrderKey]?.directiveKey : undefined,
+  });
 }
 
 function nextCouncilDay(day) {
@@ -1321,6 +1427,69 @@ function normalizeRaidIntel(raidIntel, fallbackDirective = "rush-core", fallback
   };
 }
 
+function getLeaderTraitRule(key) {
+  return (key && HERO_LEADER_TRAIT_MAP[key]) || null;
+}
+
+function partyLeaderTraitKey(party = []) {
+  return party.find((member) => member?.isRaidLeader && member?.leaderTraitKey)?.leaderTraitKey || null;
+}
+
+function isSupportInfluencedTile(grid, x, y) {
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+  const tile = grid?.[y]?.[x];
+  if (tile?.room === "utility") return true;
+  return neighbors(x, y).some((pos) => grid?.[pos.y]?.[pos.x]?.room === "utility");
+}
+
+function purgerBonusAt(grid, x, y, leaderTraitKey = null) {
+  if (leaderTraitKey !== "purger") return 0;
+  const tile = grid?.[y]?.[x];
+  return tile?.room === "trap" || isSupportInfluencedTile(grid, x, y) ? 1 : 0;
+}
+
+function seedRaidIntelFromGrid(grid, directiveKey = "rush-core", leaderId = null, leaderTraitKey = null) {
+  const raidIntel = createEmptyRaidIntel(directiveKey, leaderId);
+  if (leaderTraitKey !== "scryer" || !Array.isArray(grid)) return raidIntel;
+  for (let y = 0; y < H; y += 1) {
+    for (let x = 0; x < W; x += 1) {
+      const tile = grid?.[y]?.[x];
+      if (!tile?.room) continue;
+      const tileKey = keyOf(x, y);
+      if (tile.room === "trap") {
+        raidIntel.trapHubs.push(tileKey);
+      } else if (tile.room === "utility") {
+        raidIntel.utilityHubs.push(tileKey);
+      }
+    }
+  }
+  return raidIntel;
+}
+
+function buildScoutRevealQueue(party = [], grid, doctrines = {}, raidBoons = [], artifacts = [], day = 1) {
+  if (!Array.isArray(party) || !party.length) return [];
+  const doctrineEffects = getDoctrineEffects(doctrines);
+  const raidMods = buildRaidModifiers(raidBoons);
+  const artifactMods = calcArtifactMods(artifacts, day);
+  const baseMirrorTier = maxUtilityTier(grid, "scout-mirror");
+  const mirrorTier =
+    baseMirrorTier > 0
+      ? baseMirrorTier +
+        doctrineEffects.utilityPotencyBonus +
+        doctrineEffects.utilityPotencyBonusExtra +
+        doctrineEffects.utilityScoutBonus +
+        (artifactMods.utilityPotencyBonus || 0)
+      : 0;
+  const leaderRevealBonus = partyLeaderTraitKey(party) === "trailmaster" ? 1 : 0;
+  const revealBase = (artifactMods.scoutRevealBonus || 0) + huntScoutRevealBonus(grid, artifactMods) + leaderRevealBonus;
+  if (mirrorTier <= 0 && revealBase <= 0) return [];
+  const revealCount = Math.min(
+    party.length,
+    revealBase + (mirrorTier > 0 ? 2 + (mirrorTier - 1) + raidMods.scoutRevealBonus : 0)
+  );
+  return party.slice(0, revealCount).map((hero) => ({ ...hero }));
+}
+
 function mergeRaidIntelKey(list = [], key) {
   if (!key) return list || [];
   if ((list || []).includes(key)) return list || [];
@@ -1417,6 +1586,11 @@ function pickHeroArchetypeKey(heroClass, passiveKey, raidType = null) {
   if (["Mage", "Cleric"].includes(heroClass)) return "purifier";
   if (["Ranger", "Rogue"].includes(heroClass)) return "scout";
   return "zealot";
+}
+
+function pickHeroArchetypeFromWeights(weightMap = {}, fallbackKey = "zealot") {
+  const choice = weightedPick(weightMap, fallbackKey);
+  return HERO_ARCHETYPE_RULES[choice] ? choice : fallbackKey;
 }
 
 function pickRaidArchetypeKey(heroClass, passiveKey, raidType = null, directiveKey = null) {
@@ -1829,28 +2003,33 @@ function heroRaidStatMultiplier(raidType) {
   return 1;
 }
 
-function buildHeroStats(stars, raidType) {
+function buildHeroStats(stars, raidType, heroClass = null) {
   const safeStars = clampMonsterStar(stars);
   const raidMult = heroRaidStatMultiplier(raidType);
+  const classMods = CLASS_STAT_MODS[heroClass] || {};
   return {
-    maxHp: Math.max(1, Math.round(scaleStat(HERO_BASE.hp, safeStars) * raidMult)),
-    atk: Math.max(1, Math.round(scaleStat(HERO_BASE.atk, safeStars) * raidMult)),
-    def: Math.max(0, Math.floor(safeStars / 2)),
+    maxHp: Math.max(1, Math.round(scaleStat(HERO_BASE.hp, safeStars) * raidMult) + (classMods.hp || 0)),
+    atk: Math.max(1, Math.round(scaleStat(HERO_BASE.atk, safeStars) * raidMult) + (classMods.atk || 0)),
+    def: Math.max(0, Math.floor(safeStars / 2) + (classMods.def || 0)),
     shd: Math.max(0, safeStars - 2),
-    spd: Math.max(1, 2 + safeStars),
+    spd: Math.max(1, 2 + safeStars + (heroClass === "Rogue" || heroClass === "Ranger" || heroClass === "Monk" ? 1 : 0)),
   };
 }
 
 function normalizeHeroEntity(hero, day = 1, raidType = null) {
   const safeDay = Math.max(1, day || 1);
   const stars = Math.min(clampMonsterStar(hero?.stars || 1), monsterStarCapForDay(safeDay));
-  const stats = buildHeroStats(stars, raidType);
+  const profile = hero?.profileKey ? HERO_PROFILE_MAP[hero.profileKey] : null;
+  const heroClass = hero?.class || profile?.className || "Warrior";
+  const stats = buildHeroStats(stars, raidType, heroClass);
   const previousMaxHp = Math.max(1, hero?.stats?.maxHp ?? hero?.hp ?? stats.maxHp);
   const hpRatio = clamp((hero?.hp ?? previousMaxHp) / previousMaxHp, 0, 1);
   const heroPassiveKey = normalizeHeroPassiveKey(hero?.heroPassiveKey || hero?.passive);
   const archetypeKey = HERO_ARCHETYPE_RULES[hero?.archetypeKey]
     ? hero.archetypeKey
-    : pickHeroArchetypeKey(hero?.class, heroPassiveKey, raidType);
+    : pickHeroArchetypeKey(heroClass, heroPassiveKey, raidType);
+  const order = hero?.orderKey ? HERO_ORDER_MAP[hero.orderKey] : profile?.orderKey ? HERO_ORDER_MAP[profile.orderKey] : null;
+  const leaderTraitKey = hero?.leaderTraitKey && HERO_LEADER_TRAIT_MAP[hero.leaderTraitKey] ? hero.leaderTraitKey : null;
   return {
     ...hero,
     id: Number.isFinite(hero?.id) ? hero.id : 1,
@@ -1861,8 +2040,8 @@ function normalizeHeroEntity(hero, day = 1, raidType = null) {
     def: stats.def,
     shd: stats.shd,
     spd: stats.spd,
-    race: hero?.race || HERO_RACES[0],
-    class: hero?.class || HERO_CLASSES[0],
+    race: hero?.race || profile?.racePool?.[0] || "Human",
+    class: heroClass,
     stars,
     passive: hero?.passive || HERO_PASSIVE_MAP[heroPassiveKey]?.name || HERO_PASSIVES[0],
     heroPassiveKey,
@@ -1875,12 +2054,19 @@ function normalizeHeroEntity(hero, day = 1, raidType = null) {
     raidDirectiveKey:
       hero?.raidDirectiveKey ||
       (hero?.factionKey ? COUNCIL_RAID_FACTIONS[hero.factionKey]?.defaultDirective : null) ||
+      order?.directiveKey ||
       resolveRaidDirectiveKey(raidType, null, safeDay),
     traitPassiveKey: hero?.traitPassiveKey || null,
     traitPassiveName: hero?.traitPassiveName || null,
     isRaidLeader: !!hero?.isRaidLeader,
     stats,
-    name: hero?.name || `${HERO_NAMES[0]} the ${hero?.class || HERO_CLASSES[0]}`,
+    profileKey: hero?.profileKey || profile?.key || null,
+    profileName: hero?.profileName || profile?.name || heroClass,
+    orderKey: hero?.orderKey || order?.key || null,
+    orderName: hero?.orderName || order?.name || null,
+    leaderTraitKey,
+    leaderTraitName: leaderTraitKey ? HERO_LEADER_TRAIT_MAP[leaderTraitKey]?.name || null : null,
+    name: hero?.name || `${HERO_NAMES[0]} the ${hero?.profileName || profile?.name || heroClass}`,
     statuses: hero?.statuses || {},
     memory: createHeroMemory(hero?.memory),
     counters: {
@@ -1899,17 +2085,27 @@ function normalizeHeroEntity(hero, day = 1, raidType = null) {
 }
 
 function generateHero(id, entrancePos, turnsSurvived, raidType, day = 1, options = {}) {
-  const classPool = options.classPool || HERO_CLASSES;
-  const passivePool = options.passivePool || HERO_PASSIVE_RULES;
-  const racePool = options.racePool || HERO_RACES;
+  const order = HERO_ORDER_MAP[options.orderKey] || null;
+  const profile =
+    HERO_PROFILE_MAP[options.profileKey] ||
+    options.profile ||
+    weightedPickHeroProfile(day, order?.key || options.orderKey || null);
+  const passivePool = profile?.passivePool || options.passivePool || HERO_PASSIVE_RULES;
+  const racePool = profile?.racePool || options.racePool || ["Human", "Elf", "Dwarf", "Orc", "Tiefling", "Halfling"];
   const passiveRule = pickHeroPassiveRule(passivePool);
-  const heroClass = pick(classPool);
-  const directiveKey = options.directiveKey || resolveRaidDirectiveKey(raidType, options.councilRaid, day);
-  const archetypeKey = options.archetypeKey || pickRaidArchetypeKey(heroClass, passiveRule.key, raidType, directiveKey);
+  const heroClass = profile?.className || options.className || "Warrior";
+  const directiveKey = options.directiveKey || order?.directiveKey || resolveRaidDirectiveKey(raidType, options.councilRaid, day);
+  const archetypeKey =
+    options.archetypeKey ||
+    pickHeroArchetypeFromWeights(
+      profile?.archetypeWeights || order?.archetypeWeights || getRaidDirectiveRule(directiveKey).archetypeWeights || {},
+      pickRaidArchetypeKey(heroClass, passiveRule.key, raidType, directiveKey)
+    );
   const stars = applyRaidStarBias(rollAuthoritativeStar(day), day, raidType, options.starBias || 0);
   const race = pick(racePool);
-  const name = `${pick(HERO_NAMES)} the ${heroClass}`;
-  const stats = buildHeroStats(stars, raidType);
+  const profileName = profile?.name || heroClass;
+  const name = `${pick(HERO_NAMES)} the ${profileName}`;
+  const stats = buildHeroStats(stars, raidType, heroClass);
 
   return {
     id,
@@ -1933,6 +2129,12 @@ function generateHero(id, entrancePos, turnsSurvived, raidType, day = 1, options
     factionName: null,
     raidOriginLabel: raidTypeMeta(raidType).label,
     raidDirectiveKey: directiveKey,
+    profileKey: profile?.key || null,
+    profileName,
+    orderKey: order?.key || profile?.orderKey || null,
+    orderName: order?.name || (profile?.orderKey ? HERO_ORDER_MAP[profile.orderKey]?.name || null : null),
+    leaderTraitKey: null,
+    leaderTraitName: null,
     traitPassiveKey: null,
     traitPassiveName: null,
     isRaidLeader: false,
@@ -2076,28 +2278,36 @@ function generateHeroParty(turnsSurvived, raidType, day = 1, options = {}) {
   const basePos = { x: 0, y: 0 };
   const party = [];
   let nextId = 1;
-  const directiveKey = options.directiveKey || resolveRaidDirectiveKey(raidType, options.councilRaid, day);
+  const plannedRaid = options.plannedRaid || planRaidEncounter(raidType, day, options);
+  const directiveKey = plannedRaid.directiveKey || options.directiveKey || resolveRaidDirectiveKey(raidType, options.councilRaid, day);
   const eliteOptions =
     raidType === "elite"
       ? {
-          classPool: ["Warrior", "Ranger", "Cleric", "Monk", "Warrior", "Ranger"],
-          passivePool: ["Brave", "Stoic", "Focused", "Warded", "Quick", "Unyielding", "Resolute"],
           starBias: 0.45 + (raidMods.starBias || 0),
           directiveKey,
+          orderKey: plannedRaid.orderKey,
         }
       : {
-        starBias: raidMods.starBias || 0,
-        directiveKey,
-      };
+          starBias: raidMods.starBias || 0,
+          directiveKey,
+          orderKey: plannedRaid.orderKey,
+        };
   for (let i = 0; i < size; i++) {
-    const hero = generateHero(nextId, basePos, turnsSurvived, raidType, day, eliteOptions);
+    const profile = weightedPickHeroProfile(day, plannedRaid.orderKey);
+    const hero = generateHero(nextId, basePos, turnsSurvived, raidType, day, {
+      ...eliteOptions,
+      profile,
+      profileKey: profile?.key,
+      orderKey: plannedRaid.orderKey,
+      directiveKey,
+    });
     party.push(hero);
     nextId += 1;
   }
-  return applyRaidPartyModifiers(party, options.raidBoons || []);
+  return applyRaidPartyModifiers(party, options.raidBoons || [], plannedRaid);
 }
 
-function applyRaidPartyModifiers(party, raidBoons = []) {
+function applyRaidPartyModifiers(party, raidBoons = [], plannedRaid = null) {
   if (!Array.isArray(party) || party.length === 0) return [];
   const raidMods = buildRaidModifiers(raidBoons);
   const starsOf = (entity) => clampMonsterStar(entity?.stars || 1);
@@ -2120,6 +2330,8 @@ function applyRaidPartyModifiers(party, raidBoons = []) {
       ...member,
       stats: { ...(member.stats || {}) },
       isRaidLeader: idx === leaderIdx,
+      orderKey: member.orderKey || plannedRaid?.orderKey || null,
+      orderName: member.orderName || plannedRaid?.orderName || null,
     };
     if (idx === leaderIdx && raidMods.leaderHpMult !== 1) {
       const baseMaxHp = next.stats.maxHp || next.hp || 1;
@@ -2127,6 +2339,18 @@ function applyRaidPartyModifiers(party, raidBoons = []) {
       const scaledMaxHp = Math.max(1, Math.round(baseMaxHp * raidMods.leaderHpMult));
       next.stats.maxHp = scaledMaxHp;
       next.hp = Math.max(1, Math.round(scaledMaxHp * hpRatio));
+    }
+    if (idx === leaderIdx && plannedRaid?.leaderTraitKey) {
+      const trait = getLeaderTraitRule(plannedRaid.leaderTraitKey);
+      next.leaderTraitKey = plannedRaid.leaderTraitKey;
+      next.leaderTraitName = trait?.name || plannedRaid.leaderTraitName || null;
+      if (plannedRaid.leaderTraitKey === "bulwark") {
+        next.def = (next.def || 0) + 2;
+        next.stats.def = (next.stats.def || 0) + 2;
+      } else if (plannedRaid.leaderTraitKey === "fanatic") {
+        next.atk = (next.atk || 0) + 2;
+        next.stats.atk = (next.stats.atk || 0) + 2;
+      }
     }
     return next;
   });
@@ -2149,16 +2373,19 @@ function generateRaidParty(turnsSurvived, raidType, day = 1, options = {}) {
 }
 
 function buildRaidPartyWithIntel(turnsSurvived, raidType, day = 1, options = {}) {
-  const directiveKey = options.directiveKey || resolveRaidDirectiveKey(raidType, options.councilRaid, day);
+  const plannedRaid = options.plannedRaid || planRaidEncounter(raidType, day, options);
+  const directiveKey = plannedRaid.directiveKey || options.directiveKey || resolveRaidDirectiveKey(raidType, options.councilRaid, day);
   const party = generateRaidParty(turnsSurvived, raidType, day, {
     ...options,
     directiveKey,
+    plannedRaid,
   });
   const leader = party.find((member) => member.isRaidLeader) || null;
   return {
     directiveKey,
+    plannedRaid,
     party,
-    raidIntel: createEmptyRaidIntel(directiveKey, leader?.id || null),
+    raidIntel: seedRaidIntelFromGrid(options.grid, directiveKey, leader?.id || null, leader?.leaderTraitKey || plannedRaid?.leaderTraitKey || null),
   };
 }
 
@@ -3613,6 +3840,9 @@ function defaultState() {
       councilQuest: null,
       councilQuestCounters: createEmptyCouncilQuestCounters(),
       nextRaidType: null,
+      pendingRaidOrderKey: null,
+      pendingRaidOrderName: null,
+      pendingRaidLeaderTraitKey: null,
       pendingPunitiveRaid: false,
       pendingCouncilRaid: null,
       nextRaidBoons: [],
@@ -3719,6 +3949,15 @@ function defaultState() {
         getCoreMaxHp({ doctrines, day: savedDay, nihazaCurseUntilDay })
       );
       const nextRaidType = parsed.nextRaidType || base.nextRaidType;
+      const pendingRaidOrderKey =
+        parsed.pendingRaidOrderKey ||
+        parsed.currentParty?.[0]?.orderKey ||
+        parsed.partyQueue?.[0]?.orderKey ||
+        null;
+      const pendingRaidLeaderTraitKey =
+        parsed.pendingRaidLeaderTraitKey ||
+        parsed.currentParty?.find((hero) => hero?.isRaidLeader)?.leaderTraitKey ||
+        null;
       const pendingPunitiveRaid =
         !!parsed.pendingPunitiveRaid || (council.declinedStreak >= 2 && nextRaidType === "council");
       const pendingCouncilRaid =
@@ -3801,6 +4040,9 @@ function defaultState() {
         fleshMarketStock,
         boughtUniqueKeys,
         nextRaidType,
+        pendingRaidOrderKey,
+        pendingRaidOrderName: pendingRaidOrderKey ? HERO_ORDER_MAP[pendingRaidOrderKey]?.name || parsed.pendingRaidOrderName || null : null,
+        pendingRaidLeaderTraitKey,
         pendingPunitiveRaid,
         pendingCouncilRaid,
         nextRaidBoons,
@@ -4775,29 +5017,15 @@ function defaultState() {
     }
     setState((s) => {
       const raidType = s.pendingPunitiveRaid ? "council" : s.nextRaidType;
+      const plannedRaid = plannedRaidFromState(s, raidType, s.pendingCouncilRaid, s.day);
       const stagedRaid = buildRaidPartyWithIntel(s.turnsSurvived, raidType, s.day, {
         councilRaid: s.pendingCouncilRaid,
         raidBoons: s.nextRaidBoons,
+        grid: s.grid,
+        plannedRaid,
       });
       const party = stagedRaid.party;
-      let scoutQueue = [];
-      const doctrineEffects = getDoctrineEffects(s.doctrines);
-      const raidMods = buildRaidModifiers(s.nextRaidBoons);
-      const artifactMods = calcArtifactMods(s.artifacts, s.day);
-      const baseMirrorTier = maxUtilityTier(s.grid, "scout-mirror");
-      const mirrorTier =
-        baseMirrorTier > 0
-          ? baseMirrorTier +
-            doctrineEffects.utilityPotencyBonus +
-            doctrineEffects.utilityPotencyBonusExtra +
-            doctrineEffects.utilityScoutBonus +
-            (artifactMods.utilityPotencyBonus || 0)
-          : 0;
-      const revealBase = (artifactMods.scoutRevealBonus || 0) + huntScoutRevealBonus(s.grid, artifactMods);
-      if (mirrorTier > 0 || revealBase > 0) {
-        const revealCount = Math.min(party.length, revealBase + (mirrorTier > 0 ? 2 + (mirrorTier - 1) + raidMods.scoutRevealBonus : 0));
-        scoutQueue = party.slice(0, revealCount).map((h) => ({ ...h }));
-      }
+      const scoutQueue = buildScoutRevealQueue(party, s.grid, s.doctrines, s.nextRaidBoons, s.artifacts, s.day);
       let ns = {
         ...s,
         phase: "battle",
@@ -4806,6 +5034,7 @@ function defaultState() {
         partyQueue: party.map((h) => ({ ...h })),
         scoutQueue,
         raidIntel: stagedRaid.raidIntel,
+        ...raidPlanningState(stagedRaid.plannedRaid),
       };
       if (scoutQueue.length > 0) {
         ns = addCouncilQuestCounter(ns, "revealedInvaderCount", scoutQueue.length);
@@ -4814,6 +5043,12 @@ function defaultState() {
       ns = addLog(ns, `Day ${s.day} battle begins. ${meta.label}. Party size ${party.length}.`);
       ns = addLog(ns, meta.desc);
       ns = addLog(ns, `Raid directive: ${getRaidDirectiveRule(stagedRaid.directiveKey).name}.`);
+      if (stagedRaid.plannedRaid?.orderName) {
+        ns = addLog(
+          ns,
+          `Expedition order: ${stagedRaid.plannedRaid.orderName}${stagedRaid.plannedRaid.leaderTraitName ? ` | Leader trait ${stagedRaid.plannedRaid.leaderTraitName}` : ""}.`
+        );
+      }
         if (scoutQueue.length > 0) {
           const previews = scoutQueue
           .map((h) => `${h.name}${h.isRaidLeader ? " [Leader]" : ""} (${formatStars(safeEntityStars(h))}, ATK ${h.atk}, HP ${h.hp})`)
@@ -4892,6 +5127,7 @@ function defaultState() {
       let heroes = [...s.heroes];
       let nextId = s.nextHeroId;
       const raidType = s.pendingPunitiveRaid ? "council" : s.nextRaidType;
+      const plannedRaid = plannedRaidFromState(s, raidType, s.pendingCouncilRaid, s.day);
       const reuseParty =
         s.currentParty &&
         s.currentParty.length &&
@@ -4901,6 +5137,7 @@ function defaultState() {
             directiveKey:
               s.raidIntel?.directive || s.currentParty?.[0]?.raidDirectiveKey || resolveRaidDirectiveKey(raidType, s.pendingCouncilRaid, s.day),
             party: s.currentParty,
+            plannedRaid,
             raidIntel: normalizeRaidIntel(
               s.raidIntel,
               s.currentParty?.[0]?.raidDirectiveKey || resolveRaidDirectiveKey(raidType, s.pendingCouncilRaid, s.day),
@@ -4910,35 +5147,20 @@ function defaultState() {
         : buildRaidPartyWithIntel(s.turnsSurvived, raidType, s.day, {
             councilRaid: s.pendingCouncilRaid,
             raidBoons: s.nextRaidBoons,
+            grid: s.grid,
+            plannedRaid,
           });
       const party = stagedRaid.party;
       let partyQueue = [...party];
       let raidRemaining = partyQueue.length;
       let raidKills = 0;
-      let scoutQueue = [];
+      let scoutQueue = buildScoutRevealQueue(partyQueue, s.grid, s.doctrines, s.nextRaidBoons, s.artifacts, s.day);
 
-      const doctrineEffects = getDoctrineEffects(s.doctrines);
       const artifactModsStart = calcArtifactMods(s.artifacts, s.day);
       const raidMods = buildRaidModifiers(s.nextRaidBoons);
-      const baseMirrorTier = maxUtilityTier(s.grid, "scout-mirror");
-      const mirrorTier =
-        baseMirrorTier > 0
-          ? baseMirrorTier +
-            doctrineEffects.utilityPotencyBonus +
-            doctrineEffects.utilityPotencyBonusExtra +
-            doctrineEffects.utilityScoutBonus +
-            (artifactModsStart.utilityPotencyBonus || 0)
-          : 0;
+      const doctrineEffects = getDoctrineEffects(s.doctrines);
       const doctrineShield = doctrineEffects.coreShieldBonus || 0;
       const fortifiedCoreShield = (s.coreShield || 0) + doctrineShield + (raidMods.coreShieldBonus || 0) + (artifactModsStart.coreStartShield || 0);
-      const revealBase = (artifactModsStart.scoutRevealBonus || 0) + huntScoutRevealBonus(s.grid, artifactModsStart);
-      if (mirrorTier > 0 || revealBase > 0) {
-        const revealCount = Math.min(
-          partyQueue.length,
-          revealBase + (mirrorTier > 0 ? 2 + (mirrorTier - 1) + raidMods.scoutRevealBonus : 0)
-        );
-        scoutQueue = partyQueue.slice(0, revealCount).map((h) => ({ ...h }));
-      }
 
       if (heroes.length < HERO_CAP && partyQueue.length > 0) {
         const spawnResult = spawnOneHero(heroes, nextId, entrances, s.turnsSurvived, partyQueue, grid, raidType, s.day);
@@ -4963,6 +5185,7 @@ function defaultState() {
           currentPartyRaidType: raidType || null,
           partyQueue,
           raidIntel: stagedRaid.raidIntel,
+          ...raidPlanningState(stagedRaid.plannedRaid),
           raidType: raidType || null,
           nextRaidType: null,
           pendingPunitiveRaid: false,
@@ -4975,6 +5198,12 @@ function defaultState() {
         }
         const meta = raidTypeMeta(raidType, s.pendingCouncilRaid);
         ns = addLog(ns, `Raid directive: ${getRaidDirectiveRule(stagedRaid.directiveKey).name}.`);
+        if (stagedRaid.plannedRaid?.orderName) {
+          ns = addLog(
+            ns,
+            `Expedition order: ${stagedRaid.plannedRaid.orderName}${stagedRaid.plannedRaid.leaderTraitName ? ` | Leader trait ${stagedRaid.plannedRaid.leaderTraitName}` : ""}.`
+          );
+        }
         if (doctrineShield > 0) {
           ns = addLog(ns, `Core Doctrine fortifies the Core with +${doctrineShield} Shield.`);
         }
@@ -5140,6 +5369,7 @@ function defaultState() {
       };
 
       const heroHasPassive = (h, name) => normalizeHeroPassiveKey(h.heroPassiveKey || h.passive) === normalizeHeroPassiveKey(name);
+      const leaderTraitAuraKey = partyLeaderTraitKey(s.currentParty || []);
       const shareRaidDanger = (x, y, amount = 1) => {
         const key = keyOf(x, y);
         const sharedAmount = Math.max(1, Math.round(amount)) + (s.raidType === "elite" ? 1 : 0);
@@ -5292,6 +5522,7 @@ function defaultState() {
         const bonus =
           (heroHasPassive(h, "Reckless") ? 1 : 0) +
           (getStatus(h, "bloodlust").turns > 0 ? 1 : 0) +
+          purgerBonusAt(grid, h.x, h.y, leaderTraitAuraKey) +
           (eventMods.heroAtk || 0);
         return Math.max(1, h.atk + (getStatus(h, "fear").turns > 0 ? -1 : 0) + bonus);
       };
@@ -6138,9 +6369,13 @@ function defaultState() {
           nextState.councilQuest = null;
           nextState.councilQuestCounters = createEmptyCouncilQuestCounters();
           const punitive = council.declinedStreak >= 2;
-          nextState.nextRaidType = punitive ? "council" : "elite";
+          const nextRaidType = punitive ? "council" : "elite";
+          const pendingCouncilRaid = punitive ? buildCouncilRaidFromRoster(roster, nextState.day, councilFavor) : null;
+          const plannedRaid = planRaidEncounter(nextRaidType, nextState.day, { councilRaid: pendingCouncilRaid });
+          nextState.nextRaidType = nextRaidType;
+          Object.assign(nextState, raidPlanningState(plannedRaid));
           nextState.pendingPunitiveRaid = punitive;
-          nextState.pendingCouncilRaid = punitive ? buildCouncilRaidFromRoster(roster, nextState.day, councilFavor) : null;
+          nextState.pendingCouncilRaid = pendingCouncilRaid;
           nextState.councilSession = buildCouncilSession(roster, nextState.day, councilFavor);
           nextState = addLog(nextState, "Council of the Dungeonlords convenes. Attend or decline.");
         }
@@ -6149,6 +6384,9 @@ function defaultState() {
         }
         if (!councilDue) {
           nextState.pendingCouncilRaid = nextState.pendingPunitiveRaid ? nextState.pendingCouncilRaid : null;
+        }
+        if (!nextState.nextRaidType) {
+          Object.assign(nextState, raidPlanningState(null));
         }
         nextState.raidType = null;
         nextState.activeRaidBoons = [];
@@ -6266,6 +6504,9 @@ function defaultState() {
         councilQuest: null,
         councilQuestCounters: createEmptyCouncilQuestCounters(),
         nextRaidType: null,
+        pendingRaidOrderKey: null,
+        pendingRaidOrderName: null,
+        pendingRaidLeaderTraitKey: null,
         pendingPunitiveRaid: false,
         pendingCouncilRaid: null,
         nextRaidBoons: [],
@@ -6312,6 +6553,7 @@ function defaultState() {
     setState((s) => {
       const council = { ...s.council, active: false, declinedStreak: 0 };
       const nextRaidType = "elite";
+      const plannedRaid = planRaidEncounter(nextRaidType, s.day, { councilRaid: null });
       let councilSession = s.councilSession ? { ...s.councilSession, status: "attended" } : s.councilSession;
       let councilFavor = normalizeCouncilFavorMap(s.councilFavor || {});
       const favorLogLines = [];
@@ -6326,6 +6568,7 @@ function defaultState() {
         council,
         councilFavor,
         nextRaidType,
+        ...raidPlanningState(plannedRaid),
         pendingPunitiveRaid: false,
         pendingCouncilRaid: null,
         councilSession,
@@ -6340,26 +6583,11 @@ function defaultState() {
         const stagedRaid = buildRaidPartyWithIntel(s.turnsSurvived, nextRaidType, s.day, {
           councilRaid: null,
           raidBoons: s.nextRaidBoons,
+          grid: s.grid,
+          plannedRaid,
         });
         const party = stagedRaid.party;
-        let scoutQueue = [];
-        const doctrineEffects = getDoctrineEffects(s.doctrines);
-        const raidMods = buildRaidModifiers(s.nextRaidBoons);
-        const artifactMods = calcArtifactMods(s.artifacts, s.day);
-        const baseMirrorTier = maxUtilityTier(s.grid, "scout-mirror");
-        const mirrorTier =
-          baseMirrorTier > 0
-            ? baseMirrorTier +
-              doctrineEffects.utilityPotencyBonus +
-              doctrineEffects.utilityPotencyBonusExtra +
-              doctrineEffects.utilityScoutBonus +
-              (artifactMods.utilityPotencyBonus || 0)
-            : 0;
-        const revealBase = (artifactMods.scoutRevealBonus || 0) + huntScoutRevealBonus(s.grid, artifactMods);
-        if (mirrorTier > 0 || revealBase > 0) {
-          const revealCount = Math.min(party.length, revealBase + (mirrorTier > 0 ? 2 + (mirrorTier - 1) + raidMods.scoutRevealBonus : 0));
-          scoutQueue = party.slice(0, revealCount).map((h) => ({ ...h }));
-        }
+        const scoutQueue = buildScoutRevealQueue(party, s.grid, s.doctrines, s.nextRaidBoons, s.artifacts, s.day);
         ns = {
           ...ns,
           currentParty: party,
@@ -6396,11 +6624,13 @@ function defaultState() {
       }
       councilSession = rebuildCouncilSessionWithFavor(councilSession, council.roster || [], s.day, councilFavor);
       const pendingCouncilRaid = declinedStreak >= 2 ? buildCouncilRaidFromRoster(council.roster, s.day, councilFavor) : null;
+      const plannedRaid = planRaidEncounter(nextRaidType, s.day, { councilRaid: pendingCouncilRaid });
       let ns = {
         ...s,
         council,
         councilFavor,
         nextRaidType,
+        ...raidPlanningState(plannedRaid),
         pendingPunitiveRaid: declinedStreak >= 2,
         pendingCouncilRaid,
         councilSession,
@@ -6414,26 +6644,11 @@ function defaultState() {
         const stagedRaid = buildRaidPartyWithIntel(s.turnsSurvived, nextRaidType, s.day, {
           councilRaid: pendingCouncilRaid,
           raidBoons: s.nextRaidBoons,
+          grid: s.grid,
+          plannedRaid,
         });
         const party = stagedRaid.party;
-        let scoutQueue = [];
-        const doctrineEffects = getDoctrineEffects(s.doctrines);
-        const raidMods = buildRaidModifiers(s.nextRaidBoons);
-        const artifactMods = calcArtifactMods(s.artifacts, s.day);
-        const baseMirrorTier = maxUtilityTier(s.grid, "scout-mirror");
-        const mirrorTier =
-          baseMirrorTier > 0
-            ? baseMirrorTier +
-              doctrineEffects.utilityPotencyBonus +
-              doctrineEffects.utilityPotencyBonusExtra +
-              doctrineEffects.utilityScoutBonus +
-              (artifactMods.utilityPotencyBonus || 0)
-            : 0;
-        const revealBase = (artifactMods.scoutRevealBonus || 0) + huntScoutRevealBonus(s.grid, artifactMods);
-        if (mirrorTier > 0 || revealBase > 0) {
-          const revealCount = Math.min(party.length, revealBase + (mirrorTier > 0 ? 2 + (mirrorTier - 1) + raidMods.scoutRevealBonus : 0));
-          scoutQueue = party.slice(0, revealCount).map((h) => ({ ...h }));
-        }
+        const scoutQueue = buildScoutRevealQueue(party, s.grid, s.doctrines, s.nextRaidBoons, s.artifacts, s.day);
         ns = {
           ...ns,
           currentParty: party,
@@ -7045,13 +7260,25 @@ function defaultState() {
     );
   }, [selectedHeroes, state.grid, core, state.activeRaidBoons, doctrineEffects, state.raidIntel]);
 
-  const pendingRaidMeta = raidTypeMeta(state.pendingPunitiveRaid ? "council" : state.nextRaidType, state.pendingCouncilRaid);
-  const pendingDirectiveKey = resolveRaidDirectiveKey(state.pendingPunitiveRaid ? "council" : state.nextRaidType, state.pendingCouncilRaid, state.day);
+  const pendingRaidType = state.pendingPunitiveRaid ? "council" : state.nextRaidType;
+  const activeRaidOrderKey = state.currentParty?.[0]?.orderKey || null;
+  const pendingRaidOrderKey = activeRaidOrderKey || state.pendingRaidOrderKey || null;
+  const pendingRaidOrder = pendingRaidOrderKey ? HERO_ORDER_MAP[pendingRaidOrderKey] || null : null;
+  const pendingRaidLeaderTraitKey =
+    state.currentParty?.find((hero) => hero.isRaidLeader)?.leaderTraitKey || state.pendingRaidLeaderTraitKey || null;
+  const pendingRaidLeaderTrait = pendingRaidLeaderTraitKey ? HERO_LEADER_TRAIT_MAP[pendingRaidLeaderTraitKey] || null : null;
+  const pendingRaidCrestSrc = pendingRaidOrder ? EXPEDITION_ORDER_CRESTS[pendingRaidOrder.key] || null : null;
+  const usePendingRaidCrest = !!pendingRaidCrestSrc;
+  const pendingRaidMeta = raidTypeMeta(pendingRaidType, state.pendingCouncilRaid);
+  const pendingDirectiveKey =
+    pendingRaidOrder?.directiveKey || resolveRaidDirectiveKey(pendingRaidType, state.pendingCouncilRaid, state.day);
   const pendingDirective = getRaidDirectiveRule(state.raidIntel?.directive || pendingDirectiveKey);
   const raidForecastMix =
     isBattlePhase && state.currentParty?.length
       ? partyArchetypeSummary(state.currentParty)
-      : raidDirectiveArchetypeSummary(state.pendingPunitiveRaid ? "council" : state.nextRaidType, state.pendingCouncilRaid, state.day);
+      : pendingRaidOrder && pendingRaidType !== "council"
+      ? topArchetypesFromWeights(pendingRaidOrder.archetypeWeights || {}, 2).join(" / ") || "Mixed pressure"
+      : raidDirectiveArchetypeSummary(pendingRaidType, state.pendingCouncilRaid, state.day);
 
   const invPreview = state.invMonsters.slice(0, 3);
 
@@ -7850,9 +8077,24 @@ function defaultState() {
 
             <div className="card">
               <div className="cardTitle">Raid Forecast</div>
-              <div className="entityName">{pendingRaidMeta.label}</div>
+              <div className="raidForecastHeader">
+                {usePendingRaidCrest && pendingRaidType !== "council" ? (
+                  <img className="expeditionCrest" src={pendingRaidCrestSrc} alt="" draggable="false" />
+                ) : null}
+                <div>
+                  <div className="entityName">{pendingRaidMeta.label}</div>
+                  {pendingRaidOrder && pendingRaidType !== "council" ? (
+                    <div className="entityMeta">
+                      {pendingRaidOrder.name} | {pendingRaidOrder.modifier}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
               <div className="muted">{pendingRaidMeta.desc}</div>
               <div className="muted">Directive: {pendingDirective.name}</div>
+              {pendingRaidLeaderTrait && pendingRaidType !== "council" ? (
+                <div className="muted small">Leader Trait: {pendingRaidLeaderTrait.name} - {pendingRaidLeaderTrait.desc}</div>
+              ) : null}
               <div className="muted small">Expected mix: {raidForecastMix}</div>
               {state.pendingCouncilRaid?.attackers?.length ? (
                 <div className="entityList">
@@ -7942,6 +8184,11 @@ function defaultState() {
                           <div className="entityMeta">
                             {safeEntityLabel(h.race, "Unknown")} {safeEntityLabel(h.class, "Hero")} | {formatStars(safeEntityStars(h))} | {invaderPassiveSummary(h)}
                           </div>
+                          {h.profileKey || h.orderName ? (
+                            <div className="muted">
+                              {h.profileName || "Expeditioner"}{h.orderName ? ` | ${h.orderName}` : ""}{h.isRaidLeader && h.leaderTraitName ? ` | Leader Trait ${h.leaderTraitName}` : ""}
+                            </div>
+                          ) : null}
                           <div className="entityStats">
                             HP {h.hp}/{safeEntityMaxHp(h)} | ATK {h.atk} | DEF {h.def || 0} | SHD {h.shd || 0} | SPD {h.spd || 0}
                           </div>
@@ -8086,7 +8333,8 @@ function defaultState() {
               )}
             </div>
 
-            <div className="card">
+            <div className="card marketCard marketCard--flesh" style={{ "--market-card-art": `url(${MARKET_ART.flesh})` }}>
+              <div className="marketCardBackdrop" />
               <div className="cardTitle">Flesh Market (Maltheron)</div>
               {state.fleshMarketUntilDay >= state.day && state.fleshMarketUntilDay > 0 ? (
                 <>
@@ -8107,10 +8355,10 @@ function defaultState() {
                     </button>
                     <div className="muted">Inventory only. Unique monsters cannot be sacrificed.</div>
                   </div>
-                  <div className="entityList">
+                  <div className="entityList marketOfferList">
                     {state.fleshMarketStock?.length ? (
                       state.fleshMarketStock.map((offer, idx) => (
-                        <div className="entityItem" key={`flesh-offer-${offer.key}-${idx}`}>
+                        <div className="entityItem marketOfferItem" key={`flesh-offer-${offer.key}-${idx}`}>
                           <div className="entityName">{offer.name}</div>
                           <div className="entityMeta">
                             {offer.type === "monster" ? "Unique Monster" : "Unique Artifact"}
@@ -8134,7 +8382,8 @@ function defaultState() {
                       <div className="entityEmpty">No stock remains in the market today.</div>
                     )}
                   </div>
-                  <div className="card">
+                  <div className="card marketSubcard marketSubcard--crucible" style={{ "--market-card-art": `url(${MARKET_ART.crucible})` }}>
+                    <div className="marketCardBackdrop" />
                     <div className="cardTitle">Fusion Crucible</div>
                     <div className="row">
                       <select className="select" value={fuseA} onChange={(e) => setFuseA(e.target.value)}>
@@ -8451,12 +8700,13 @@ function defaultState() {
               )}
             </div>
 
-            <div className="card">
+            <div className="card marketCard marketCard--trader" style={{ "--market-card-art": `url(${MARKET_ART.trader})` }}>
+              <div className="marketCardBackdrop" />
               <div className="cardTitle">Monster Trader</div>
               {state.traderStock && state.traderStock.length > 0 ? (
-                <div className="entityList">
+                <div className="entityList marketOfferList">
                   {state.traderStock.map((m, idx) => (
-                    <div className="entityItem" key={`trade-${m.key}-${idx}`}>
+                    <div className="entityItem marketOfferItem" key={`trade-${m.key}-${idx}`}>
                       <div className="entityName">{m.name}</div>
                       <div className="entityMeta">
                         {safeEntityLabel(m.race, "Monster")}
@@ -8479,17 +8729,18 @@ function defaultState() {
               )}
             </div>
 
-            <div className="card">
+            <div className="card marketCard marketCard--dealer" style={{ "--market-card-art": `url(${MARKET_ART.dealer})` }}>
+              <div className="marketCardBackdrop" />
               <div className="cardTitle">Shady Dealer</div>
               {state.shadyStock && state.shadyStock.length > 0 ? (
-                <div className="entityList">
+                <div className="entityList marketOfferList">
                   {state.shadyStock.map((rawArtifact, idx) => {
                     const artifact = hydrateArtifactDefinition(rawArtifact);
                     const ownedCount = ownedArtifactCounts[artifact.key] || 0;
                     const copyCap = artifactCopyCap(artifact);
                     const atCap = ownedCount >= copyCap;
                     return (
-                      <div className="entityItem" key={`artifact-${artifact.key}-${idx}`}>
+                      <div className="entityItem marketOfferItem" key={`artifact-${artifact.key}-${idx}`}>
                         <div className="entityName">{artifact.name}</div>
                         <div className="entityMeta">{artifact.desc}</div>
                         <div className="dockBadgeRow">
@@ -8587,6 +8838,11 @@ function defaultState() {
                         <div className="entityMeta">
                           {safeEntityLabel(h.race, "Unknown")} {safeEntityLabel(h.class, "Hero")} | {formatStars(safeEntityStars(h))} | {h.archetypeLabel || "Zealot"}
                         </div>
+                        {h.profileKey || h.orderName ? (
+                          <div className="muted small">
+                            {h.profileName || "Expeditioner"}{h.orderName ? ` | ${h.orderName}` : ""}{h.isRaidLeader && h.leaderTraitName ? ` | ${h.leaderTraitName}` : ""}
+                          </div>
+                        ) : null}
                         <div className="entityStats">
                           HP {h.hp}/{safeEntityMaxHp(h)} | ATK {h.atk} | DEF {h.def || 0} | SHD {h.shd || 0} | SPD {h.spd || 0}
                         </div>
@@ -8631,6 +8887,11 @@ function defaultState() {
                       <div className="entityMeta">
                         {safeEntityLabel(h.race, "Unknown")} {safeEntityLabel(h.class, "Hero")} | {formatStars(safeEntityStars(h))} | {h.archetypeLabel || "Zealot"}
                       </div>
+                      {h.profileKey || h.orderName ? (
+                        <div className="muted small">
+                          {h.profileName || "Expeditioner"}{h.orderName ? ` | ${h.orderName}` : ""}{h.isRaidLeader && h.leaderTraitName ? ` | ${h.leaderTraitName}` : ""}
+                        </div>
+                      ) : null}
                       <div className="entityStats">
                         HP {h.hp}/{safeEntityMaxHp(h)} | ATK {h.atk}
                       </div>
@@ -9193,6 +9454,56 @@ function defaultState() {
                   <div className="entityItem" key={p.key}>
                     <div className="entityName">{p.name}</div>
                     <div className="entityMeta">{p.desc}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="cardTitle">Hero Orders</div>
+              <div className="entityList">
+                {HERO_ORDER_LIST.map((order) => (
+                  <div className="entityItem" key={order.key}>
+                    <div className="entityName">
+                      {EXPEDITION_ORDER_CRESTS[order.key] ? (
+                        <img className="glossaryCrest" src={EXPEDITION_ORDER_CRESTS[order.key]} alt="" draggable="false" />
+                      ) : null}
+                      {order.name}
+                    </div>
+                    <div className="entityMeta">{order.desc}</div>
+                    <div className="muted small">
+                      Directive {getRaidDirectiveRule(order.directiveKey).name} | Expected mix{" "}
+                      {topArchetypesFromWeights(order.archetypeWeights || {}, 2).join(" / ") || "Mixed pressure"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="cardTitle">Hero Profiles</div>
+              <div className="entityList">
+                {STANDARD_HERO_PROFILES.map((profile) => (
+                  <div className="entityItem" key={profile.key}>
+                    <div className="entityName">{profile.name}</div>
+                    <div className="entityMeta">
+                      {profile.className} | {HERO_ORDER_MAP[profile.orderKey]?.name || profile.orderKey}
+                    </div>
+                    <div className="muted small">
+                      Unlock Day {profile.unlockDay} | Passives {(profile.passivePool || []).map((key) => HERO_PASSIVE_MAP[key]?.name || key).join(", ")}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="cardTitle">Leader Traits</div>
+              <div className="entityList">
+                {Object.values(HERO_LEADER_TRAIT_MAP).map((trait) => (
+                  <div className="entityItem" key={trait.key}>
+                    <div className="entityName">{trait.name}</div>
+                    <div className="entityMeta">{trait.desc}</div>
                   </div>
                 ))}
               </div>

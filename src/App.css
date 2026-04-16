@@ -846,6 +846,101 @@ body::before {
   text-transform: uppercase;
   letter-spacing: 0.6px;
   color: var(--ink-1);
+  position: relative;
+  z-index: 1;
+}
+
+.raidForecastHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.expeditionCrest,
+.glossaryCrest {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  object-fit: cover;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(212, 168, 93, 0.45);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.26), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.glossaryCrest {
+  width: 28px;
+  height: 28px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.marketCard,
+.marketSubcard {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(156, 122, 72, 0.45);
+  background:
+    linear-gradient(180deg, rgba(22, 19, 21, 0.94), rgba(14, 12, 16, 0.97)),
+    linear-gradient(160deg, rgba(18, 27, 51, 0.95), rgba(12, 18, 32, 0.95));
+}
+
+.marketCardBackdrop {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 138px;
+  background-image: var(--market-card-art);
+  background-size: cover;
+  background-position: center;
+  opacity: 0.4;
+  pointer-events: none;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 1), rgba(0, 0, 0, 0.28), transparent);
+}
+
+.marketCard::after,
+.marketSubcard::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(226, 180, 103, 0.12), transparent 26%),
+    linear-gradient(0deg, rgba(94, 62, 31, 0.14), transparent 36%);
+}
+
+.marketCard > *,
+.marketSubcard > * {
+  position: relative;
+  z-index: 1;
+}
+
+.marketCard .cardTitle,
+.marketSubcard .cardTitle {
+  color: #f6dfb3;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+}
+
+.marketOfferList {
+  gap: 10px;
+}
+
+.marketOfferItem {
+  background: linear-gradient(180deg, rgba(33, 27, 22, 0.82), rgba(15, 13, 16, 0.9));
+  border-color: rgba(173, 126, 76, 0.35);
+  box-shadow: inset 0 1px 0 rgba(255, 239, 203, 0.04);
+}
+
+.marketCard .muted,
+.marketSubcard .muted,
+.marketCard .entityMeta,
+.marketCard .entityStats,
+.marketSubcard .entityMeta,
+.marketSubcard .entityStats {
+  color: #d8c8b0;
+}
+
+.marketCard .btn,
+.marketSubcard .btn {
+  border-color: rgba(173, 126, 76, 0.42);
 }
 
 .row {
