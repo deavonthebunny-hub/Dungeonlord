@@ -1481,12 +1481,17 @@ function buildScoutRevealQueue(party = [], grid, doctrines = {}, raidBoons = [],
         (artifactMods.utilityPotencyBonus || 0)
       : 0;
   const leaderRevealBonus = partyLeaderTraitKey(party) === "trailmaster" ? 1 : 0;
-  const revealBase = (artifactMods.scoutRevealBonus || 0) + huntScoutRevealBonus(grid, artifactMods) + leaderRevealBonus;
+  const revealBase =
+    (artifactMods.scoutRevealBonus || 0) +
+    huntScoutRevealBonus(grid, artifactMods) +
+    leaderRevealBonus -
+    (artifactMods.scoutRevealPenalty || 0);
   if (mirrorTier <= 0 && revealBase <= 0) return [];
-  const revealCount = Math.min(
-    party.length,
-    revealBase + (mirrorTier > 0 ? 2 + (mirrorTier - 1) + raidMods.scoutRevealBonus : 0)
+  const revealCount = Math.max(
+    0,
+    Math.min(party.length, revealBase + (mirrorTier > 0 ? 2 + (mirrorTier - 1) + raidMods.scoutRevealBonus : 0))
   );
+  if (revealCount <= 0) return [];
   return party.slice(0, revealCount).map((hero) => ({ ...hero }));
 }
 
@@ -1789,6 +1794,20 @@ function fusionCost(first, second) {
   return Math.max(6, (recipe?.baseCost || 8) + maxStar * 2 + maxStage * 4);
 }
 
+function discountedFusionCost(first, second, artifactMods = {}) {
+  return Math.max(1, fusionCost(first, second) - (artifactMods?.fusionCostReduction || 0));
+}
+
+function dungeonUpgradeCost(currentLevel, day = 1, artifactMods = {}) {
+  return Math.max(1, scaleByDay(25 + currentLevel * 15, day, 0.03, 3.0) - (artifactMods?.dungeonUpgradeDiscount || 0));
+}
+
+function doctrineUpgradeCost(rule, currentLevel = 0, artifactMods = {}) {
+  const nextLevelDef = rule?.levels?.[currentLevel];
+  if (!nextLevelDef) return null;
+  return Math.max(1, nextLevelDef.cost - (artifactMods?.doctrineCostReduction || 0));
+}
+
 function fusionPassiveSelection(first, second) {
   const chosen = [];
   const ranks = {};
@@ -1981,11 +2000,12 @@ function trapCooldownAfterTrigger(trapType, star, doctrineEffects = null) {
   return Math.max(0, baseCooldown - Math.floor((clampMonsterStar(star) - 1) / 2) - (doctrineEffects?.trapCooldownReduction || 0));
 }
 
-function trapChargesForTile(grid, tile, x, y, doctrineEffects = null, artifactMods = null) {
+function trapChargesForTile(grid, tile, x, y, doctrineEffects = null, artifactMods = null, ashTrial = null) {
   const star = clampMonsterStar(tile?.trapStar ?? tile?.trapStars ?? 1);
   const bonus =
     (doctrineEffects?.trapChargeBonus || 0) +
     (artifactMods?.trapChargeBonus || 0) +
+    (isAshTrialActive(ashTrial) ? artifactMods?.ashTrialTrapChargeBonus || 0 : 0) +
     (Number.isFinite(x) && Number.isFinite(y) ? wardTrapChargeBonusAt(grid, x, y, artifactMods || {}) : 0);
   return trapChargesForStar(star, {
     ...(doctrineEffects || {}),
@@ -2731,7 +2751,9 @@ function calcArtifactMods(artifacts, day = 1) {
     trapFlatDamage: 0,
     coreRetaliationBonus: 0,
     monsterDef: 0,
+    monsterSpd: 0,
     scoutRevealBonus: 0,
+    scoutRevealPenalty: 0,
     trapChargeBonus: 0,
     monsterRoomCapBonus: 0,
     trapKillEssence: 0,
@@ -2739,12 +2761,22 @@ function calcArtifactMods(artifacts, day = 1) {
     roomWithdrawHealFull: 0,
     shadyStockBonus: 0,
     bloodLinkedEssenceBonus: 0,
+    bloodLinkedSoulshardOnKill: 0,
+    bloodLinkedMonsterAtk: 0,
     bloodLinkedTrapKillSoulshard: 0,
+    wardLinkedWeakenDuration: 0,
     huntLinkedTrapFlatDamage: 0,
     huntLinkedLureBonus: 0,
     huntLinkedScoutRevealBonus: 0,
+    huntLinkedMonsterSpd: 0,
     wardLinkedMonsterDef: 0,
     wardLinkedTrapChargeBonus: 0,
+    dungeonUpgradeDiscount: 0,
+    ashTrialMonsterDef: 0,
+    ashTrialTrapChargeBonus: 0,
+    monsterBonusVsMarked: 0,
+    doctrineCostReduction: 0,
+    fusionCostReduction: 0,
   };
   for (const artifact of artifacts || []) {
     const art = hydrateArtifactDefinition(artifact);
@@ -2965,6 +2997,7 @@ function bloodDeathBonuses(grid, x, y, why, artifactMods = {}) {
   let extraSoulshards = trapKill && linkedUtilityTier(grid, x, y, "butchers-shrine") > 0 ? 1 : 0;
   if (linkInfo.linked && linkInfo.tag === "Blood") {
     extraEssence += artifactMods.bloodLinkedEssenceBonus || 0;
+    extraSoulshards += artifactMods.bloodLinkedSoulshardOnKill || 0;
     if (trapKill) {
       extraSoulshards += artifactMods.bloodLinkedTrapKillSoulshard || 0;
       if (tile?.room === "trap" && tile.trapType === "gore-channel") {
@@ -3001,6 +3034,22 @@ function huntTrapFlatDamageBonus(grid, x, y, artifactMods = {}) {
   const tile = grid?.[y]?.[x];
   if (tile?.room === "trap" && roomSynergyTag(tile) === "Hunt" && isLinkedRoom(grid, x, y)) {
     return artifactMods.huntLinkedTrapFlatDamage || 0;
+  }
+  return 0;
+}
+
+function bloodMonsterAtkBonus(grid, x, y, artifactMods = {}) {
+  const tile = grid?.[y]?.[x];
+  if (tile?.room === "monster" && roomSynergyTag(tile) === "Blood" && isLinkedRoom(grid, x, y)) {
+    return artifactMods.bloodLinkedMonsterAtk || 0;
+  }
+  return 0;
+}
+
+function huntMonsterSpdBonus(grid, x, y, artifactMods = {}) {
+  const tile = grid?.[y]?.[x];
+  if (tile?.room === "monster" && roomSynergyTag(tile) === "Hunt" && isLinkedRoom(grid, x, y)) {
+    return artifactMods.huntLinkedMonsterSpd || 0;
   }
   return 0;
 }
@@ -4144,6 +4193,26 @@ function defaultState() {
   const doctrineEffects = useMemo(() => getDoctrineEffects(state.doctrines || {}), [state.doctrines]);
   const artifactMods = useMemo(() => calcArtifactMods(state.artifacts, state.day), [state.artifacts, state.day]);
   const ownedArtifactCounts = useMemo(() => countOwnedArtifacts(state.artifacts), [state.artifacts]);
+  const standardArtifactCollectedCount = useMemo(
+    () => STANDARD_ARTIFACTS.filter((artifact) => (ownedArtifactCounts[artifact.key] || 0) > 0).length,
+    [ownedArtifactCounts]
+  );
+  const unlockedStandardArtifactCount = useMemo(
+    () => STANDARD_ARTIFACTS.filter((artifact) => (artifact.unlockDay || 1) <= state.day).length,
+    [state.day]
+  );
+  const standardArtifactAtCapCount = useMemo(
+    () => STANDARD_ARTIFACTS.filter((artifact) => (ownedArtifactCounts[artifact.key] || 0) >= artifactCopyCap(artifact)).length,
+    [ownedArtifactCounts]
+  );
+  const dealerCatalogExhausted = useMemo(
+    () =>
+      unlockedStandardArtifactCount > 0 &&
+      STANDARD_ARTIFACTS.filter((artifact) => (artifact.unlockDay || 1) <= state.day).every(
+        (artifact) => (ownedArtifactCounts[artifact.key] || 0) >= artifactCopyCap(artifact)
+      ),
+    [ownedArtifactCounts, state.day, unlockedStandardArtifactCount]
+  );
   const contentWarnings = useMemo(() => validateGameContent(), []);
   const coreMaxHp = useMemo(() => getCoreMaxHp(state), [state.doctrines, state.nihazaCurseUntilDay, state.day]);
   const dungeonLevel = clampDungeonLevel(state.dungeonLevel);
@@ -4172,7 +4241,7 @@ function defaultState() {
     fusionFirst && fusionSecond && fusionFirst !== fusionSecond
       ? {
           recipe: fusionRecipeForMonster(fusionSecond),
-          cost: fusionCost(fusionFirst, fusionSecond),
+          cost: discountedFusionCost(fusionFirst, fusionSecond, artifactMods),
           result: buildFusedMonsterEntity(fusionFirst, fusionSecond, state.day),
         }
       : null;
@@ -4225,7 +4294,7 @@ function defaultState() {
           t.trapStars = payload.trapStar ?? payload.trapStars ?? 1;
           t.trapRank = payload.trapRank ?? payload.roomTier ?? 1;
           t.trapChargesRemaining = payload.trap
-            ? trapChargesForTile(grid, t, x, y, getDoctrineEffects(s.doctrines), calcArtifactMods(s.artifacts, s.day))
+            ? trapChargesForTile(grid, t, x, y, getDoctrineEffects(s.doctrines), calcArtifactMods(s.artifacts, s.day), s.ashTrial)
             : 0;
           t.trapCooldownRemaining = payload.trapCooldownRemaining ?? 0;
           t.trapBroken = payload.trapBroken;
@@ -4383,7 +4452,7 @@ function defaultState() {
       t.trapStar = trapStar;
       t.trapStars = trapStar;
       t.trapRank = 1;
-      t.trapChargesRemaining = trapChargesForTile(grid, t, s.selected.x, s.selected.y, getDoctrineEffects(s.doctrines), calcArtifactMods(s.artifacts, s.day));
+      t.trapChargesRemaining = trapChargesForTile(grid, t, s.selected.x, s.selected.y, getDoctrineEffects(s.doctrines), calcArtifactMods(s.artifacts, s.day), s.ashTrial);
       t.trapCooldownRemaining = 0;
       t.trapBroken = false;
       t.monsters = [];
@@ -4491,7 +4560,7 @@ function defaultState() {
         if (t.trapBroken) {
           t.trapBroken = false;
         }
-        t.trapChargesRemaining = trapChargesForTile(grid, t, s.selected.x, s.selected.y, getDoctrineEffects(s.doctrines), calcArtifactMods(s.artifacts, s.day));
+        t.trapChargesRemaining = trapChargesForTile(grid, t, s.selected.x, s.selected.y, getDoctrineEffects(s.doctrines), calcArtifactMods(s.artifacts, s.day), s.ashTrial);
         t.trapCooldownRemaining = 0;
         return addLog({ ...s, grid }, `Trap armed. ${t.trapChargesRemaining} charge(s) ready.`);
       }
@@ -4852,7 +4921,7 @@ function defaultState() {
       if (currentLevel >= MAX_DUNGEON_LEVEL) {
         return addLog(s, `Dungeon already at maximum level (${MAX_DUNGEON_LEVEL}).`);
       }
-      const cost = scaleByDay(25 + currentLevel * 15, s.day, 0.03, 3.0);
+      const cost = dungeonUpgradeCost(currentLevel, s.day, calcArtifactMods(s.artifacts, s.day));
       if (s.currency.essence < cost) return addLog(s, `Not enough Essence to upgrade (${cost}).`);
       const dungeonLevel = currentLevel + 1;
       return addLog(
@@ -4875,11 +4944,12 @@ function defaultState() {
       const nextLevelDef = rule.levels[currentLevel];
       if (!nextLevelDef) return addLog(s, `${rule.name} is already mastered.`);
       const currencyKey = rule.currency;
-      if ((s.currency?.[currencyKey] || 0) < nextLevelDef.cost) {
-        return addLog(s, `Not enough ${currencyKey} for ${rule.name} (${nextLevelDef.cost}).`);
+      const cost = doctrineUpgradeCost(rule, currentLevel, calcArtifactMods(s.artifacts, s.day));
+      if ((s.currency?.[currencyKey] || 0) < cost) {
+        return addLog(s, `Not enough ${currencyKey} for ${rule.name} (${cost}).`);
       }
       const doctrines = { ...(s.doctrines || {}), [kind]: currentLevel + 1 };
-      const currency = { ...s.currency, [currencyKey]: (s.currency?.[currencyKey] || 0) - nextLevelDef.cost };
+      const currency = { ...s.currency, [currencyKey]: (s.currency?.[currencyKey] || 0) - cost };
       let coreHp = s.coreHp;
       if (kind === "core") {
         const previousMax = getCoreMaxHp(s);
@@ -4921,7 +4991,7 @@ function defaultState() {
       if (t.room === "trap") {
         t.trapRank = nextTier;
         if (t.trap) {
-          t.trapChargesRemaining = trapChargesForTile(grid, t, s.selected.x, s.selected.y, getDoctrineEffects(s.doctrines), calcArtifactMods(s.artifacts, s.day));
+          t.trapChargesRemaining = trapChargesForTile(grid, t, s.selected.x, s.selected.y, getDoctrineEffects(s.doctrines), calcArtifactMods(s.artifacts, s.day), s.ashTrial);
           t.trapCooldownRemaining = 0;
         }
       }
@@ -5114,7 +5184,7 @@ function defaultState() {
             t.trapStars = trapStar;
             t.trapRank = Math.max(1, t.trapRank ?? t.roomTier ?? 1);
             if (t.trap && !t.trapBroken) {
-              t.trapChargesRemaining = trapChargesForTile(grid, t, x, y, getDoctrineEffects(s.doctrines), calcArtifactMods(s.artifacts, s.day));
+              t.trapChargesRemaining = trapChargesForTile(grid, t, x, y, getDoctrineEffects(s.doctrines), calcArtifactMods(s.artifacts, s.day), s.ashTrial);
               t.trapCooldownRemaining = 0;
             } else {
               t.trapChargesRemaining = 0;
@@ -5432,6 +5502,8 @@ function defaultState() {
         const hasteTier = effectiveUtilityTier(x, y, "haste-glyph");
         if (hasteTier > 0) spd += hasteTier;
         if (room?.room === "monster" && room.roomType === "pack-blind") spd += 1;
+        spd += artifactMods.monsterSpd || 0;
+        spd += huntMonsterSpdBonus(grid, x, y, artifactMods);
         if (dominionEffects.monsterFirstStrike) spd += 2;
         return Math.max(1, spd);
       };
@@ -5590,6 +5662,7 @@ function defaultState() {
         if (roomHasPassive(room, "packleader") && room.monsters.length >= 2) bonus += roomPassiveRank(room, "packleader");
         bonus += eventMods.monsterAtk || 0;
         bonus += artifactMods.monsterAtk || 0;
+        bonus += bloodMonsterAtkBonus(grid, x, y, artifactMods);
         bonus += dominionEffects.monsterAtk || 0;
         bonus += doctrineEffectsLocal.monsterAtkBonus || 0;
         return bonus;
@@ -5610,6 +5683,9 @@ function defaultState() {
         }
         bonus += artifactMods.monsterDef || 0;
         bonus += wardMonsterDefBonus(grid, x, y, artifactMods);
+        if (isAshTrialActive(s.ashTrial)) {
+          bonus += artifactMods.ashTrialMonsterDef || 0;
+        }
         return bonus;
       }
 
@@ -5755,6 +5831,9 @@ function defaultState() {
             }
             if (h.counters?.trapDamaged) {
               bonus += artifactMods.trapDamageVulnerability || 0;
+            }
+            if ((getStatus(h, "marked").turns > 0 ? getStatus(h, "marked").value || 0 : h.counters?.cursedMark || 0) > 0) {
+              bonus += artifactMods.monsterBonusVsMarked || 0;
             }
             if (t.roomType === "pack-blind" && isLinkedRoom(grid, h.x, h.y) && h.hp < safeEntityMaxHp(h)) {
               bonus += 1;
@@ -5977,7 +6056,8 @@ function defaultState() {
                   push(`${invaderLabel(h)} is poisoned.`);
                 }
               } else if (trapKey === "warding-sigil") {
-                if (tryApplyDebuff(h, "weaken", 2, 1)) {
+                const weakenTurns = 2 + (isLinkedRoom(grid, h.x, h.y) ? artifactMods.wardLinkedWeakenDuration || 0 : 0);
+                if (tryApplyDebuff(h, "weaken", weakenTurns, 1)) {
                   shareRaidDanger(h.x, h.y, 2);
                   push(`${invaderLabel(h)} is weakened.`);
                 }
@@ -6823,7 +6903,7 @@ function defaultState() {
       if (!first || !second) return s;
       if (first.isUnique || second.isUnique) return addLog(s, "Unique monsters cannot be used as fusion stock.");
       if (first.isFused || second.isFused) return addLog(s, "Fused monsters cannot be used as fusion stock.");
-      const cost = fusionCost(first, second);
+      const cost = discountedFusionCost(first, second, calcArtifactMods(s.artifacts, s.day));
       if ((s.currency.darkcrystals || 0) < cost) return addLog(s, `Not enough Darkcrystals for fusion (${cost}).`);
       const hybrid = buildFusedMonsterEntity(first, second, s.day);
       const a = Math.max(aIdx, bIdx);
@@ -7017,7 +7097,7 @@ function defaultState() {
             huntTrapFlatDamageBonus(state.grid, x, y, artifactMods)
         )
       );
-      const charges = trapChargesForTile(state.grid, tile, x, y, doctrineEffects, artifactMods);
+      const charges = trapChargesForTile(state.grid, tile, x, y, doctrineEffects, artifactMods, state.ashTrial);
       const cooldown = trapCooldownAfterTrigger(tile.trapType, star, doctrineEffects);
       return `${trap.baseDesc || trap.desc} Tier ${tier}. ${formatStars(star)} / Rank ${rank}. Trigger ${scaled} dmg, ${charges} charge(s), cooldown ${cooldown}.${linkInfo.linked && trap.linkDesc ? ` Linked: ${trap.linkDesc}` : ""}`;
     }
@@ -7291,7 +7371,7 @@ function defaultState() {
   const canStartRaid = !locked && isBattlePhase && !state.raidActive && validation.ok;
   const canEndTurn = !locked && isBattlePhase && (state.raidActive || state.heroes.length > 0);
   const atDungeonLevelCap = dungeonLevel >= MAX_DUNGEON_LEVEL;
-  const nextUpgradeCost = atDungeonLevelCap ? null : scaleByDay(25 + dungeonLevel * 15, state.day, 0.03, 3.0);
+  const nextUpgradeCost = atDungeonLevelCap ? null : dungeonUpgradeCost(dungeonLevel, state.day, artifactMods);
   const selectedIsAshBreach = isAshBreachAt(state.ashTrial, state.selected.x, state.selected.y);
   const selectedLinkInfo = roomLinkInfoAt(state.grid, state.selected.x, state.selected.y);
   const selectedReadiness = tileStateChip(selectedTile, state.selected.x, state.selected.y) || "n/a";
@@ -8270,6 +8350,7 @@ function defaultState() {
                 {Object.values(DOCTRINE_RULES).map((rule) => {
                   const currentLevel = state.doctrines?.[rule.key] || 0;
                   const nextLevel = rule.levels[currentLevel] || null;
+                  const nextLevelCost = doctrineUpgradeCost(rule, currentLevel, artifactMods);
                   return (
                     <div className="entityItem" key={`doctrine-${rule.key}`}>
                       <div className="entityName">
@@ -8278,7 +8359,7 @@ function defaultState() {
                       <div className="entityMeta">Uses {rule.currency}. Current: {rule.levels.slice(0, currentLevel).map((level) => level.desc).join(" ") || "No doctrine bonus yet."}</div>
                       <div className="row">
                         <button className="btn" onClick={() => upgradeDoctrine(rule.key)} disabled={!nextLevel || locked || !isBuildPhase}>
-                          {nextLevel ? `Upgrade (${nextLevel.cost} ${rule.currency})` : "Maxed"}
+                          {nextLevel ? `Upgrade (${nextLevelCost} ${rule.currency})` : "Maxed"}
                         </button>
                         <div className="muted">{nextLevel ? nextLevel.desc : "Mastered."}</div>
                       </div>
@@ -8732,6 +8813,7 @@ function defaultState() {
             <div className="card marketCard marketCard--dealer" style={{ "--market-card-art": `url(${MARKET_ART.dealer})` }}>
               <div className="marketCardBackdrop" />
               <div className="cardTitle">Shady Dealer</div>
+              <div className="muted">Collected {standardArtifactCollectedCount}/{STANDARD_ARTIFACTS.length} Standard Artifacts.</div>
               {state.shadyStock && state.shadyStock.length > 0 ? (
                 <div className="entityList marketOfferList">
                   {state.shadyStock.map((rawArtifact, idx) => {
@@ -8762,7 +8844,13 @@ function defaultState() {
                   })}
                 </div>
               ) : (
-                <div className="muted">Dealer is out of stock.</div>
+                <div className="muted">
+                  {standardArtifactAtCapCount >= STANDARD_ARTIFACTS.length
+                    ? "Dealer has nothing left to sell. You have completed the standard artifact catalog."
+                    : dealerCatalogExhausted
+                    ? "Dealer has no eligible standard artifacts left to offer at your current unlocks."
+                    : "Dealer is out of stock."}
+                </div>
               )}
             </div>
 
@@ -8939,6 +9027,7 @@ function defaultState() {
             </div>
             <div className="card">
               <div className="cardTitle">Artifacts</div>
+              <div className="muted">Collected {standardArtifactCollectedCount}/{STANDARD_ARTIFACTS.length} Standard Artifacts.</div>
               {ownedArtifactGroups.length ? (
                 <div className="entityList">
                   {ownedArtifactGroups.map(({ artifact, count }) => (
