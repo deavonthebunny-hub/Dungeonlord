@@ -8176,6 +8176,35 @@ function defaultState() {
                 <div className="muted small">Leader Trait: {pendingRaidLeaderTrait.name} - {pendingRaidLeaderTrait.desc}</div>
               ) : null}
               <div className="muted small">Expected mix: {raidForecastMix}</div>
+              {state.scoutQueue?.length ? (
+                <div className="entityList">
+                  <div className="entityItem">
+                    <div className="entityName">Revealed Ahead</div>
+                    <div className="entityMeta">Scout effects expose upcoming invaders before the raid fully unfolds.</div>
+                  </div>
+                  {state.scoutQueue.slice(0, 2).map((h, idx) => (
+                    <div className="entityItem" key={`forecast-scout-${h.id}-${idx}`}>
+                      <div className="entityName">{h.name}</div>
+                      <div className="entityMeta">
+                        {safeEntityLabel(h.race, "Unknown")} {safeEntityLabel(h.class, "Hero")} | {formatStars(safeEntityStars(h))} | {h.archetypeLabel || "Zealot"}
+                      </div>
+                      {h.profileKey || h.orderName ? (
+                        <div className="muted small">
+                          {h.profileName || "Expeditioner"}{h.orderName ? ` | ${h.orderName}` : ""}{h.isRaidLeader && h.leaderTraitName ? ` | ${h.leaderTraitName}` : ""}
+                        </div>
+                      ) : null}
+                      <div className="entityStats">
+                        HP {h.hp}/{safeEntityMaxHp(h)} | ATK {h.atk}
+                      </div>
+                      <div className="muted small">{invaderPassiveSummary(h)}</div>
+                      <div className="muted small">
+                        {h.raidOriginLabel || "Hero Raid"}{h.factionName ? ` | ${h.factionName}` : ""}{h.isRaidLeader ? " | Leader" : ""}
+                        {h.raidDirectiveKey ? ` | ${getRaidDirectiveRule(h.raidDirectiveKey).name}` : ""}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               {state.pendingCouncilRaid?.attackers?.length ? (
                 <div className="entityList">
                   {state.pendingCouncilRaid.attackers.map((attacker) => (
@@ -8539,40 +8568,8 @@ function defaultState() {
                     : "Default entrance-to-core route is highlighted while no invader is selected."}
                 </div>
               ) : (
-                <div className="muted">Place Entrance and Core to preview the main route.</div>
+                <div className="muted">No active entrance-to-core route is available to preview.</div>
               )}
-            </div>
-
-            <div className="card">
-              <div className="cardTitle">Place Entrance / Core</div>
-              <div className="row">
-                <button
-  className="btn"
-  onClick={() => {
-    placeEntrance();
-    setActiveTab("dungeon");
-  }}
-  disabled={locked || state.movePayload || !isBuildPhase || checklist.entrancePlaced}
->
-  Place Entrance (E)
-</button>
-
-                <div className="muted">Choose any tile.</div>
-              </div>
-              <div className="row">
-                <button
-  className="btn"
-  onClick={() => {
-    placeCore();
-    setActiveTab("dungeon");
-  }}
-  disabled={locked || state.movePayload || !isBuildPhase}
->
-  Place Core (C)
-</button>
-
-                <div className="muted">Choose any tile.</div>
-              </div>
             </div>
 
             <div className="card">
@@ -8962,37 +8959,6 @@ function defaultState() {
                 </>
               ) : (
                 <div className="muted">No raid report yet.</div>
-              )}
-            </div>
-
-            <div className="card">
-              <div className="cardTitle">Scout Report</div>
-              {state.scoutQueue && state.scoutQueue.length > 0 ? (
-                <div className="entityList">
-                  {state.scoutQueue.slice(0, 2).map((h, idx) => (
-                    <div className="entityItem" key={`scout-${h.id}-${idx}`}>
-                      <div className="entityName">{h.name}</div>
-                      <div className="entityMeta">
-                        {safeEntityLabel(h.race, "Unknown")} {safeEntityLabel(h.class, "Hero")} | {formatStars(safeEntityStars(h))} | {h.archetypeLabel || "Zealot"}
-                      </div>
-                      {h.profileKey || h.orderName ? (
-                        <div className="muted small">
-                          {h.profileName || "Expeditioner"}{h.orderName ? ` | ${h.orderName}` : ""}{h.isRaidLeader && h.leaderTraitName ? ` | ${h.leaderTraitName}` : ""}
-                        </div>
-                      ) : null}
-                      <div className="entityStats">
-                        HP {h.hp}/{safeEntityMaxHp(h)} | ATK {h.atk}
-                      </div>
-                      <div className="muted small">{invaderPassiveSummary(h)}</div>
-                      <div className="muted small">
-                        {h.raidOriginLabel || "Hero Raid"}{h.factionName ? ` | ${h.factionName}` : ""}{h.isRaidLeader ? " | Leader" : ""}
-                        {h.raidDirectiveKey ? ` | ${getRaidDirectiveRule(h.raidDirectiveKey).name}` : ""}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="muted">No scout data.</div>
               )}
             </div>
 
