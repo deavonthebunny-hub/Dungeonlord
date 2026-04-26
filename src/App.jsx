@@ -47,6 +47,7 @@ const SAVE_KEY = "dungeonlord.save.v1";
 const DOMINION_CAP = 4;
 const BASE_MONSTER_ROOM_CAP = 3;
 const COUNCIL_INTERVAL = 10;
+const ESCALATION_INTERVAL = 5;
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const ECONOMY_ROLES = [
   ["Essence", "Build tempo: rooms, upgrades, and trap infrastructure."],
@@ -718,6 +719,71 @@ function pickLeaderTraitKey(orderKey = null) {
   return pick(all);
 }
 
+function isCouncilDay(day = 1) {
+  const safeDay = Math.max(1, day || 1);
+  return safeDay % COUNCIL_INTERVAL === 0;
+}
+
+function isEscalationDay(day = 1) {
+  const safeDay = Math.max(1, day || 1);
+  return safeDay > 1 && safeDay % ESCALATION_INTERVAL === 0 && !isCouncilDay(safeDay);
+}
+
+function normalizeEscalationLevel(level = 0) {
+  return Math.max(0, Math.round(Number.isFinite(level) ? level : 0));
+}
+
+function raidDifficultyConfig(raidType = null, escalationLevel = 0) {
+  const level = normalizeEscalationLevel(escalationLevel);
+  if (raidType === "council") {
+    return {
+      statMult: 1.35,
+      partySizeDelta: 1,
+      starBias: 0.6,
+      rewardMult: 1.6,
+      clearEvolutionBonus: 0,
+      guaranteedLeader: false,
+    };
+  }
+  if (raidType === "escalation") {
+    const safeLevel = Math.max(1, level || 1);
+    return {
+      statMult: Math.min(1.55, 1.18 + 0.04 * (safeLevel - 1)),
+      partySizeDelta: Math.min(4, safeLevel),
+      starBias: 0.45,
+      rewardMult: Math.min(2.0, 1.45 + 0.1 * (safeLevel - 1)),
+      clearEvolutionBonus: Math.ceil(safeLevel / 2),
+      guaranteedLeader: true,
+    };
+  }
+  if (raidType === "elite") {
+    return {
+      statMult: 1.2,
+      partySizeDelta: -1,
+      starBias: 0.9,
+      rewardMult: 1.3,
+      clearEvolutionBonus: 1,
+      guaranteedLeader: true,
+    };
+  }
+  return {
+    statMult: 1,
+    partySizeDelta: 0,
+    starBias: 0,
+    rewardMult: 1,
+    clearEvolutionBonus: 0,
+    guaranteedLeader: false,
+  };
+}
+
+function raidRewardMultiplier(raidType = null, escalationLevel = 0) {
+  return raidDifficultyConfig(raidType, escalationLevel).rewardMult || 1;
+}
+
+function raidClearEvolutionBonus(raidType = null, escalationLevel = 0) {
+  return raidDifficultyConfig(raidType, escalationLevel).clearEvolutionBonus || 0;
+}
+
 function planRaidEncounter(raidType = null, day = 1, options = {}) {
   if (raidType === "council") {
     return {
@@ -729,8 +795,8 @@ function planRaidEncounter(raidType = null, day = 1, options = {}) {
     };
   }
   const order = pickHeroOrder(day, options.orderKey);
-  const leaderTraitKey =
-    raidType === "elite" ? options.leaderTraitKey || pickLeaderTraitKey(order?.key) : null;
+  const difficulty = raidDifficultyConfig(raidType, options.escalationLevel || 0);
+  const leaderTraitKey = difficulty.guaranteedLeader ? options.leaderTraitKey || pickLeaderTraitKey(order?.key) : null;
   return {
     orderKey: order?.key || null,
     orderName: order?.name || null,
@@ -748,6 +814,130 @@ function raidPlanningState(plannedRaid = null) {
   };
 }
 
+function buildInvasionChoice(raidType, day = 1, options = {}) {
+  const escalationLevel = raidType === "escalation" ? Math.max(1, normalizeEscalationLevel(options.escalationLevel) || 1) : 0;
+  const plannedRaid = planRaidEncounter(raidType, day, { ...options, escalationLevel });
+  const difficulty = raidDifficultyConfig(raidType, escalationLevel);
+  return {
+    key: options.key || raidType,
+    raidType,
+    label: raidTypeMeta(raidType).label,
+    day,
+    escalationLevel,
+    orderKey: plannedRaid.orderKey,
+    orderName: plannedRaid.orderName,
+    leaderTraitKey: plannedRaid.leaderTraitKey,
+    leaderTraitName: plannedRaid.leaderTraitName,
+    directiveKey: plannedRaid.directiveKey,
+    rewardMult: difficulty.rewardMult,
+    clearEvolutionBonus: difficulty.clearEvolutionBonus,
+    partySizeDelta: difficulty.partySizeDelta,
+    statMult: difficulty.statMult,
+  };
+}
+
+function buildDailyInvasionChoices(day = 1) {
+  return [buildInvasionChoice("normal", day), buildInvasionChoice("elite", day)];
+}
+
+function normalizeInvasionChoice(raw, day = 1) {
+  if (!raw || !["normal", "elite", "escalation"].includes(raw.raidType)) return null;
+  const fallback = buildInvasionChoice(raw.raidType, raw.day || day, {
+    key: raw.key || raw.raidType,
+    orderKey: raw.orderKey || undefined,
+    leaderTraitKey: raw.leaderTraitKey || undefined,
+    escalationLevel: raw.escalationLevel || 0,
+  });
+  return {
+    ...fallback,
+    ...raw,
+    key: raw.key || fallback.key,
+    day: raw.day || day,
+    escalationLevel: raw.raidType === "escalation" ? Math.max(1, normalizeEscalationLevel(raw.escalationLevel || fallback.escalationLevel) || 1) : 0,
+  };
+}
+
+function applyInvasionChoiceToState(stateLike, choice) {
+  if (!choice) return stateLike;
+  const escalationLevel = choice.raidType === "escalation" ? Math.max(1, normalizeEscalationLevel(choice.escalationLevel) || 1) : 0;
+  const plannedRaid = planRaidEncounter(choice.raidType, stateLike.day || choice.day || 1, {
+    orderKey: choice.orderKey || undefined,
+    leaderTraitKey: choice.leaderTraitKey || undefined,
+    directiveKey: choice.directiveKey || undefined,
+    escalationLevel,
+  });
+  return {
+    ...stateLike,
+    selectedInvasionKey: choice.key,
+    nextRaidType: choice.raidType,
+    ...raidPlanningState(plannedRaid),
+    pendingPunitiveRaid: false,
+    pendingCouncilRaid: null,
+    pendingEscalationLevel: escalationLevel,
+  };
+}
+
+function prepareRaidPlanForDay(stateLike, options = {}) {
+  const day = Math.max(1, stateLike?.day || 1);
+  const rerollChoices = !!options.rerollChoices;
+  const base = {
+    ...stateLike,
+    pendingCouncilRaid: stateLike?.pendingPunitiveRaid ? stateLike.pendingCouncilRaid : null,
+  };
+  if (isCouncilDay(day)) {
+    return {
+      ...base,
+      invasionChoices: [],
+      selectedInvasionKey: null,
+      nextRaidType: null,
+      ...raidPlanningState(null),
+      pendingPunitiveRaid: false,
+      pendingCouncilRaid: null,
+      pendingEscalationLevel: 0,
+    };
+  }
+  if (base.pendingPunitiveRaid) {
+    const plannedRaid = planRaidEncounter("council", day, { councilRaid: base.pendingCouncilRaid });
+    return {
+      ...base,
+      invasionChoices: [],
+      selectedInvasionKey: "council",
+      nextRaidType: "council",
+      ...raidPlanningState(plannedRaid),
+      pendingEscalationLevel: 0,
+    };
+  }
+  if (isEscalationDay(day)) {
+    const escalationLevel = Math.max(1, normalizeEscalationLevel(base.escalationsCleared) + 1);
+    const choice = buildInvasionChoice("escalation", day, { escalationLevel });
+    return applyInvasionChoiceToState(
+      {
+        ...base,
+        invasionChoices: [],
+      },
+      choice
+    );
+  }
+  const choices = rerollChoices || !Array.isArray(base.invasionChoices) || base.invasionChoices.length === 0
+    ? buildDailyInvasionChoices(day)
+    : base.invasionChoices.map((choice) => normalizeInvasionChoice(choice, day)).filter(Boolean);
+  const selectedChoice = choices.find((choice) => choice.key === base.selectedInvasionKey) || null;
+  const next = {
+    ...base,
+    invasionChoices: choices,
+    pendingPunitiveRaid: false,
+    pendingCouncilRaid: null,
+    pendingEscalationLevel: 0,
+  };
+  if (selectedChoice) return applyInvasionChoiceToState(next, selectedChoice);
+  return {
+    ...next,
+    selectedInvasionKey: null,
+    nextRaidType: null,
+    ...raidPlanningState(null),
+  };
+}
+
 function plannedRaidFromState(stateLike, raidType = null, councilRaid = null, day = null) {
   const safeDay = Math.max(1, day || stateLike?.day || 1);
   if (raidType === "council") {
@@ -760,6 +950,7 @@ function plannedRaidFromState(stateLike, raidType = null, councilRaid = null, da
     orderKey: pendingOrderKey || undefined,
     leaderTraitKey: pendingLeaderTraitKey || undefined,
     directiveKey: pendingOrderKey ? HERO_ORDER_MAP[pendingOrderKey]?.directiveKey : undefined,
+    escalationLevel: raidType === "escalation" ? stateLike?.pendingEscalationLevel || stateLike?.currentRaidEscalationLevel || 1 : 0,
   });
 }
 
@@ -1513,6 +1704,9 @@ function resolveRaidDirectiveKey(raidType = null, councilRaid = null, day = 1) {
   if (raidType === "elite") {
     return day % 2 === 0 ? "purge-support" : "break-frontline";
   }
+  if (raidType === "escalation") {
+    return day % 2 === 0 ? "break-frontline" : "purge-support";
+  }
   return day % 2 === 0 ? "probe-flanks" : "rush-core";
 }
 
@@ -1616,13 +1810,10 @@ function pickFactionArchetypeKey(faction, fallbackKey = "zealot") {
   return fallbackKey;
 }
 
-function applyRaidStarBias(stars, day = 1, raidType = null, bias = 0) {
+function applyRaidStarBias(stars, day = 1, raidType = null, bias = 0, escalationLevel = 0) {
   const cap = monsterStarCapForDay(day);
   let next = clampMonsterStar(stars);
-  const totalBias =
-    bias +
-    (raidType === "elite" ? 0.45 : 0) +
-    (raidType === "council" ? 0.6 : 0);
+  const totalBias = bias + (raidDifficultyConfig(raidType, escalationLevel).starBias || 0);
   if (totalBias > 0 && Math.random() < totalBias) {
     next = Math.min(cap, next + 1);
   }
@@ -2017,15 +2208,13 @@ function scaleStat(base, stars) {
   return Math.max(1, Math.round(base * monsterStarMultiplier(stars)));
 }
 
-function heroRaidStatMultiplier(raidType) {
-  if (raidType === "elite") return 1.2;
-  if (raidType === "council") return 1.35;
-  return 1;
+function heroRaidStatMultiplier(raidType, escalationLevel = 0) {
+  return raidDifficultyConfig(raidType, escalationLevel).statMult || 1;
 }
 
-function buildHeroStats(stars, raidType, heroClass = null) {
+function buildHeroStats(stars, raidType, heroClass = null, escalationLevel = 0) {
   const safeStars = clampMonsterStar(stars);
-  const raidMult = heroRaidStatMultiplier(raidType);
+  const raidMult = heroRaidStatMultiplier(raidType, escalationLevel);
   const classMods = CLASS_STAT_MODS[heroClass] || {};
   return {
     maxHp: Math.max(1, Math.round(scaleStat(HERO_BASE.hp, safeStars) * raidMult) + (classMods.hp || 0)),
@@ -2036,12 +2225,13 @@ function buildHeroStats(stars, raidType, heroClass = null) {
   };
 }
 
-function normalizeHeroEntity(hero, day = 1, raidType = null) {
+function normalizeHeroEntity(hero, day = 1, raidType = null, fallbackEscalationLevel = 0) {
   const safeDay = Math.max(1, day || 1);
   const stars = Math.min(clampMonsterStar(hero?.stars || 1), monsterStarCapForDay(safeDay));
   const profile = hero?.profileKey ? HERO_PROFILE_MAP[hero.profileKey] : null;
   const heroClass = hero?.class || profile?.className || "Warrior";
-  const stats = buildHeroStats(stars, raidType, heroClass);
+  const raidEscalationLevel = normalizeEscalationLevel(hero?.raidEscalationLevel || fallbackEscalationLevel);
+  const stats = buildHeroStats(stars, raidType, heroClass, raidEscalationLevel);
   const previousMaxHp = Math.max(1, hero?.stats?.maxHp ?? hero?.hp ?? stats.maxHp);
   const hpRatio = clamp((hero?.hp ?? previousMaxHp) / previousMaxHp, 0, 1);
   const heroPassiveKey = normalizeHeroPassiveKey(hero?.heroPassiveKey || hero?.passive);
@@ -2070,7 +2260,8 @@ function normalizeHeroEntity(hero, day = 1, raidType = null) {
     unitKind: hero?.unitKind || "hero",
     factionKey: hero?.factionKey || null,
     factionName: hero?.factionName || null,
-    raidOriginLabel: hero?.raidOriginLabel || null,
+    raidOriginLabel: hero?.raidOriginLabel || (raidType ? raidTypeMeta(raidType).label : null),
+    raidEscalationLevel,
     raidDirectiveKey:
       hero?.raidDirectiveKey ||
       (hero?.factionKey ? COUNCIL_RAID_FACTIONS[hero.factionKey]?.defaultDirective : null) ||
@@ -2115,17 +2306,18 @@ function generateHero(id, entrancePos, turnsSurvived, raidType, day = 1, options
   const passiveRule = pickHeroPassiveRule(passivePool);
   const heroClass = profile?.className || options.className || "Warrior";
   const directiveKey = options.directiveKey || order?.directiveKey || resolveRaidDirectiveKey(raidType, options.councilRaid, day);
+  const escalationLevel = raidType === "escalation" ? Math.max(1, normalizeEscalationLevel(options.escalationLevel) || 1) : 0;
   const archetypeKey =
     options.archetypeKey ||
     pickHeroArchetypeFromWeights(
       profile?.archetypeWeights || order?.archetypeWeights || getRaidDirectiveRule(directiveKey).archetypeWeights || {},
       pickRaidArchetypeKey(heroClass, passiveRule.key, raidType, directiveKey)
     );
-  const stars = applyRaidStarBias(rollAuthoritativeStar(day), day, raidType, options.starBias || 0);
+  const stars = applyRaidStarBias(rollAuthoritativeStar(day), day, raidType, options.starBias || 0, escalationLevel);
   const race = pick(racePool);
   const profileName = profile?.name || heroClass;
   const name = `${pick(HERO_NAMES)} the ${profileName}`;
-  const stats = buildHeroStats(stars, raidType, heroClass);
+  const stats = buildHeroStats(stars, raidType, heroClass, escalationLevel);
 
   return {
     id,
@@ -2149,6 +2341,7 @@ function generateHero(id, entrancePos, turnsSurvived, raidType, day = 1, options
     factionName: null,
     raidOriginLabel: raidTypeMeta(raidType).label,
     raidDirectiveKey: directiveKey,
+    raidEscalationLevel: escalationLevel,
     profileKey: profile?.key || null,
     profileName,
     orderKey: order?.key || profile?.orderKey || null,
@@ -2292,25 +2485,28 @@ function initMonsterInventory(turnsSurvived, count = 4, starCap, day = 1) {
 
 function generateHeroParty(turnsSurvived, raidType, day = 1, options = {}) {
   const raidMods = buildRaidModifiers(options.raidBoons || []);
+  const escalationLevel = raidType === "escalation" ? Math.max(1, normalizeEscalationLevel(options.escalationLevel) || 1) : 0;
+  const difficulty = raidDifficultyConfig(raidType, escalationLevel);
   const baseSize = DAY_START_PARTY_MIN + Math.floor(Math.random() * (DAY_START_PARTY_MAX - DAY_START_PARTY_MIN + 1));
-  const eliteDelta = raidType === "elite" ? -1 : 0;
-  const size = Math.max(1, baseSize + eliteDelta + (raidMods.partySizeDelta || 0));
+  const size = Math.max(1, baseSize + (difficulty.partySizeDelta || 0) + (raidMods.partySizeDelta || 0));
   const basePos = { x: 0, y: 0 };
   const party = [];
   let nextId = 1;
   const plannedRaid = options.plannedRaid || planRaidEncounter(raidType, day, options);
   const directiveKey = plannedRaid.directiveKey || options.directiveKey || resolveRaidDirectiveKey(raidType, options.councilRaid, day);
   const eliteOptions =
-    raidType === "elite"
+    difficulty.guaranteedLeader
       ? {
-          starBias: 0.45 + (raidMods.starBias || 0),
+          starBias: raidMods.starBias || 0,
           directiveKey,
           orderKey: plannedRaid.orderKey,
+          escalationLevel,
         }
       : {
           starBias: raidMods.starBias || 0,
           directiveKey,
           orderKey: plannedRaid.orderKey,
+          escalationLevel,
         };
   for (let i = 0; i < size; i++) {
     const profile = weightedPickHeroProfile(day, plannedRaid.orderKey);
@@ -2379,8 +2575,9 @@ function applyRaidPartyModifiers(party, raidBoons = [], plannedRaid = null) {
 function generateRaidParty(turnsSurvived, raidType, day = 1, options = {}) {
   if (raidType === "council") {
     const raidMods = buildRaidModifiers(options.raidBoons || []);
+    const difficulty = raidDifficultyConfig("council");
     const baseSize = DAY_START_PARTY_MIN + Math.floor(Math.random() * (DAY_START_PARTY_MAX - DAY_START_PARTY_MIN + 1));
-    const size = Math.max(1, baseSize + 1 + (raidMods.partySizeDelta || 0));
+    const size = Math.max(1, baseSize + (difficulty.partySizeDelta || 0) + (raidMods.partySizeDelta || 0));
     const basePos = { x: 0, y: 0 };
     return applyRaidPartyModifiers(
       Array.from({ length: size }, (_, idx) =>
@@ -3809,14 +4006,13 @@ export default function App() {
   const [selectedInventoryMonsterIndex, setSelectedInventoryMonsterIndex] = useState("");
   const [brokenTileArt, setBrokenTileArt] = useState({});
   const [brokenCouncilArt, setBrokenCouncilArt] = useState({});
-function defaultState() {
-    const startingRaid = buildRaidPartyWithIntel(0, null, 1);
-    const startingParty = startingRaid.party;
+  function defaultState() {
     const dailyEvent = rollDailyEvent();
     const traderStock = generateTraderStock(0, 1);
     const artifacts = [];
     const shadyStock = generateArtifactStock(1, artifacts);
     const grid = initStartingGrid();
+    const invasionChoices = buildDailyInvasionChoices(1);
     let invMonsters = initMonsterInventory(0, 2, 2, 1);
     const starterRoom = grid[0]?.[1];
     if (starterRoom && starterRoom.room === "monster") {
@@ -3852,7 +4048,7 @@ function defaultState() {
       heroes: [],
       nextHeroId: 1,
       invMonsters,
-      log: ["Day 1 begins. Build phase skipped. Prepare for the raid."],
+      log: ["Day 1 begins. Choose your first invasion."],
       raidActive: false,
       raidRemaining: 0, // heroes left to spawn in THIS raid
       raidStartTurn: 0,
@@ -3864,11 +4060,11 @@ function defaultState() {
       lastRaidReport: null,
       turnsSurvived: 0,
       day: 1,
-      phase: "battle",
-      currentParty: startingParty,
+      phase: "build",
+      currentParty: [],
       currentPartyRaidType: null,
-      partyQueue: startingParty.map((h) => ({ ...h })),
-      raidIntel: startingRaid.raidIntel,
+      partyQueue: [],
+      raidIntel: null,
       dailyEvent,
       traderStock,
       dpRegenCounter: 0,
@@ -3894,6 +4090,11 @@ function defaultState() {
       pendingRaidLeaderTraitKey: null,
       pendingPunitiveRaid: false,
       pendingCouncilRaid: null,
+      invasionChoices,
+      selectedInvasionKey: null,
+      escalationsCleared: 0,
+      pendingEscalationLevel: 0,
+      currentRaidEscalationLevel: 0,
       nextRaidBoons: [],
       activeRaidBoons: [],
       dungeonLevel: 1,
@@ -4013,6 +4214,13 @@ function defaultState() {
         parsed.pendingCouncilRaid ||
         (pendingPunitiveRaid && council.roster?.length ? buildCouncilRaidFromRoster(council.roster, parsed.day || base.day, councilFavor) : null);
       const currentPartyRaidType = parsed.currentPartyRaidType || null;
+      const escalationsCleared = normalizeEscalationLevel(parsed.escalationsCleared);
+      const pendingEscalationLevel = normalizeEscalationLevel(parsed.pendingEscalationLevel);
+      const currentRaidEscalationLevel = normalizeEscalationLevel(parsed.currentRaidEscalationLevel);
+      const invasionChoices = Array.isArray(parsed.invasionChoices)
+        ? parsed.invasionChoices.map((choice) => normalizeInvasionChoice(choice, savedDay)).filter(Boolean)
+        : [];
+      const selectedInvasionKey = typeof parsed.selectedInvasionKey === "string" ? parsed.selectedInvasionKey : null;
       const councilQuestCounters = createEmptyCouncilQuestCounters();
       for (const key of COUNCIL_QUEST_COUNTER_KEYS) {
         const value = parsed.councilQuestCounters?.[key];
@@ -4038,7 +4246,9 @@ function defaultState() {
       const nextRaidBoons = Array.isArray(parsed.nextRaidBoons) ? parsed.nextRaidBoons.filter(Boolean) : [];
       const activeRaidBoons = Array.isArray(parsed.activeRaidBoons) ? parsed.activeRaidBoons.filter(Boolean) : [];
       const normalizeHeroList = (list, raidType = null) =>
-        Array.isArray(list) ? list.filter(Boolean).map((hero) => normalizeHeroEntity(hero, savedDay, raidType)) : [];
+        Array.isArray(list)
+          ? list.filter(Boolean).map((hero) => normalizeHeroEntity(hero, savedDay, raidType, currentRaidEscalationLevel))
+          : [];
       const normalizedCurrentParty = normalizeHeroList(parsed.currentParty, currentPartyRaidType);
       const normalizedHeroes = normalizeHeroList(parsed.heroes, parsed.raidType || currentPartyRaidType);
       const normalizedPartyQueue = normalizeHeroList(parsed.partyQueue, currentPartyRaidType);
@@ -4059,7 +4269,7 @@ function defaultState() {
             ? parsed.fleshMarketStock.filter(Boolean)
             : generateFleshMarketStock(savedDay, boughtUniqueKeys)
           : [];
-      return {
+      const loadedState = {
         ...base,
         ...parsed,
         grid,
@@ -4094,6 +4304,11 @@ function defaultState() {
         pendingRaidLeaderTraitKey,
         pendingPunitiveRaid,
         pendingCouncilRaid,
+        invasionChoices,
+        selectedInvasionKey,
+        escalationsCleared,
+        pendingEscalationLevel,
+        currentRaidEscalationLevel,
         nextRaidBoons,
         activeRaidBoons,
         currentPartyRaidType,
@@ -4108,6 +4323,9 @@ function defaultState() {
               .map((monster) => normalizeMonsterEntity(monster))
           : base.invMonsters,
       };
+      return parsed.raidActive || parsed.phase === "battle" || normalizedHeroes.length > 0
+        ? loadedState
+        : prepareRaidPlanForDay(loadedState);
     } catch {
       return null;
     }
@@ -4173,6 +4391,7 @@ function defaultState() {
   const isBattlePhase = state.phase === "battle";
   const councilSessionActive = state.councilSession && state.councilSession.day === state.day;
   const showCouncilPrompt = councilSessionActive && state.councilSession.status === "pending";
+  const councilAwaitingConclusion = councilSessionActive && state.councilSession.status !== "pending";
   const councilRoster = councilSessionActive ? state.council?.roster || [] : [];
   const focusedCouncilMember = councilRoster.find((m) => m.key === focusedCouncilKey) || councilRoster[0] || null;
   const absentCouncilMembers = councilSessionActive
@@ -5075,6 +5294,26 @@ function defaultState() {
     });
   }
 
+  function selectInvasionChoice(choiceKey) {
+    if (locked) return;
+    setState((s) => {
+      if (s.phase !== "build") return addLog(s, "Invasion choices can only be changed during build phase.");
+      if (s.council?.active || (s.councilSession && s.councilSession.day === s.day)) {
+        return addLog(s, "The Council must conclude before choosing the next invasion.");
+      }
+      if (s.pendingPunitiveRaid || isEscalationDay(s.day)) {
+        return addLog(s, "Today's raid is forced.");
+      }
+      const choices = Array.isArray(s.invasionChoices) && s.invasionChoices.length
+        ? s.invasionChoices.map((choice) => normalizeInvasionChoice(choice, s.day)).filter(Boolean)
+        : buildDailyInvasionChoices(s.day);
+      const choice = choices.find((entry) => entry.key === choiceKey);
+      if (!choice) return addLog({ ...s, invasionChoices: choices }, "That invasion option is no longer available.");
+      const ns = applyInvasionChoiceToState({ ...s, invasionChoices: choices }, choice);
+      return addLog(ns, `Invasion selected: ${choice.label}${choice.orderName ? ` - ${choice.orderName}` : ""}.`);
+    });
+  }
+
   function beginBattle() {
     if (locked) return;
     if (!isBuildPhase) {
@@ -5085,20 +5324,32 @@ function defaultState() {
       setState((s) => addLog(s, "Council is in session. Attend or decline first."));
       return;
     }
+    if (state.councilSession && state.councilSession.day === state.day) {
+      setState((s) => addLog(s, "Conclude the Council before beginning another battle."));
+      return;
+    }
+    if (!state.nextRaidType) {
+      setState((s) => addLog(s, "Choose an invasion in Raid Forecast first."));
+      return;
+    }
     setState((s) => {
       const raidType = s.pendingPunitiveRaid ? "council" : s.nextRaidType;
+      if (!raidType) return addLog(s, "Choose an invasion in Raid Forecast first.");
+      const escalationLevel = raidType === "escalation" ? Math.max(1, s.pendingEscalationLevel || 1) : 0;
       const plannedRaid = plannedRaidFromState(s, raidType, s.pendingCouncilRaid, s.day);
       const stagedRaid = buildRaidPartyWithIntel(s.turnsSurvived, raidType, s.day, {
         councilRaid: s.pendingCouncilRaid,
         raidBoons: s.nextRaidBoons,
         grid: s.grid,
         plannedRaid,
+        escalationLevel,
       });
       const party = stagedRaid.party;
       const scoutQueue = buildScoutRevealQueue(party, s.grid, s.doctrines, s.nextRaidBoons, s.artifacts, s.day);
       let ns = {
         ...s,
         phase: "battle",
+        currentRaidEscalationLevel: escalationLevel,
         currentParty: party,
         currentPartyRaidType: raidType || null,
         partyQueue: party.map((h) => ({ ...h })),
@@ -5110,7 +5361,10 @@ function defaultState() {
         ns = addCouncilQuestCounter(ns, "revealedInvaderCount", scoutQueue.length);
       }
       const meta = raidTypeMeta(raidType, s.pendingCouncilRaid);
-      ns = addLog(ns, `Day ${s.day} battle begins. ${meta.label}. Party size ${party.length}.`);
+      ns = addLog(
+        ns,
+        `Day ${s.day} battle begins. ${meta.label}${escalationLevel ? ` Level ${escalationLevel}` : ""}. Party size ${party.length}.`
+      );
       ns = addLog(ns, meta.desc);
       ns = addLog(ns, `Raid directive: ${getRaidDirectiveRule(stagedRaid.directiveKey).name}.`);
       if (stagedRaid.plannedRaid?.orderName) {
@@ -5129,7 +5383,7 @@ function defaultState() {
     });
   }
 
-  function spawnOneHero(heroes, nextId, entranceOptions, turnsSurvived, queueIn, grid, raidType, day = 1) {
+  function spawnOneHero(heroes, nextId, entranceOptions, turnsSurvived, queueIn, grid, raidType, day = 1, escalationLevel = 0) {
     let queue = queueIn ? [...queueIn] : [];
     const spawnFrom = Array.isArray(entranceOptions) ? pickSpawnEntrance(grid, { active: true, breaches: entranceOptions.filter((entry) => entry.kind === "ash-breach") }) : entranceOptions;
     if (!spawnFrom) return { nextHeroId: nextId, scoutQueue: queue, spawned: null, entrance: null };
@@ -5139,7 +5393,7 @@ function defaultState() {
       hero.x = spawnFrom.x;
       hero.y = spawnFrom.y;
     } else {
-      hero = generateHero(nextId, spawnFrom, turnsSurvived, raidType, day);
+      hero = generateHero(nextId, spawnFrom, turnsSurvived, raidType, day, { escalationLevel });
     }
     if (grid && hasUtilityAura(grid, hero.x, hero.y, "fear-idol")) {
       hero.statuses = hero.statuses || {};
@@ -5154,6 +5408,14 @@ function defaultState() {
     if (locked) return;
     if (state.council?.active) {
       setState((s) => addLog(s, "Council is in session. Attend or decline first."));
+      return;
+    }
+    if (state.councilSession && state.councilSession.day === state.day) {
+      setState((s) => addLog(s, "Conclude the Council before starting another raid."));
+      return;
+    }
+    if (!state.nextRaidType) {
+      setState((s) => addLog(s, "Choose an invasion in Raid Forecast first."));
       return;
     }
     if (state.movePayload) {
@@ -5197,11 +5459,14 @@ function defaultState() {
       let heroes = [...s.heroes];
       let nextId = s.nextHeroId;
       const raidType = s.pendingPunitiveRaid ? "council" : s.nextRaidType;
+      if (!raidType) return addLog(s, "Choose an invasion in Raid Forecast first.");
+      const escalationLevel = raidType === "escalation" ? Math.max(1, s.currentRaidEscalationLevel || s.pendingEscalationLevel || 1) : 0;
       const plannedRaid = plannedRaidFromState(s, raidType, s.pendingCouncilRaid, s.day);
       const reuseParty =
         s.currentParty &&
         s.currentParty.length &&
-        (s.currentPartyRaidType || null) === (raidType || null);
+        (s.currentPartyRaidType || null) === (raidType || null) &&
+        (raidType !== "escalation" || (s.currentRaidEscalationLevel || 0) === escalationLevel);
       const stagedRaid = reuseParty
         ? {
             directiveKey:
@@ -5219,6 +5484,7 @@ function defaultState() {
             raidBoons: s.nextRaidBoons,
             grid: s.grid,
             plannedRaid,
+            escalationLevel,
           });
       const party = stagedRaid.party;
       let partyQueue = [...party];
@@ -5233,7 +5499,7 @@ function defaultState() {
       const fortifiedCoreShield = (s.coreShield || 0) + doctrineShield + (raidMods.coreShieldBonus || 0) + (artifactModsStart.coreStartShield || 0);
 
       if (heroes.length < HERO_CAP && partyQueue.length > 0) {
-        const spawnResult = spawnOneHero(heroes, nextId, entrances, s.turnsSurvived, partyQueue, grid, raidType, s.day);
+        const spawnResult = spawnOneHero(heroes, nextId, entrances, s.turnsSurvived, partyQueue, grid, raidType, s.day, escalationLevel);
         nextId = spawnResult.nextHeroId;
         partyQueue = spawnResult.scoutQueue;
         raidRemaining = partyQueue.length;
@@ -5253,6 +5519,7 @@ function defaultState() {
           scoutQueue,
           currentParty: party,
           currentPartyRaidType: raidType || null,
+          currentRaidEscalationLevel: escalationLevel,
           partyQueue,
           raidIntel: stagedRaid.raidIntel,
           ...raidPlanningState(stagedRaid.plannedRaid),
@@ -5284,7 +5551,10 @@ function defaultState() {
           ns = addLog(ns, `Council leverage fortifies the Core with +${raidMods.coreShieldBonus} Shield.`);
         }
         const originLabel = spawnResult.entrance?.kind === "ash-breach" ? `Ash Breach ${formatGridPos(spawnResult.entrance)}` : "the Entrance";
-        ns = addLog(ns, `Raid started. ${meta.label}. Party size ${party.length}. ${invaderLabel(spawnResult.spawned)} enters from ${originLabel}.`);
+        ns = addLog(
+          ns,
+          `Raid started. ${meta.label}${escalationLevel ? ` Level ${escalationLevel}` : ""}. Party size ${party.length}. ${invaderLabel(spawnResult.spawned)} enters from ${originLabel}.`
+        );
         if (scoutQueue.length > 0) {
           const previews = scoutQueue
             .map((h) => `${h.name}${h.isRaidLeader ? " [Leader]" : ""} (${formatStars(safeEntityStars(h))}, ATK ${h.atk}, HP ${h.hp})`)
@@ -5310,6 +5580,7 @@ function defaultState() {
         scoutQueue,
         currentParty: party,
         currentPartyRaidType: raidType || null,
+        currentRaidEscalationLevel: escalationLevel,
         partyQueue,
         raidIntel: stagedRaid.raidIntel,
         raidType: raidType || null,
@@ -5333,7 +5604,7 @@ function defaultState() {
       if (raidMods.coreShieldBonus > 0) {
         ns = addLog(ns, `Council leverage fortifies the Core with +${raidMods.coreShieldBonus} Shield.`);
       }
-      ns = addLog(ns, `Raid started. ${meta.label}. Party size ${party.length}. (Cap reached; no spawn yet.)`);
+      ns = addLog(ns, `Raid started. ${meta.label}${escalationLevel ? ` Level ${escalationLevel}` : ""}. Party size ${party.length}. (Cap reached; no spawn yet.)`);
       if (scoutQueue.length > 0) {
         const previews = scoutQueue
           .slice(0, 2)
@@ -5388,7 +5659,7 @@ function defaultState() {
         ...createEmptyCouncilQuestCounters(),
         ...(s.councilQuestCounters || {}),
       };
-      const raidMult = s.raidType === "council" ? 1.6 : s.raidType === "elite" ? 1.3 : 1;
+      const raidMult = raidRewardMultiplier(s.raidType, s.currentRaidEscalationLevel || 0);
 
       let turnsSurvived = s.turnsSurvived;
       let heroesIn = s.heroes;
@@ -6265,7 +6536,17 @@ function defaultState() {
       let nextHeroId = s.nextHeroId;
       let partyQueue = s.partyQueue ? [...s.partyQueue] : [];
       if (raidActive && partyQueue.length > 0 && activeEntrancesLocal.length > 0 && heroesOut.length < HERO_CAP) {
-        const spawnResult = spawnOneHero(heroesOut, nextHeroId, activeEntrancesLocal, turnsSurvived, partyQueue, grid, s.raidType, s.day);
+        const spawnResult = spawnOneHero(
+          heroesOut,
+          nextHeroId,
+          activeEntrancesLocal,
+          turnsSurvived,
+          partyQueue,
+          grid,
+          s.raidType,
+          s.day,
+          s.currentRaidEscalationLevel || 0
+        );
         nextHeroId = spawnResult.nextHeroId;
         partyQueue = spawnResult.scoutQueue;
         raidRemaining = partyQueue.length;
@@ -6352,6 +6633,21 @@ function defaultState() {
           nextState.currency = { ...nextState.currency, evolution: nextState.currency.evolution + evoGain };
           nextState = addLog(nextState, `Evolution gained: +${evoGain}.`);
         }
+        const clearEvolutionBonus = raidClearEvolutionBonus(s.raidType, s.currentRaidEscalationLevel || 0);
+        if (clearEvolutionBonus > 0) {
+          nextState.currency = {
+            ...nextState.currency,
+            evolution: nextState.currency.evolution + clearEvolutionBonus,
+          };
+          nextState = addLog(
+            nextState,
+            `${raidTypeMeta(s.raidType, s.pendingCouncilRaid).label} clear bonus: +${clearEvolutionBonus} Evolution.`
+          );
+        }
+        if (s.raidType === "escalation") {
+          nextState.escalationsCleared = Math.max(normalizeEscalationLevel(nextState.escalationsCleared), s.currentRaidEscalationLevel || 1);
+          nextState = addLog(nextState, `Escalation Level ${s.currentRaidEscalationLevel || 1} cleared.`);
+        }
         const completedRaidCoreDamage = Math.max(0, (s.raidStartCoreHp || getCoreMaxHp(s)) - coreHp);
         nextState = addCouncilQuestCounter(nextState, "survivedRaidCount", 1);
         if (completedRaidCoreDamage === 0) {
@@ -6410,7 +6706,7 @@ function defaultState() {
             nextState.councilQuest = { ...nextState.councilQuest, progress };
           }
         }
-        const councilDue = nextState.day % COUNCIL_INTERVAL === 0;
+        const councilDue = isCouncilDay(nextState.day);
         if (councilDue) {
           const council = nextState.council || { active: false, day: null, roster: [], lastRoster: [], declinedStreak: 0 };
           const roster = buildCouncilRoster(council.lastRoster || []);
@@ -6448,14 +6744,13 @@ function defaultState() {
           }
           nextState.councilQuest = null;
           nextState.councilQuestCounters = createEmptyCouncilQuestCounters();
-          const punitive = council.declinedStreak >= 2;
-          const nextRaidType = punitive ? "council" : "elite";
-          const pendingCouncilRaid = punitive ? buildCouncilRaidFromRoster(roster, nextState.day, councilFavor) : null;
-          const plannedRaid = planRaidEncounter(nextRaidType, nextState.day, { councilRaid: pendingCouncilRaid });
-          nextState.nextRaidType = nextRaidType;
-          Object.assign(nextState, raidPlanningState(plannedRaid));
-          nextState.pendingPunitiveRaid = punitive;
-          nextState.pendingCouncilRaid = pendingCouncilRaid;
+          nextState.nextRaidType = null;
+          Object.assign(nextState, raidPlanningState(null));
+          nextState.pendingPunitiveRaid = false;
+          nextState.pendingCouncilRaid = null;
+          nextState.invasionChoices = [];
+          nextState.selectedInvasionKey = null;
+          nextState.pendingEscalationLevel = 0;
           nextState.councilSession = buildCouncilSession(roster, nextState.day, councilFavor);
           nextState = addLog(nextState, "Council of the Dungeonlords convenes. Attend or decline.");
         }
@@ -6463,12 +6758,17 @@ function defaultState() {
           nextState.councilSession = null;
         }
         if (!councilDue) {
-          nextState.pendingCouncilRaid = nextState.pendingPunitiveRaid ? nextState.pendingCouncilRaid : null;
-        }
-        if (!nextState.nextRaidType) {
-          Object.assign(nextState, raidPlanningState(null));
+          nextState = prepareRaidPlanForDay(
+            {
+              ...nextState,
+              invasionChoices: [],
+              selectedInvasionKey: null,
+            },
+            { rerollChoices: true }
+          );
         }
         nextState.raidType = null;
+        nextState.currentRaidEscalationLevel = 0;
         nextState.activeRaidBoons = [];
         nextState = addLog(nextState, `Day ${nextState.day} begins. Build phase.`);
         if (nextState.dailyEvent?.key && nextState.dailyEvent.key !== "none") {
@@ -6487,6 +6787,10 @@ function defaultState() {
           essence: essenceGained,
           soulshards: soulshardsGained,
           coreDamage,
+          raidType: s.raidType || null,
+          escalationLevel: s.currentRaidEscalationLevel || 0,
+          rewardMultiplier: raidRewardMultiplier(s.raidType, s.currentRaidEscalationLevel || 0),
+          clearEvolutionBonus: raidClearEvolutionBonus(s.raidType, s.currentRaidEscalationLevel || 0),
         };
       }
 
@@ -6512,11 +6816,10 @@ function defaultState() {
   function resetRun() {
     setState((s) => {
       const grid = resetLayoutKeepStructure(s.grid);
-      const startingRaid = buildRaidPartyWithIntel(0, null, 1);
-      const startingParty = startingRaid.party;
       const dailyEvent = rollDailyEvent();
       const traderStock = generateTraderStock(0, 1);
       const shadyStock = generateArtifactStock(1, []);
+      const invasionChoices = buildDailyInvasionChoices(1);
       let ns = {
         ...s,
         grid,
@@ -6559,11 +6862,11 @@ function defaultState() {
         movePayload: null,
         scoutQueue: [],
         day: 1,
-        phase: "battle",
-        currentParty: startingParty,
+        phase: "build",
+        currentParty: [],
         currentPartyRaidType: null,
-        partyQueue: startingParty.map((h) => ({ ...h })),
-        raidIntel: startingRaid.raidIntel,
+        partyQueue: [],
+        raidIntel: null,
         dailyEvent,
         traderStock,
         dpRegenCounter: 0,
@@ -6589,6 +6892,11 @@ function defaultState() {
         pendingRaidLeaderTraitKey: null,
         pendingPunitiveRaid: false,
         pendingCouncilRaid: null,
+        invasionChoices,
+        selectedInvasionKey: null,
+        escalationsCleared: 0,
+        pendingEscalationLevel: 0,
+        currentRaidEscalationLevel: 0,
         nextRaidBoons: [],
         activeRaidBoons: [],
         fleshMarketUntilDay: 0,
@@ -6596,7 +6904,7 @@ function defaultState() {
         boughtUniqueKeys: [],
         evolutionOffer: null,
       };
-      ns = addLog(ns, "Run reset (layout kept).");
+      ns = addLog(ns, "Run reset (layout kept). Choose your first invasion.");
       return ns;
     });
   }
@@ -6604,7 +6912,7 @@ function defaultState() {
   function newRun() {
     setState(() => ({
       ...defaultState(),
-      log: ["Day 1 begins. Build phase skipped. Prepare for the raid."],
+      log: ["Day 1 begins. Choose your first invasion."],
     }));
   }
 
@@ -6632,8 +6940,6 @@ function defaultState() {
     setCouncilScreenOpen(true);
     setState((s) => {
       const council = { ...s.council, active: false, declinedStreak: 0 };
-      const nextRaidType = "elite";
-      const plannedRaid = planRaidEncounter(nextRaidType, s.day, { councilRaid: null });
       let councilSession = s.councilSession ? { ...s.councilSession, status: "attended" } : s.councilSession;
       let councilFavor = normalizeCouncilFavorMap(s.councilFavor || {});
       const favorLogLines = [];
@@ -6647,10 +6953,13 @@ function defaultState() {
         ...s,
         council,
         councilFavor,
-        nextRaidType,
-        ...raidPlanningState(plannedRaid),
+        nextRaidType: null,
+        ...raidPlanningState(null),
         pendingPunitiveRaid: false,
         pendingCouncilRaid: null,
+        invasionChoices: [],
+        selectedInvasionKey: null,
+        pendingEscalationLevel: 0,
         councilSession,
       };
       ns = addLogLines(ns, favorLogLines);
@@ -6659,29 +6968,7 @@ function defaultState() {
         const names = council.roster.map((m) => m.name).join(", ");
         ns = addLog(ns, `Council attendees: ${names}.`);
       }
-      if (s.phase === "battle") {
-        const stagedRaid = buildRaidPartyWithIntel(s.turnsSurvived, nextRaidType, s.day, {
-          councilRaid: null,
-          raidBoons: s.nextRaidBoons,
-          grid: s.grid,
-          plannedRaid,
-        });
-        const party = stagedRaid.party;
-        const scoutQueue = buildScoutRevealQueue(party, s.grid, s.doctrines, s.nextRaidBoons, s.artifacts, s.day);
-        ns = {
-          ...ns,
-          currentParty: party,
-          currentPartyRaidType: nextRaidType || null,
-          partyQueue: party.map((h) => ({ ...h })),
-          scoutQueue,
-          raidIntel: stagedRaid.raidIntel,
-        };
-        if (scoutQueue.length > 0) {
-          ns = addCouncilQuestCounter(ns, "revealedInvaderCount", scoutQueue.length);
-        }
-        ns = addLog(ns, "Council choice updated today's raid.");
-        ns = addLog(ns, `Raid directive: ${getRaidDirectiveRule(stagedRaid.directiveKey).name}.`);
-      }
+      ns = addLog(ns, "Choose any Council boon or quest, then conclude the Council to advance.");
       return ns;
     });
   }
@@ -6693,7 +6980,6 @@ function defaultState() {
     setState((s) => {
       const declinedStreak = (s.council?.declinedStreak || 0) + 1;
       const council = { ...s.council, active: false, declinedStreak };
-      const nextRaidType = declinedStreak >= 2 ? "council" : "elite";
       let councilSession = s.councilSession ? { ...s.councilSession, status: "declined" } : s.councilSession;
       let councilFavor = normalizeCouncilFavorMap(s.councilFavor || {});
       const favorLogLines = [];
@@ -6703,45 +6989,95 @@ function defaultState() {
         favorLogLines.push(...favorShift.logLines);
       }
       councilSession = rebuildCouncilSessionWithFavor(councilSession, council.roster || [], s.day, councilFavor);
-      const pendingCouncilRaid = declinedStreak >= 2 ? buildCouncilRaidFromRoster(council.roster, s.day, councilFavor) : null;
-      const plannedRaid = planRaidEncounter(nextRaidType, s.day, { councilRaid: pendingCouncilRaid });
       let ns = {
         ...s,
         council,
         councilFavor,
-        nextRaidType,
-        ...raidPlanningState(plannedRaid),
-        pendingPunitiveRaid: declinedStreak >= 2,
-        pendingCouncilRaid,
+        nextRaidType: null,
+        ...raidPlanningState(null),
+        pendingPunitiveRaid: false,
+        pendingCouncilRaid: null,
+        invasionChoices: [],
+        selectedInvasionKey: null,
+        pendingEscalationLevel: 0,
         councilSession,
       };
       ns = addLogLines(ns, favorLogLines);
       ns = addLog(ns, "You declined the Council.");
       if (declinedStreak >= 2) {
-        ns = addLog(ns, `The Council prepares a punitive raid. ${pendingCouncilRaid?.label || ""}`.trim());
+        ns = addLog(ns, "The Council will prepare a punitive raid after this session concludes.");
       }
-      if (s.phase === "battle") {
-        const stagedRaid = buildRaidPartyWithIntel(s.turnsSurvived, nextRaidType, s.day, {
-          councilRaid: pendingCouncilRaid,
-          raidBoons: s.nextRaidBoons,
-          grid: s.grid,
-          plannedRaid,
-        });
-        const party = stagedRaid.party;
-        const scoutQueue = buildScoutRevealQueue(party, s.grid, s.doctrines, s.nextRaidBoons, s.artifacts, s.day);
+      ns = addLog(ns, "Conclude the Council to advance.");
+      return ns;
+    });
+  }
+
+  function concludeCouncil() {
+    if (locked) return;
+    if (!state.councilSession || state.councilSession.day !== state.day) return;
+    if (state.councilSession.status === "pending") {
+      setState((s) => addLog(s, "Attend or decline the Council before concluding it."));
+      return;
+    }
+    setCouncilScreenOpen(false);
+    setState((s) => {
+      if (!s.councilSession || s.councilSession.day !== s.day) return s;
+      if (s.councilSession.status === "pending") return addLog(s, "Attend or decline the Council before concluding it.");
+      const nextDay = (s.day || 1) + 1;
+      const dailyEvent = rollDailyEvent();
+      let ns = {
+        ...s,
+        day: nextDay,
+        phase: "build",
+        council: {
+          ...(s.council || {}),
+          active: false,
+          day: null,
+        },
+        councilSession: null,
+        heroes: [],
+        raidActive: false,
+        raidRemaining: 0,
+        raidKills: 0,
+        raidType: null,
+        currentParty: [],
+        currentPartyRaidType: null,
+        currentRaidEscalationLevel: 0,
+        partyQueue: [],
+        scoutQueue: [],
+        raidIntel: null,
+        activeRaidBoons: [],
+        dailyEvent,
+        traderStock: generateTraderStock(s.turnsSurvived, nextDay),
+        shadyStock: generateArtifactStock(nextDay, s.artifacts),
+        fleshMarketStock:
+          s.fleshMarketUntilDay >= nextDay && s.fleshMarketUntilDay > 0
+            ? generateFleshMarketStock(nextDay, s.boughtUniqueKeys || [])
+            : [],
+        dpRegenCounter: 0,
+        invasionChoices: [],
+        selectedInvasionKey: null,
+        pendingEscalationLevel: 0,
+      };
+      const punitive = (s.council?.declinedStreak || 0) >= 2;
+      if (punitive) {
+        const pendingCouncilRaid = buildCouncilRaidFromRoster(s.council?.roster || [], nextDay, s.councilFavor || {});
+        const plannedRaid = planRaidEncounter("council", nextDay, { councilRaid: pendingCouncilRaid });
         ns = {
           ...ns,
-          currentParty: party,
-          currentPartyRaidType: nextRaidType || null,
-          partyQueue: party.map((h) => ({ ...h })),
-          scoutQueue,
-          raidIntel: stagedRaid.raidIntel,
+          nextRaidType: "council",
+          ...raidPlanningState(plannedRaid),
+          pendingPunitiveRaid: true,
+          pendingCouncilRaid,
+          selectedInvasionKey: "council",
         };
-        if (scoutQueue.length > 0) {
-          ns = addCouncilQuestCounter(ns, "revealedInvaderCount", scoutQueue.length);
-        }
-        ns = addLog(ns, "Council choice updated today's raid.");
-        ns = addLog(ns, `Raid directive: ${getRaidDirectiveRule(stagedRaid.directiveKey).name}.`);
+        ns = addLog(ns, `The Council prepares a punitive raid. ${pendingCouncilRaid?.label || ""}`.trim());
+      } else {
+        ns = prepareRaidPlanForDay(ns, { rerollChoices: true });
+      }
+      ns = addLog(ns, `Council concludes. Day ${nextDay} begins. Build phase.`);
+      if (ns.dailyEvent?.key && ns.dailyEvent.key !== "none") {
+        ns = addLog(ns, `Daily Event: ${ns.dailyEvent.name} - ${ns.dailyEvent.desc}`);
       }
       return ns;
     });
@@ -7341,6 +7677,8 @@ function defaultState() {
   }, [selectedHeroes, state.grid, core, state.activeRaidBoons, doctrineEffects, state.raidIntel]);
 
   const pendingRaidType = state.pendingPunitiveRaid ? "council" : state.nextRaidType;
+  const pendingEscalationLevel =
+    pendingRaidType === "escalation" ? Math.max(1, state.currentRaidEscalationLevel || state.pendingEscalationLevel || 1) : 0;
   const activeRaidOrderKey = state.currentParty?.[0]?.orderKey || null;
   const pendingRaidOrderKey = activeRaidOrderKey || state.pendingRaidOrderKey || null;
   const pendingRaidOrder = pendingRaidOrderKey ? HERO_ORDER_MAP[pendingRaidOrderKey] || null : null;
@@ -7350,6 +7688,7 @@ function defaultState() {
   const pendingRaidCrestSrc = pendingRaidOrder ? EXPEDITION_ORDER_CRESTS[pendingRaidOrder.key] || null : null;
   const usePendingRaidCrest = !!pendingRaidCrestSrc;
   const pendingRaidMeta = raidTypeMeta(pendingRaidType, state.pendingCouncilRaid);
+  const pendingRaidDifficulty = raidDifficultyConfig(pendingRaidType, pendingEscalationLevel);
   const pendingDirectiveKey =
     pendingRaidOrder?.directiveKey || resolveRaidDirectiveKey(pendingRaidType, state.pendingCouncilRaid, state.day);
   const pendingDirective = getRaidDirectiveRule(state.raidIntel?.directive || pendingDirectiveKey);
@@ -7368,7 +7707,17 @@ function defaultState() {
     validPath: validation.ok,
   };
 
-  const canStartRaid = !locked && isBattlePhase && !state.raidActive && validation.ok;
+  const raidPlanReady = !!pendingRaidType;
+  const needsInvasionChoice = isBuildPhase && !councilSessionActive && !state.council?.active && !raidPlanReady;
+  const showInvasionChoiceCards =
+    isBuildPhase &&
+    !councilSessionActive &&
+    !state.council?.active &&
+    !state.pendingPunitiveRaid &&
+    !isEscalationDay(state.day) &&
+    Array.isArray(state.invasionChoices) &&
+    state.invasionChoices.length > 0;
+  const canStartRaid = !locked && isBattlePhase && !state.raidActive && validation.ok && raidPlanReady;
   const canEndTurn = !locked && isBattlePhase && (state.raidActive || state.heroes.length > 0);
   const atDungeonLevelCap = dungeonLevel >= MAX_DUNGEON_LEVEL;
   const nextUpgradeCost = atDungeonLevelCap ? null : dungeonUpgradeCost(dungeonLevel, state.day, artifactMods);
@@ -7391,13 +7740,21 @@ function defaultState() {
     ? "Core destroyed. Reset or load to continue."
     : state.movePayload
     ? "Move mode active. Click a destination tile or cancel the move."
+    : state.council?.active
+    ? "Council in session. Attend or decline before advancing."
+    : councilAwaitingConclusion
+    ? "Council resolved. Conclude the Council to advance to the next day."
     : state.raidActive
     ? `Raid active. ${state.raidRemaining} invader${state.raidRemaining === 1 ? "" : "s"} left to spawn.`
     : isBattlePhase
-    ? validation.ok
+    ? !raidPlanReady
+      ? "Choose an invasion in Raid Forecast."
+      : validation.ok
       ? `Battle staged. ${pendingRaidMeta.label} is ready to begin.`
       : validation.reason
-    : `Build phase. Next raid: ${pendingRaidMeta.label}.`;
+    : needsInvasionChoice
+    ? "Build phase. Choose an invasion in Raid Forecast."
+    : `Build phase. Next raid: ${pendingRaidMeta.label}${pendingEscalationLevel ? ` Level ${pendingEscalationLevel}` : ""}.`;
   const dungeonRailSupport = state.movePayload
     ? "Moving a room or the Core does not consume a turn."
     : atDungeonLevelCap
@@ -7544,9 +7901,16 @@ function defaultState() {
         <div className="councilScreen">
           <div className="councilScreenHeader">
             <div className="councilScreenTitle">Council of the Dungeonlords - Day {state.day}</div>
-            <button className="btn" onClick={() => setCouncilScreenOpen(false)}>
-              Return to Dungeon
-            </button>
+            <div className="row">
+              {councilAwaitingConclusion ? (
+                <button className="btn primary" onClick={concludeCouncil}>
+                  Conclude Council
+                </button>
+              ) : null}
+              <button className="btn" onClick={() => setCouncilScreenOpen(false)}>
+                Return to Dungeon
+              </button>
+            </div>
           </div>
           <div className="councilScreenBody">
             <div className="councilRing">
@@ -8096,7 +8460,7 @@ function defaultState() {
               <div className="muted small">{dungeonRailSupport}</div>
             </div>
             <div className="dungeonActionButtons">
-              <button className="btn" onClick={beginBattle} disabled={locked || state.movePayload || isBattlePhase}>
+              <button className="btn" onClick={beginBattle} disabled={locked || state.movePayload || isBattlePhase || councilSessionActive || !raidPlanReady}>
                 Begin Battle
               </button>
               <button className="btn primary" onClick={startRaid} disabled={!canStartRaid || state.movePayload}>
@@ -8157,81 +8521,127 @@ function defaultState() {
 
             <div className="card">
               <div className="cardTitle">Raid Forecast</div>
-              <div className="raidForecastHeader">
-                {usePendingRaidCrest && pendingRaidType !== "council" ? (
-                  <img className="expeditionCrest" src={pendingRaidCrestSrc} alt="" draggable="false" />
-                ) : null}
-                <div>
-                  <div className="entityName">{pendingRaidMeta.label}</div>
-                  {pendingRaidOrder && pendingRaidType !== "council" ? (
-                    <div className="entityMeta">
-                      {pendingRaidOrder.name} | {pendingRaidOrder.modifier}
-                    </div>
+              {councilSessionActive ? (
+                <div className="entityItem">
+                  <div className="entityName">Council Day</div>
+                  <div className="entityMeta">No invasion is chosen today. Resolve the Council, then conclude it to advance.</div>
+                  {councilAwaitingConclusion ? (
+                    <button className="btn small" onClick={concludeCouncil}>
+                      Conclude Council
+                    </button>
                   ) : null}
                 </div>
-              </div>
-              <div className="muted">{pendingRaidMeta.desc}</div>
-              <div className="muted">Directive: {pendingDirective.name}</div>
-              {pendingRaidLeaderTrait && pendingRaidType !== "council" ? (
-                <div className="muted small">Leader Trait: {pendingRaidLeaderTrait.name} - {pendingRaidLeaderTrait.desc}</div>
-              ) : null}
-              <div className="muted small">Expected mix: {raidForecastMix}</div>
-              {state.scoutQueue?.length ? (
+              ) : showInvasionChoiceCards ? (
                 <div className="entityList">
-                  <div className="entityItem">
-                    <div className="entityName">Revealed Ahead</div>
-                    <div className="entityMeta">Scout effects expose upcoming invaders before the raid fully unfolds.</div>
+                  <div className="muted">
+                    {state.selectedInvasionKey ? "Selected invasion. You can change it until battle begins." : "Choose the next invasion before battle begins."}
                   </div>
-                  {state.scoutQueue.slice(0, 2).map((h, idx) => (
-                    <div className="entityItem" key={`forecast-scout-${h.id}-${idx}`}>
-                      <div className="entityName">{h.name}</div>
-                      <div className="entityMeta">
-                        {safeEntityLabel(h.race, "Unknown")} {safeEntityLabel(h.class, "Hero")} | {formatStars(safeEntityStars(h))} | {h.archetypeLabel || "Zealot"}
-                      </div>
-                      {h.profileKey || h.orderName ? (
-                        <div className="muted small">
-                          {h.profileName || "Expeditioner"}{h.orderName ? ` | ${h.orderName}` : ""}{h.isRaidLeader && h.leaderTraitName ? ` | ${h.leaderTraitName}` : ""}
+                  {(state.invasionChoices || []).map((choice) => {
+                    const order = choice.orderKey ? HERO_ORDER_MAP[choice.orderKey] : null;
+                    const leaderTrait = choice.leaderTraitKey ? HERO_LEADER_TRAIT_MAP[choice.leaderTraitKey] : null;
+                    const directive = getRaidDirectiveRule(choice.directiveKey || order?.directiveKey || resolveRaidDirectiveKey(choice.raidType, null, state.day));
+                    return (
+                      <button
+                        className={`entityItem invasionChoice ${state.selectedInvasionKey === choice.key ? "active" : ""}`}
+                        key={`invasion-choice-${choice.key}`}
+                        onClick={() => selectInvasionChoice(choice.key)}
+                      >
+                        <div className="entityName">{choice.label}</div>
+                        {order ? <div className="entityMeta">{order.name} | {order.modifier}</div> : null}
+                        <div className="muted small">Directive: {directive.name} | Expected mix: {order ? topArchetypesFromWeights(order.archetypeWeights || {}, 2).join(" / ") : "Mixed pressure"}</div>
+                        {leaderTrait ? <div className="muted small">Leader Trait: {leaderTrait.name} - {leaderTrait.desc}</div> : null}
+                        <div className="entityStats">
+                          Rewards x{(choice.rewardMult || 1).toFixed(2)}
+                          {choice.clearEvolutionBonus ? ` | Clear +${choice.clearEvolutionBonus} Evolution` : ""}
                         </div>
-                      ) : null}
-                      <div className="entityStats">
-                        HP {h.hp}/{safeEntityMaxHp(h)} | ATK {h.atk}
-                      </div>
-                      <div className="muted small">{invaderPassiveSummary(h)}</div>
-                      <div className="muted small">
-                        {h.raidOriginLabel || "Hero Raid"}{h.factionName ? ` | ${h.factionName}` : ""}{h.isRaidLeader ? " | Leader" : ""}
-                        {h.raidDirectiveKey ? ` | ${getRaidDirectiveRule(h.raidDirectiveKey).name}` : ""}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-              {state.pendingCouncilRaid?.attackers?.length ? (
-                <div className="entityList">
-                  {state.pendingCouncilRaid.attackers.map((attacker) => (
-                    <div className="entityItem" key={`raid-attacker-${attacker.key}`}>
-                      <div className="entityName">{attacker.memberName}</div>
-                      <div className="entityMeta">{attacker.raidName}</div>
-                      <div className="muted">{attacker.raidModifier}</div>
-                      <div className="muted small">
-                        Directive {getRaidDirectiveRule(attacker.directiveKey || COUNCIL_RAID_FACTIONS[attacker.key]?.defaultDirective || state.pendingCouncilRaid?.directiveKey || "rush-core").name} |{" "}
-                        {topArchetypesFromWeights(attacker.archetypeWeights || {}, 2).join(" / ") || "Mixed pressure"}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-              {state.nextRaidBoons?.length ? (
-                <div className="entityList">
-                  {state.nextRaidBoons.map((boon, idx) => (
-                    <div className="entityItem" key={`raid-boon-${idx}`}>
-                      <div className="entityName">{boon.label || "Raid Influence"}</div>
-                      <div className="entityMeta">{boon.sponsorName || "Council leverage"}</div>
-                      <div className="entityMeta">{boon.desc}</div>
-                    </div>
-                  ))}
+                      </button>
+                    );
+                  })}
                 </div>
               ) : (
-                <div className="muted small">No stored council leverage for the next raid.</div>
+                <>
+                  <div className="raidForecastHeader">
+                    {usePendingRaidCrest && pendingRaidType !== "council" ? (
+                      <img className="expeditionCrest" src={pendingRaidCrestSrc} alt="" draggable="false" />
+                    ) : null}
+                    <div>
+                      <div className="entityName">
+                        {pendingRaidMeta.label}{pendingEscalationLevel ? ` - Level ${pendingEscalationLevel}` : ""}
+                      </div>
+                      {pendingRaidOrder && pendingRaidType !== "council" ? (
+                        <div className="entityMeta">
+                          {pendingRaidOrder.name} | {pendingRaidOrder.modifier}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="muted">{pendingRaidMeta.desc}</div>
+                  <div className="muted">Directive: {pendingDirective.name}</div>
+                  {pendingRaidLeaderTrait && pendingRaidType !== "council" ? (
+                    <div className="muted small">Leader Trait: {pendingRaidLeaderTrait.name} - {pendingRaidLeaderTrait.desc}</div>
+                  ) : null}
+                  <div className="muted small">
+                    Expected mix: {raidForecastMix} | Rewards x{(pendingRaidDifficulty.rewardMult || 1).toFixed(2)}
+                    {pendingRaidDifficulty.clearEvolutionBonus ? ` | Clear +${pendingRaidDifficulty.clearEvolutionBonus} Evolution` : ""}
+                  </div>
+                  {state.scoutQueue?.length ? (
+                    <div className="entityList">
+                      <div className="entityItem">
+                        <div className="entityName">Revealed Ahead</div>
+                        <div className="entityMeta">Scout effects expose upcoming invaders before the raid fully unfolds.</div>
+                      </div>
+                      {state.scoutQueue.slice(0, 2).map((h, idx) => (
+                        <div className="entityItem" key={`forecast-scout-${h.id}-${idx}`}>
+                          <div className="entityName">{h.name}</div>
+                          <div className="entityMeta">
+                            {safeEntityLabel(h.race, "Unknown")} {safeEntityLabel(h.class, "Hero")} | {formatStars(safeEntityStars(h))} | {h.archetypeLabel || "Zealot"}
+                          </div>
+                          {h.profileKey || h.orderName ? (
+                            <div className="muted small">
+                              {h.profileName || "Expeditioner"}{h.orderName ? ` | ${h.orderName}` : ""}{h.isRaidLeader && h.leaderTraitName ? ` | ${h.leaderTraitName}` : ""}
+                            </div>
+                          ) : null}
+                          <div className="entityStats">
+                            HP {h.hp}/{safeEntityMaxHp(h)} | ATK {h.atk}
+                          </div>
+                          <div className="muted small">{invaderPassiveSummary(h)}</div>
+                          <div className="muted small">
+                            {h.raidOriginLabel || "Hero Raid"}{h.factionName ? ` | ${h.factionName}` : ""}{h.isRaidLeader ? " | Leader" : ""}
+                            {h.raidDirectiveKey ? ` | ${getRaidDirectiveRule(h.raidDirectiveKey).name}` : ""}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  {state.pendingCouncilRaid?.attackers?.length ? (
+                    <div className="entityList">
+                      {state.pendingCouncilRaid.attackers.map((attacker) => (
+                        <div className="entityItem" key={`raid-attacker-${attacker.key}`}>
+                          <div className="entityName">{attacker.memberName}</div>
+                          <div className="entityMeta">{attacker.raidName}</div>
+                          <div className="muted">{attacker.raidModifier}</div>
+                          <div className="muted small">
+                            Directive {getRaidDirectiveRule(attacker.directiveKey || COUNCIL_RAID_FACTIONS[attacker.key]?.defaultDirective || state.pendingCouncilRaid?.directiveKey || "rush-core").name} |{" "}
+                            {topArchetypesFromWeights(attacker.archetypeWeights || {}, 2).join(" / ") || "Mixed pressure"}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  {state.nextRaidBoons?.length ? (
+                    <div className="entityList">
+                      {state.nextRaidBoons.map((boon, idx) => (
+                        <div className="entityItem" key={`raid-boon-${idx}`}>
+                          <div className="entityName">{boon.label || "Raid Influence"}</div>
+                          <div className="entityMeta">{boon.sponsorName || "Council leverage"}</div>
+                          <div className="entityMeta">{boon.desc}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="muted small">No stored council leverage for the next raid.</div>
+                  )}
+                </>
               )}
             </div>
 
@@ -8956,6 +9366,15 @@ function defaultState() {
                   <div className="muted">Essence Gained: {state.lastRaidReport.essence}</div>
                   <div className="muted">Soulshards Gained: {state.lastRaidReport.soulshards}</div>
                   <div className="muted">Core Damage: {state.lastRaidReport.coreDamage}</div>
+                  {state.lastRaidReport.rewardMultiplier ? (
+                    <div className="muted">Reward Multiplier: x{state.lastRaidReport.rewardMultiplier.toFixed(2)}</div>
+                  ) : null}
+                  {state.lastRaidReport.escalationLevel ? (
+                    <div className="muted">Escalation Level: {state.lastRaidReport.escalationLevel}</div>
+                  ) : null}
+                  {state.lastRaidReport.clearEvolutionBonus ? (
+                    <div className="muted">Clear Bonus: +{state.lastRaidReport.clearEvolutionBonus} Evolution</div>
+                  ) : null}
                 </>
               ) : (
                 <div className="muted">No raid report yet.</div>
@@ -9223,6 +9642,11 @@ function defaultState() {
                   )}
                   {state.councilSession.status === "attended" && <div className="muted">Status: Attended</div>}
                   {state.councilSession.status === "declined" && <div className="muted">Status: Declined</div>}
+                  {state.councilSession.status !== "pending" ? (
+                    <button className="btn primary" onClick={concludeCouncil}>
+                      Conclude Council
+                    </button>
+                  ) : null}
                 </div>
 
                 <div className="card">

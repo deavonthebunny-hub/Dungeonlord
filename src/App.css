@@ -1235,6 +1235,18 @@ button.entityItem {
   box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.22);
 }
 
+.invasionChoice {
+  border-color: rgba(212, 168, 93, 0.28);
+  background:
+    linear-gradient(135deg, rgba(212, 168, 93, 0.12), rgba(9, 14, 26, 0.68)),
+    rgba(9, 14, 26, 0.62);
+}
+
+.invasionChoice:hover {
+  border-color: rgba(212, 168, 93, 0.62);
+  box-shadow: 0 0 0 1px rgba(212, 168, 93, 0.18);
+}
+
 .entityName {
   font-weight: 700;
   color: var(--ink-0);

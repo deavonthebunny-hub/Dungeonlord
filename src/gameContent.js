@@ -90,13 +90,18 @@ export const RAID_DIRECTIVES = {
 export const RAID_TYPE_META = {
   normal: {
     key: "normal",
-    label: "Hero Raid",
+    label: "Normal Hero Raid",
     desc: "A standard adventuring party probes the dungeon.",
   },
   elite: {
     key: "elite",
     label: "Elite Expedition",
     desc: "Disciplined heroes strike with better gear and clearer intent.",
+  },
+  escalation: {
+    key: "escalation",
+    label: "Escalation Raid",
+    desc: "The mortal realms answer your growth with a harder, scaling assault.",
   },
   council: {
     key: "council",
