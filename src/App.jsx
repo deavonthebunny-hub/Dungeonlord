@@ -7792,9 +7792,27 @@ export default function App() {
     setMobileMenuOpen(false);
   }
 
+  const shellDrawerOpen = activeTab !== "dungeon";
+
+  function closeShellDrawer() {
+    selectMobileTab("dungeon");
+  }
+
+  function drawerPanelTitle(label) {
+    return (
+      <div className="panelTitle">
+        <span>{label}</span>
+        <button className="drawerClose" type="button" onClick={closeShellDrawer}>
+          Close
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       <header className="topbar">
+        <div className="title">Dungeonlord</div>
         <div className="mobileNav">
           <button
             className={`mobileMenuBtn ${mobileMenuOpen ? "active" : ""}`}
@@ -7808,7 +7826,7 @@ export default function App() {
               <span />
             </span>
             <span className="mobileMenuText">
-              <span className="mobileMenuLabel">Mobile Menu</span>
+              <span className="mobileMenuLabel">Menu</span>
               <span className="mobileMenuCurrent">{activeMobileTab.label}</span>
             </span>
           </button>
@@ -7825,57 +7843,6 @@ export default function App() {
                 </button>
               ))}
             </div>
-          )}
-        </div>
-        <div className="title">Dungeonlord</div>
-        <div className="panelToggle">
-          <span className="panelLabel">Side Panel</span>
-          <button
-            className={`btn toggle ${sidePanel === "log" ? "active" : ""}`}
-            onClick={() => {
-              setSidePanel("log");
-              setActiveTab("log");
-            }}
-          >
-            Log
-          </button>
-          <button
-            className={`btn toggle ${sidePanel === "inventory" ? "active" : ""}`}
-            onClick={() => {
-              setSidePanel("inventory");
-              setActiveTab("inventory");
-            }}
-          >
-            Inventory
-          </button>
-          <button
-            className={`btn toggle ${sidePanel === "evolution" ? "active" : ""}`}
-            onClick={() => {
-              setSidePanel("evolution");
-              setActiveTab("evolution");
-            }}
-          >
-            Evolution
-          </button>
-          <button
-            className={`btn toggle ${sidePanel === "glossary" ? "active" : ""}`}
-            onClick={() => {
-              setSidePanel("glossary");
-              setActiveTab("glossary");
-            }}
-          >
-            Glossary
-          </button>
-          {state.councilSession && state.councilSession.day === state.day && (
-            <button
-              className={`btn toggle ${sidePanel === "council" ? "active" : ""}`}
-              onClick={() => {
-                setSidePanel("council");
-                setActiveTab("council");
-              }}
-            >
-              Council
-            </button>
           )}
         </div>
       </header>
@@ -8206,6 +8173,9 @@ export default function App() {
       )}
 
       <div className="layout" data-tab={activeTab} data-side={sidePanel}>
+        {shellDrawerOpen ? (
+          <button className="drawerScrim" type="button" aria-label="Close panel drawer" onClick={closeShellDrawer} />
+        ) : null}
         <section className="panel panel--dungeon">
           <div className="dungeonHud">
             <div className="dungeonHudHeader">
@@ -8493,7 +8463,7 @@ export default function App() {
         </section>
 
         <section className="panel panel--toolbox">
-          <div className="panelTitle">Toolbox</div>
+          {drawerPanelTitle("Toolbox")}
 
           <div className="toolboxScroll">
             <div className="card">
@@ -9404,7 +9374,7 @@ export default function App() {
         </section>
 
         <section className="panel panel--inventory">
-          <div className="panelTitle">Monster Inventory</div>
+          {drawerPanelTitle("Monster Inventory")}
           <div className="toolboxScroll">
             <div className="card">
               <div className="cardTitle">Stockpile</div>
@@ -9509,7 +9479,7 @@ export default function App() {
         </section>
 
         <section className="panel panel--evolution">
-          <div className="panelTitle">Evolution</div>
+          {drawerPanelTitle("Evolution")}
           <div className="toolboxScroll">
             <div className="card">
               <div className="cardTitle">Evolution Points</div>
@@ -9600,7 +9570,7 @@ export default function App() {
         </section>
 
         <section className="panel panel--council" style={{ "--council-scroll-url": `url(${COUNCIL_CHAMBER_ART.scrollTexture})` }}>
-          <div className="panelTitle">Council of the Dungeonlords</div>
+          {drawerPanelTitle("Council of the Dungeonlords")}
           <div className="toolboxScroll">
             {state.councilSession && state.councilSession.day === state.day ? (
               <>
@@ -9828,7 +9798,7 @@ export default function App() {
         </section>
 
         <section className="panel panel--glossary">
-          <div className="panelTitle">Glossary</div>
+          {drawerPanelTitle("Glossary")}
           <div className="toolboxScroll">
             <div className="card">
               <div className="cardTitle">Room Rules</div>
@@ -10066,7 +10036,7 @@ export default function App() {
         </section>
 
         <section className="panel panel--log">
-          <div className="panelTitle">Log</div>
+          {drawerPanelTitle("Log")}
           <div className="logScroll">
             {state.log.map((l, idx) => (
               <div className="logLine" key={idx}>
