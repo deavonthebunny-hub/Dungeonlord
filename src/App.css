@@ -1945,6 +1945,9 @@ button.entityItem {
     min-height: 0;
     display: block;
     overflow: hidden;
+    position: relative;
+    z-index: 3;
+    pointer-events: auto;
   }
 
   .shellSidePanel > .panel {
@@ -1953,10 +1956,7 @@ button.entityItem {
     max-height: none;
     min-height: 0;
     box-shadow: none;
-  }
-
-  .layout[data-tab="dungeon"] .shellSidePanel {
-    pointer-events: none;
+    pointer-events: auto;
   }
 
   .dungeonHud {

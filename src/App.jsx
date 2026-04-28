@@ -7792,8 +7792,6 @@ export default function App() {
     setMobileMenuOpen(false);
   }
 
-  const shellDrawerOpen = activeTab !== "dungeon";
-
   function closeShellDrawer() {
     selectMobileTab("dungeon");
   }
@@ -8173,9 +8171,6 @@ export default function App() {
       )}
 
       <div className="layout" data-tab={activeTab} data-side={sidePanel}>
-        {shellDrawerOpen ? (
-          <button className="drawerScrim" type="button" aria-label="Close panel drawer" onClick={closeShellDrawer} />
-        ) : null}
         <section className="panel panel--dungeon">
           <div className="dungeonHud">
             <div className="dungeonHudHeader">
