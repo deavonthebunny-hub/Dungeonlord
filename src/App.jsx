@@ -8458,8 +8458,9 @@ export default function App() {
           </div>
         </section>
 
-        <section className="panel panel--toolbox">
-          {drawerPanelTitle("Toolbox")}
+        <div className="shellSidePanel">
+          <section className="panel panel--toolbox">
+            {drawerPanelTitle("Toolbox")}
 
           <div className="toolboxScroll">
             <div className="card">
@@ -10031,16 +10032,17 @@ export default function App() {
           </div>
         </section>
 
-        <section className="panel panel--log">
-          {drawerPanelTitle("Log")}
-          <div className="logScroll">
-            {state.log.map((l, idx) => (
-              <div className="logLine" key={idx}>
-                {l}
-              </div>
-            ))}
-          </div>
-        </section>
+          <section className="panel panel--log">
+            {drawerPanelTitle("Log")}
+            <div className="logScroll">
+              {state.log.map((l, idx) => (
+                <div className="logLine" key={idx}>
+                  {l}
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
       </div>
     </div>
   );
