@@ -8410,55 +8410,51 @@ export default function App() {
                   )}
                 </div>
               </div>
-            </div>
-          </div>
-
-          {state.movePayload && (
-            <div className="moveBanner">
-              Moving {state.movePayload.type === "core" ? "Core" : "Room"} - click a new tile to place it. Press Esc or Cancel to abort.
-            </div>
-          )}
-
-          <div className="dungeonActionRail">
-            <div className="dungeonActionMeta">
-              <div className="dungeonActionStats">
-                <span className="pill">Day: {state.day}</span>
-                <span className="pill">Turns: {state.turnsSurvived}</span>
-                <span className="pill">Dungeon Lvl: {dungeonLevel}</span>
+              <div className="dungeonActionZone">
+                {state.movePayload && (
+                  <div className="moveBanner">
+                    Moving {state.movePayload.type === "core" ? "Core" : "Room"} - click a new tile to place it. Press Esc or Cancel to abort.
+                  </div>
+                )}
+                <div className="dungeonActionRail">
+                  <div className="dungeonActionMeta">
+                    <div className="dungeonActionStats">
+                      <span className="pill">Day: {state.day}</span>
+                      <span className="pill">Turns: {state.turnsSurvived}</span>
+                      <span className="pill">Dungeon Lvl: {dungeonLevel}</span>
+                    </div>
+                    <div className="dungeonActionHint">{dungeonRailStatus}</div>
+                    <div className="muted small">{dungeonRailSupport}</div>
+                  </div>
+                  <div className="dungeonActionButtons">
+                    <button className="btn" onClick={beginBattle} disabled={locked || state.movePayload || isBattlePhase || councilSessionActive || !raidPlanReady}>
+                      Begin Battle
+                    </button>
+                    <button className="btn primary" onClick={startRaid} disabled={!canStartRaid || state.movePayload}>
+                      Start Raid
+                    </button>
+                    <button className="btn primary" onClick={endTurn} disabled={!canEndTurn || state.movePayload}>
+                      End Turn
+                    </button>
+                    <button
+                      className="btn"
+                      onClick={upgradeDungeon}
+                      disabled={locked || state.movePayload || !isBuildPhase || state.raidActive || atDungeonLevelCap}
+                    >
+                      {atDungeonLevelCap ? "Dungeon Maxed" : "Upgrade Dungeon"}
+                    </button>
+                    <button className="btn" onClick={startMove} disabled={locked || !!state.movePayload || !isBuildPhase}>
+                      Move Selected
+                    </button>
+                    {state.movePayload ? (
+                      <button className="btn danger" onClick={cancelMove}>
+                        Cancel Move
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
               </div>
-              <div className="dungeonActionHint">{dungeonRailStatus}</div>
-              <div className="muted small">{dungeonRailSupport}</div>
             </div>
-            <div className="dungeonActionButtons">
-              <button className="btn" onClick={beginBattle} disabled={locked || state.movePayload || isBattlePhase || councilSessionActive || !raidPlanReady}>
-                Begin Battle
-              </button>
-              <button className="btn primary" onClick={startRaid} disabled={!canStartRaid || state.movePayload}>
-                Start Raid
-              </button>
-              <button className="btn primary" onClick={endTurn} disabled={!canEndTurn || state.movePayload}>
-                End Turn
-              </button>
-              <button
-                className="btn"
-                onClick={upgradeDungeon}
-                disabled={locked || state.movePayload || !isBuildPhase || state.raidActive || atDungeonLevelCap}
-              >
-                {atDungeonLevelCap ? "Dungeon Maxed" : "Upgrade Dungeon"}
-              </button>
-              <button className="btn" onClick={startMove} disabled={locked || !!state.movePayload || !isBuildPhase}>
-                Move Selected
-              </button>
-              {state.movePayload ? (
-                <button className="btn danger" onClick={cancelMove}>
-                  Cancel Move
-                </button>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="hint">
-            Place <b>E</b> and <b>C</b>, connect with rooms. Hero cap <b>{HERO_CAP}</b>. Each raid spawns a party of <b>2-4</b> heroes.
           </div>
         </section>
 

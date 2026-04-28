@@ -806,6 +806,14 @@ body::before {
   gap: 14px;
 }
 
+.dungeonActionZone {
+  order: 3;
+  width: min(100%, 760px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .dungeonActionMeta {
   min-width: 0;
   display: flex;
@@ -1696,6 +1704,11 @@ button.entityItem {
     grid-template-columns: 1fr;
   }
 
+  .dungeonActionZone {
+    order: 3;
+    width: 100%;
+  }
+
   .hint {
     display: none;
   }
@@ -1866,16 +1879,91 @@ button.entityItem {
 
 @media (min-width: 981px) {
   .topbar {
-    flex-wrap: nowrap;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
+    gap: 14px;
+  }
+
+  .title {
+    grid-column: 2;
+    justify-self: center;
+    text-align: center;
   }
 
   .panelToggle {
     display: none;
   }
 
+  .mobileNav {
+    grid-column: 3;
+    justify-self: end;
+    margin-left: 0;
+  }
+
   .panel--dungeon {
     width: 100%;
+  }
+
+  .dungeonHud {
+    width: min(100%, 760px);
+    margin: 0 auto;
+    padding: 14px 12px 0;
+  }
+
+  .dungeonHudHeader {
+    align-items: center;
+  }
+
+  .dungeonHudRail {
+    justify-content: center;
+  }
+
+  .gridWrap {
+    padding: 12px 18px 18px;
+  }
+
+  .dungeonBody {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) minmax(480px, 560px) minmax(220px, 1fr);
+    align-items: start;
+    justify-items: center;
+    column-gap: 14px;
+  }
+
+  .dungeonGutter {
+    grid-column: 1;
+    order: 0;
+    width: min(100%, 520px);
+    justify-content: flex-end;
+    padding-top: 0;
+  }
+
+  .dungeonStage {
+    grid-column: 2;
+    order: 0;
+  }
+
+  .dungeonActionZone {
+    grid-column: 3;
+    order: 0;
+    width: min(100%, 520px);
+    align-self: start;
+  }
+
+  .dungeonTileFloat {
+    width: min(100%, 520px);
+  }
+
+  .dungeonActionRail {
+    width: 100%;
+    margin: 0;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dungeonActionButtons {
+    justify-content: flex-start;
   }
 
   .drawerScrim {
@@ -1905,6 +1993,13 @@ button.entityItem {
   .layout[data-tab="council"] .toolboxScroll,
   .layout[data-tab="log"] .logScroll {
     max-height: none;
+  }
+}
+
+@media (min-width: 1160px) {
+  .dungeonBody {
+    grid-template-columns: minmax(260px, 1fr) minmax(520px, 560px) minmax(260px, 1fr);
+    column-gap: 18px;
   }
 }
 
