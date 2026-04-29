@@ -1942,7 +1942,7 @@ button.entityItem {
   }
 
   .layout {
-    --dungeon-center-offset: clamp(140px, 14vh, 176px);
+    --dungeon-center-offset: clamp(132px, 13vh, 164px);
     flex: 1 1 auto;
     height: auto;
     min-height: 0;
@@ -2005,7 +2005,7 @@ button.entityItem {
     min-height: 0;
     height: 100%;
     display: grid;
-    grid-template-columns: minmax(410px, 500px) minmax(230px, 1fr);
+    grid-template-columns: minmax(390px, 470px) minmax(230px, 1fr);
     grid-template-rows: minmax(0, 1fr);
     align-items: stretch;
     justify-items: center;
@@ -2030,7 +2030,7 @@ button.entityItem {
     grid-column: 1;
     grid-row: 1;
     order: 0;
-    width: min(100%, 500px, calc(100vh - 240px));
+    width: min(100%, 470px, calc(100vh - 270px));
     min-height: 0;
     margin-top: var(--dungeon-center-offset);
     align-self: start;
@@ -2040,8 +2040,9 @@ button.entityItem {
   .dungeonGutter {
     order: 0;
     width: 100%;
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-height: 0;
+    max-height: min(56vh, calc(100% - 230px));
     height: auto;
     justify-content: flex-start;
     overflow: hidden;
@@ -2114,7 +2115,7 @@ button.entityItem {
   }
 
   .dungeonBody {
-    grid-template-columns: minmax(430px, 500px) minmax(300px, 1fr);
+    grid-template-columns: minmax(390px, 470px) minmax(300px, 1fr);
     gap: 14px;
   }
 }
