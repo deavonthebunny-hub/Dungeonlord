@@ -8199,63 +8199,109 @@ export default function App() {
 
           <div className="gridWrap">
             <div className="dungeonBody">
-              <div className="dungeonGutter">
-                <div className="dungeonTileFloat">
-                  <div className="dungeonTileDockHeader">
-                    <div className="dungeonTileDockTitle">Selected Tile</div>
-                    <div className="muted">({state.selected.x + 1}, {state.selected.y + 1})</div>
+              <div className="dungeonControlRail">
+                <div className="dungeonGutter">
+                  <div className="dungeonTileFloat">
+                    <div className="dungeonTileDockHeader">
+                      <div className="dungeonTileDockTitle">Selected Tile</div>
+                      <div className="muted">({state.selected.x + 1}, {state.selected.y + 1})</div>
+                    </div>
+                    <div className="dungeonTileDockGrid">
+                      <div className="dockFact">
+                        <span className="dockLabel">Type</span>
+                        <div className="dockValue">
+                          <span className="iconBadge">{roomTypeIcon(selectedTile) || "--"}</span>
+                          {roomTypeName(selectedTile)}
+                        </div>
+                      </div>
+                      <div className="dockFact">
+                        <span className="dockLabel">Flags</span>
+                        <div className="dockBadgeRow">
+                          {selectedTileFlags.length ? (
+                            selectedTileFlags.map((flag) => (
+                              <span className="badge favorNeutral" key={flag}>
+                                {flag}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="muted small">None</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="dockFact">
+                        <span className="dockLabel">Readiness</span>
+                        <div className="dockValue">{selectedReadiness}</div>
+                      </div>
+                      <div className="dockFact">
+                        <span className="dockLabel">Occupants</span>
+                        <div className="dockValue">
+                          Heroes {selectedHeroes.length} | Monsters {selectedTile.monsters.length}
+                        </div>
+                      </div>
+                      <div className="dockFact">
+                        <span className="dockLabel">Link</span>
+                        <div className="dockValue">{selectedLinkLabel}</div>
+                      </div>
+                      <div className="dockFact dockFactWide">
+                        <span className="dockLabel">Trap</span>
+                        <div className="dockValue">{selectedTrapSummary}</div>
+                      </div>
+                      <div className="dockFact dockFactWide">
+                        <span className="dockLabel">Link Bonus</span>
+                        <div className="dockValue">{selectedLinkBonus}</div>
+                      </div>
+                      <div className="dockFact dockFactWide">
+                        <span className="dockLabel">Effect</span>
+                        <div className="dockValue">{selectedTileEffect}</div>
+                      </div>
+                      <div className="dockFact dockFactWide">
+                        <span className="dockLabel">Auras</span>
+                        <div className="dockValue">{selectedTileAuras.length ? selectedTileAuras.join(", ") : "none"}</div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="dungeonTileDockGrid">
-                    <div className="dockFact">
-                      <span className="dockLabel">Type</span>
-                      <div className="dockValue">
-                        <span className="iconBadge">{roomTypeIcon(selectedTile) || "--"}</span>
-                        {roomTypeName(selectedTile)}
+                </div>
+                <div className="dungeonActionZone">
+                  {state.movePayload && (
+                    <div className="moveBanner">
+                      Moving {state.movePayload.type === "core" ? "Core" : "Room"} - click a new tile to place it. Press Esc or Cancel to abort.
+                    </div>
+                  )}
+                  <div className="dungeonActionRail">
+                    <div className="dungeonActionMeta">
+                      <div className="dungeonActionStats">
+                        <span className="pill">Day: {state.day}</span>
+                        <span className="pill">Turns: {state.turnsSurvived}</span>
+                        <span className="pill">Dungeon Lvl: {dungeonLevel}</span>
                       </div>
+                      <div className="dungeonActionHint">{dungeonRailStatus}</div>
+                      <div className="muted small">{dungeonRailSupport}</div>
                     </div>
-                    <div className="dockFact">
-                      <span className="dockLabel">Flags</span>
-                      <div className="dockBadgeRow">
-                        {selectedTileFlags.length ? (
-                          selectedTileFlags.map((flag) => (
-                            <span className="badge favorNeutral" key={flag}>
-                              {flag}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="muted small">None</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="dockFact">
-                      <span className="dockLabel">Readiness</span>
-                      <div className="dockValue">{selectedReadiness}</div>
-                    </div>
-                    <div className="dockFact">
-                      <span className="dockLabel">Occupants</span>
-                      <div className="dockValue">
-                        Heroes {selectedHeroes.length} | Monsters {selectedTile.monsters.length}
-                      </div>
-                    </div>
-                    <div className="dockFact">
-                      <span className="dockLabel">Link</span>
-                      <div className="dockValue">{selectedLinkLabel}</div>
-                    </div>
-                    <div className="dockFact dockFactWide">
-                      <span className="dockLabel">Trap</span>
-                      <div className="dockValue">{selectedTrapSummary}</div>
-                    </div>
-                    <div className="dockFact dockFactWide">
-                      <span className="dockLabel">Link Bonus</span>
-                      <div className="dockValue">{selectedLinkBonus}</div>
-                    </div>
-                    <div className="dockFact dockFactWide">
-                      <span className="dockLabel">Effect</span>
-                      <div className="dockValue">{selectedTileEffect}</div>
-                    </div>
-                    <div className="dockFact dockFactWide">
-                      <span className="dockLabel">Auras</span>
-                      <div className="dockValue">{selectedTileAuras.length ? selectedTileAuras.join(", ") : "none"}</div>
+                    <div className="dungeonActionButtons">
+                      <button className="btn" onClick={beginBattle} disabled={locked || state.movePayload || isBattlePhase || councilSessionActive || !raidPlanReady}>
+                        Begin Battle
+                      </button>
+                      <button className="btn primary" onClick={startRaid} disabled={!canStartRaid || state.movePayload}>
+                        Start Raid
+                      </button>
+                      <button className="btn primary" onClick={endTurn} disabled={!canEndTurn || state.movePayload}>
+                        End Turn
+                      </button>
+                      <button
+                        className="btn"
+                        onClick={upgradeDungeon}
+                        disabled={locked || state.movePayload || !isBuildPhase || state.raidActive || atDungeonLevelCap}
+                      >
+                        {atDungeonLevelCap ? "Dungeon Maxed" : "Upgrade Dungeon"}
+                      </button>
+                      <button className="btn" onClick={startMove} disabled={locked || !!state.movePayload || !isBuildPhase}>
+                        Move Selected
+                      </button>
+                      {state.movePayload ? (
+                        <button className="btn danger" onClick={cancelMove}>
+                          Cancel Move
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -8403,50 +8449,6 @@ export default function App() {
                       })()
                     ))
                   )}
-                </div>
-              </div>
-              <div className="dungeonActionZone">
-                {state.movePayload && (
-                  <div className="moveBanner">
-                    Moving {state.movePayload.type === "core" ? "Core" : "Room"} - click a new tile to place it. Press Esc or Cancel to abort.
-                  </div>
-                )}
-                <div className="dungeonActionRail">
-                  <div className="dungeonActionMeta">
-                    <div className="dungeonActionStats">
-                      <span className="pill">Day: {state.day}</span>
-                      <span className="pill">Turns: {state.turnsSurvived}</span>
-                      <span className="pill">Dungeon Lvl: {dungeonLevel}</span>
-                    </div>
-                    <div className="dungeonActionHint">{dungeonRailStatus}</div>
-                    <div className="muted small">{dungeonRailSupport}</div>
-                  </div>
-                  <div className="dungeonActionButtons">
-                    <button className="btn" onClick={beginBattle} disabled={locked || state.movePayload || isBattlePhase || councilSessionActive || !raidPlanReady}>
-                      Begin Battle
-                    </button>
-                    <button className="btn primary" onClick={startRaid} disabled={!canStartRaid || state.movePayload}>
-                      Start Raid
-                    </button>
-                    <button className="btn primary" onClick={endTurn} disabled={!canEndTurn || state.movePayload}>
-                      End Turn
-                    </button>
-                    <button
-                      className="btn"
-                      onClick={upgradeDungeon}
-                      disabled={locked || state.movePayload || !isBuildPhase || state.raidActive || atDungeonLevelCap}
-                    >
-                      {atDungeonLevelCap ? "Dungeon Maxed" : "Upgrade Dungeon"}
-                    </button>
-                    <button className="btn" onClick={startMove} disabled={locked || !!state.movePayload || !isBuildPhase}>
-                      Move Selected
-                    </button>
-                    {state.movePayload ? (
-                      <button className="btn danger" onClick={cancelMove}>
-                        Cancel Move
-                      </button>
-                    ) : null}
-                  </div>
                 </div>
               </div>
             </div>
