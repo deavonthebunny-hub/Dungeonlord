@@ -2204,6 +2204,29 @@ function trapChargesForTile(grid, tile, x, y, doctrineEffects = null, artifactMo
   });
 }
 
+function resetArmedTrapsForRaid(grid, stateLike) {
+  const doctrineEffects = getDoctrineEffects(stateLike?.doctrines || {});
+  const artifactMods = calcArtifactMods(stateLike?.artifacts || [], stateLike?.day || 1);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const t = grid?.[y]?.[x];
+      if (!t || t.room !== "trap") continue;
+      const trapStar = t.trapStar ?? t.trapStars ?? 1;
+      t.trapStar = trapStar;
+      t.trapStars = trapStar;
+      t.trapRank = Math.max(1, t.trapRank ?? t.roomTier ?? 1);
+      if (t.trap && !t.trapBroken) {
+        t.trapChargesRemaining = trapChargesForTile(grid, t, x, y, doctrineEffects, artifactMods, stateLike?.ashTrial);
+        t.trapCooldownRemaining = 0;
+      } else {
+        t.trapChargesRemaining = 0;
+        t.trapCooldownRemaining = 0;
+      }
+    }
+  }
+  return grid;
+}
+
 function scaleStat(base, stars) {
   return Math.max(1, Math.round(base * monsterStarMultiplier(stars)));
 }
@@ -5434,24 +5457,12 @@ export default function App() {
       const entrances = getActiveEntrances(s.grid, s.ashTrial);
       if (!entrances.length) return addLog(s, "Place an Entrance first.");
 
-      const grid = cloneGrid(s.grid);
+      const grid = resetArmedTrapsForRaid(cloneGrid(s.grid), s);
       for (let y = 0; y < H; y++) {
         for (let x = 0; x < W; x++) {
           const t = grid[y][x];
           if (t.room === "monster") {
             for (const m of t.monsters) m.foughtThisRaid = false;
-          } else if (t.room === "trap") {
-            const trapStar = t.trapStar ?? t.trapStars ?? 1;
-            t.trapStar = trapStar;
-            t.trapStars = trapStar;
-            t.trapRank = Math.max(1, t.trapRank ?? t.roomTier ?? 1);
-            if (t.trap && !t.trapBroken) {
-              t.trapChargesRemaining = trapChargesForTile(grid, t, x, y, getDoctrineEffects(s.doctrines), calcArtifactMods(s.artifacts, s.day), s.ashTrial);
-              t.trapCooldownRemaining = 0;
-            } else {
-              t.trapChargesRemaining = 0;
-              t.trapCooldownRemaining = 0;
-            }
           }
         }
       }
@@ -6767,6 +6778,7 @@ export default function App() {
             { rerollChoices: true }
           );
         }
+        resetArmedTrapsForRaid(nextState.grid, nextState);
         nextState.raidType = null;
         nextState.currentRaidEscalationLevel = 0;
         nextState.activeRaidBoons = [];
