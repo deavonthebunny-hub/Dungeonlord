@@ -1943,6 +1943,7 @@ button.entityItem {
 
   .layout {
     --dungeon-center-offset: clamp(124px, 12vh, 154px);
+    --dungeon-side-gap: clamp(26px, 2.4vw, 48px);
     flex: 1 1 auto;
     height: auto;
     min-height: 0;
@@ -2020,7 +2021,7 @@ button.entityItem {
     grid-template-rows: minmax(0, 1fr);
     align-items: stretch;
     justify-items: center;
-    gap: 18px;
+    gap: var(--dungeon-side-gap);
   }
 
   .dungeonControlRail {
@@ -2036,6 +2037,8 @@ button.entityItem {
     justify-content: flex-start;
     overflow-y: auto;
     overflow-x: hidden;
+    position: relative;
+    z-index: 2;
   }
 
   .dungeonStage {
@@ -2047,6 +2050,8 @@ button.entityItem {
     margin-top: var(--dungeon-center-offset);
     align-self: start;
     overflow: visible;
+    position: relative;
+    z-index: 1;
   }
 
   .dungeonGutter {
@@ -2128,7 +2133,7 @@ button.entityItem {
 
   .dungeonBody {
     grid-template-columns: minmax(370px, 440px) minmax(300px, 1fr);
-    gap: 18px;
+    gap: var(--dungeon-side-gap);
   }
 }
 
