@@ -1943,7 +1943,7 @@ button.entityItem {
 
   .layout {
     --dungeon-center-offset: clamp(124px, 12vh, 154px);
-    --dungeon-side-gap: clamp(26px, 2.4vw, 48px);
+    --dungeon-side-gap: clamp(38px, 4vw, 88px);
     flex: 1 1 auto;
     height: auto;
     min-height: 0;
