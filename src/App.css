@@ -1996,19 +1996,42 @@ button.entityItem {
   }
 
   .dungeonHudHeader {
-    align-items: center;
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    column-gap: 12px;
+  }
+
+  .dungeonCapMeta {
+    padding-top: 1px;
+    text-align: right;
+    white-space: nowrap;
+    font-size: 10px;
   }
 
   .dungeonHudRail {
+    display: grid;
+    grid-template-columns: repeat(5, max-content);
+    align-items: center;
     max-width: 100%;
-    flex-wrap: wrap;
     justify-content: center;
-    gap: 5px;
+    gap: 5px 5px;
   }
 
   .dungeonHudRail .pill {
-    padding: 5px 7px;
-    font-size: 10.5px;
+    padding: 4px 6px;
+    font-size: 10px;
+  }
+
+  .dungeonHudRail .pill:nth-child(6) {
+    grid-column: 2 / 4;
+    justify-self: end;
+  }
+
+  .dungeonHudRail .pill:nth-child(7) {
+    grid-column: 4 / 5;
+    justify-self: start;
   }
 
   .dungeonBody {
