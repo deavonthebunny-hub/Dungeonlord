@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { buildSaveSnapshot, isValidSaveText, serializeSave } from "./playtestSupport";
+import { BUILD_VERSION, buildSaveSnapshot, isValidSaveText, serializeSave } from "./playtestSupport";
 import { setRunRandomState } from "./random";
 
 describe("playtest save support", () => {
@@ -9,7 +9,8 @@ describe("playtest save support", () => {
     const state = { grid: [[], []], day: 3, runSeed: "DL-SAVE-TEST" };
     const snapshot = buildSaveSnapshot(state);
     expect(snapshot.rngCursor).toBe(4);
-    expect(snapshot.saveVersion).toMatch(/alpha/);
+    expect(BUILD_VERSION).toBe("0.1.0-alpha.2");
+    expect(snapshot.saveVersion).toBe(BUILD_VERSION);
     expect(state).not.toHaveProperty("saveVersion");
   });
 

@@ -1,7 +1,7 @@
 {
   "name": "dungeonlord",
   "private": true,
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,6 +10,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "check": "npm run lint && npm run test && npm run build",
+    "check:alpha": "npm run check && npm run test:e2e",
+    "guidebook": "node scripts/render-guidebook.mjs",
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist"

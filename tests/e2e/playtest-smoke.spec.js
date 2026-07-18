@@ -45,9 +45,15 @@ test("portable save export produces a JSON download", async ({ page }, testInfo)
   await page.getByRole("button", { name: /Menu Dungeon/i }).click();
   await page.getByRole("button", { name: /Toolbox/i }).click();
   await page.locator("summary").filter({ hasText: "Advanced Management" }).click();
+  await expect(page.getByText("Playtest Support", { exact: true })).toBeVisible();
 
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export Save" }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(/^dungeonlord-.*-day-\d+\.json$/);
+
+  const templateDownloadPromise = page.waitForEvent("download");
+  await page.getByRole("link", { name: "Bug Report Template" }).click();
+  const templateDownload = await templateDownloadPromise;
+  expect(templateDownload.suggestedFilename()).toBe("Dungeonlord_Bug_Report_Template.txt");
 });

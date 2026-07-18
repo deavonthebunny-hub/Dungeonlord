@@ -9515,6 +9515,30 @@ export default function App() {
                 <button className="btn" onClick={saveRun}>Save Now</button>
                 <div className="muted">Manual save for testing.</div>
               </div>
+            </div>
+
+            <div className="card">
+              <div className="cardTitle">Playtest Support</div>
+              <div className="muted small">
+                Reports are local and player-controlled. Include the build, seed, reproduction steps, and a screenshot for visual issues.
+              </div>
+              <div className="row">
+                <a
+                  className="btn"
+                  href={`${import.meta.env.BASE_URL}guidebook/Dungeonlord_Guidebook.pdf`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Guidebook
+                </a>
+                <a
+                  className="btn"
+                  href={`${import.meta.env.BASE_URL}playtest/Dungeonlord_Bug_Report_Template.txt`}
+                  download
+                >
+                  Bug Report Template
+                </a>
+              </div>
               <div className="row">
                 <button className="btn" onClick={exportRun}>Export Save</button>
                 <div className="muted">Downloads a portable JSON save.</div>
@@ -9531,6 +9555,9 @@ export default function App() {
               <div className="row">
                 <button className="btn" onClick={() => copyDiagnosticsBundle(false)}>Copy Diagnostics</button>
                 <button className="btn" onClick={() => copyDiagnosticsBundle(true)}>Copy With Save</button>
+              </div>
+              <div className="muted small">
+                Copy Diagnostics for normal reports. Use Copy With Save only when exact reproduction is needed.
               </div>
               <div className="muted small">Build {BUILD_VERSION} | Seed {state.runSeed} | {saveStatus}</div>
             </div>

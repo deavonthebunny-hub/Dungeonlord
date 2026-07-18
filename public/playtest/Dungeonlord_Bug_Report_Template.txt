@@ -1,0 +1,30 @@
+DUNGEONLORD PRIVATE ALPHA BUG REPORT
+
+ENVIRONMENT
+Game version:
+Run seed:
+Device:
+Browser and version:
+Day / phase / dungeon level:
+Raid type, if relevant:
+
+PROBLEM
+Severity: Blocker / Major / Minor / Balance-Idea
+Expected behavior:
+Actual behavior:
+First point of confusion, if applicable:
+
+REPRODUCTION STEPS
+1.
+2.
+3.
+
+Does it happen every time?
+Did reloading change the result?
+
+EVIDENCE
+Paste Copy Diagnostics output here, or attach it separately.
+Attach an exported save when exact reproduction is needed.
+Attach a screenshot for visual or layout problems.
+
+Do not include personal or sensitive information.

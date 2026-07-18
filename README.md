@@ -2,7 +2,7 @@
 
 Dungeonlord is an endless dungeon-defense roguelite built with React and Vite. Players construct a connected dungeon, staff monster rooms, choose invading expeditions, survive Escalation Raids, negotiate with the Council of Dungeonlords, and use an evolving roster, artifacts, doctrines, and the Flesh Market to keep the Core alive.
 
-Current release target: **private alpha 0.1.0-alpha.1**.
+Current release target: **private alpha 0.1.0-alpha.2**.
 
 ## Local Development
 
@@ -19,7 +19,11 @@ npm run dev
 npm run lint
 npm run test
 npm run build
+npm run check
+npm run check:alpha
 ```
+
+`npm run check` runs lint, unit tests, and the production build. `npm run check:alpha` also runs the responsive Playwright smoke suite.
 
 The deployed GitHub Pages base path is `/Dungeonlord/`, configured in `vite.config.js`.
 
@@ -59,6 +63,10 @@ Old saves are normalized by the load path in `src/App.jsx`. New persisted fields
 - `src/playtestSupport.js` - saves, backups, exports, and diagnostic bundles
 - `docs/Dungeonlord_Guidebook.html` - editable guidebook source
 - `docs/Dungeonlord_Guidebook.pdf` - rendered player guide
+- `docs/PRIVATE_ALPHA_RELEASE_NOTES.md` - current alpha changes and test focus
+- `docs/KNOWN_ISSUES.md` - confirmed limitations and active defects
+- `docs/PRIVATE_ALPHA_TEST_PLAN.md` - tester groups, scenarios, and triage rules
+- `docs/BUG_REPORT_TEMPLATE.md` - reusable tester report format
 - `tests/e2e/` - responsive browser smoke tests
 
 Future refactors should continue extracting pure gameplay rules from `App.jsx` without changing save semantics.

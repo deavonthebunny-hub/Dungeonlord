@@ -1,6 +1,6 @@
 import { getRunRandomState } from "./random";
 
-export const BUILD_VERSION = "0.1.0-alpha.1";
+export const BUILD_VERSION = "0.1.0-alpha.2";
 export const SAVE_KEY = "dungeonlord.save.v1";
 export const BACKUP_SAVE_KEY = "dungeonlord.save.backup.v1";
 
