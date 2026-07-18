@@ -2262,9 +2262,43 @@ button.entityItem {
     gap: 14px;
   }
 
+  .dungeonHud {
+    transform: translateX(clamp(-24px, -1.25vw, -14px));
+  }
+
+  .dungeonHudHeader {
+    align-items: start;
+  }
+
+  .dungeonFrameTitle,
+  .dungeonFrameSubtitle {
+    text-align: left;
+  }
+
+  .dungeonCapMeta {
+    justify-self: end;
+  }
+
+  .dungeonHudRail {
+    width: 100%;
+  }
+
+  .dungeonHudRail .pill:nth-child(-n + 5) {
+    grid-row: 1;
+  }
+
+  .dungeonHudRail .pill:nth-child(6),
+  .dungeonHudRail .pill:nth-child(7) {
+    grid-row: 2;
+  }
+
   .dungeonBody {
     grid-template-columns: minmax(370px, 440px) minmax(300px, 1fr);
     gap: var(--dungeon-side-gap);
+  }
+
+  .dungeonStage {
+    transform: translateX(clamp(16px, 1.55vw, 30px));
   }
 }
 
