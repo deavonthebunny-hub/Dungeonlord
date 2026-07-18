@@ -137,6 +137,25 @@ body::before {
   font-size: clamp(20px, 2vw, 28px);
 }
 
+.titleBlock {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.releaseMeta {
+  color: var(--ink-2);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+.saveBad {
+  color: #ff8a8a;
+  font-weight: 800;
+}
+
 .status {
   display: flex;
   flex-wrap: wrap;
@@ -841,6 +860,90 @@ body::before {
   gap: 10px;
 }
 
+.firstRunGuide {
+  padding: 9px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(230, 162, 60, 0.55);
+  background: linear-gradient(145deg, rgba(76, 47, 17, 0.55), rgba(15, 23, 42, 0.96));
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.firstRunGuide.complete {
+  border-color: rgba(53, 208, 127, 0.55);
+  background: linear-gradient(145deg, rgba(17, 75, 52, 0.45), rgba(15, 23, 42, 0.96));
+}
+
+.firstRunGuideHeader,
+.firstRunGuideActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.firstRunGuideHeader {
+  color: var(--ink-1);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.firstRunGuideTitle {
+  color: var(--ink-0);
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.textButton {
+  border: 0;
+  background: transparent;
+  color: var(--ink-2);
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+}
+
+.toolboxAdvanced {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(9, 14, 26, 0.45);
+  overflow: visible;
+}
+
+.toolboxAdvanced > summary {
+  padding: 11px 12px;
+  color: var(--ink-1);
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.toolboxAdvancedBody {
+  padding: 0 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.visuallyHidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
 .dungeonActionMeta {
   min-width: 0;
   display: flex;
@@ -1504,6 +1607,7 @@ button.entityItem {
   color: var(--ink-0);
   cursor: pointer;
   text-align: left;
+  text-decoration: none;
 }
 
 .mobileNavBtn.active {
@@ -1925,9 +2029,13 @@ button.entityItem {
     gap: 14px;
   }
 
-  .title {
+  .titleBlock {
     grid-column: 2;
     justify-self: center;
+    text-align: center;
+  }
+
+  .title {
     text-align: center;
   }
 

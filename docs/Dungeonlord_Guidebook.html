@@ -132,7 +132,7 @@
       }
 
       .screenshot-slot {
-        min-height: 210px;
+        min-height: 150px;
         display: grid;
         place-items: center;
         text-align: center;
@@ -146,6 +146,16 @@
       .screenshot-slot span {
         display: block;
         max-width: 520px;
+      }
+
+      .screenshot-img {
+        display: block;
+        width: 100%;
+        height: auto;
+        margin: 14px 0;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        break-inside: avoid;
       }
 
       .grid-2 {
@@ -234,6 +244,24 @@
           text-decoration: none;
         }
 
+        h2,
+        h3 {
+          break-after: avoid-page;
+          page-break-after: avoid;
+        }
+
+        table,
+        .grid-2,
+        .grid-3,
+        .callout,
+        .rule-card,
+        .screenshot-slot,
+        .screenshot-img,
+        .keep-together {
+          break-inside: avoid-page;
+          page-break-inside: avoid;
+        }
+
         .cover {
           min-height: 9.4in;
         }
@@ -255,7 +283,7 @@
   <body>
     <section class="cover">
       <div>
-        <div class="version">Player guidebook draft</div>
+        <div class="version">Private Alpha Guide - 0.1.0-alpha.1</div>
         <h1>Dungeonlord</h1>
         <p class="subtitle">
           A practical field guide for building, raiding, surviving Councils, and keeping an endless dungeon alive.
@@ -263,9 +291,9 @@
       </div>
       <div class="callout">
         <strong>How to use this document:</strong>
-        This is written as a quick reference first, not a lore manual. Screenshot boxes are intentionally left blank so you can add your own images later.
+        This is written as a quick reference first, not a lore manual. Use the in-game First Run card for the opening raid, then return here for deeper systems.
       </div>
-      <p class="small">Prepared for the current prototype build. Last edited: April 29, 2026.</p>
+      <p class="small">Prepared for the private alpha build. Last edited: July 17, 2026.</p>
     </section>
 
     <section class="page-break">
@@ -275,20 +303,17 @@
       </p>
       <div class="callout">
         <strong>First goal:</strong>
-        Build a valid route from <code>E</code> Entrance to <code>C</code> Core, place at least one trap or monster room on that route, choose an invasion in Raid Forecast, then begin battle.
+        Your first run begins with an Entrance, a staffed Training Den, and the Core already connected. Inspect the Training Den, choose an invasion in Raid Forecast, then begin battle.
       </div>
       <ol>
-        <li>Select an empty tile connected to your Entrance or route.</li>
-        <li>Build a trap, monster room, or utility room from the Toolbox.</li>
-        <li>Recruit or buy monsters, then place them into monster rooms.</li>
+        <li>Select the starter <code>Training Den</code> and confirm its monsters in Selected Tile.</li>
+        <li>Open <code>Toolbox</code> from the hamburger menu.</li>
         <li>Pick <code>Normal Hero Raid</code> or <code>Elite Expedition</code> in Raid Forecast.</li>
         <li>Use <code>Begin Battle</code>, then <code>Start Raid</code>.</li>
         <li>Press <code>End Turn</code> until the raid ends.</li>
-        <li>Spend rewards on more rooms, artifacts, monsters, dungeon upgrades, and evolutions.</li>
+        <li>Review Last Raid, spend rewards, and expand the route.</li>
       </ol>
-      <div class="screenshot-slot">
-        <span>Screenshot placeholder: early dungeon layout with Entrance, Core, a trap room, a monster room, and Raid Forecast visible.</span>
-      </div>
+      <img class="screenshot-img" src="assets/first-run-dungeon.png" alt="Fresh Dungeonlord run showing the starter route, Selected Tile panel, first-run guidance, and action controls." />
     </section>
 
     <section>
@@ -311,9 +336,7 @@
           <p>Essence, Soulshards, Dominion, Core HP, Core Shield, build/battle mode, and dungeon validity appear above the grid.</p>
         </div>
       </div>
-      <div class="screenshot-slot">
-        <span>Screenshot placeholder: labeled full interface showing center grid, right rail, and hamburger menu.</span>
-      </div>
+      <img class="screenshot-img" src="assets/first-run-dungeon.png" alt="Dungeonlord desktop layout with centered dungeon grid, right control rail, and hamburger menu." />
     </section>
 
     <section class="page-break">
@@ -374,6 +397,9 @@
           </tr>
         </tbody>
       </table>
+      <div class="warning">
+        <strong>Core damage persists:</strong> ordinary build phases do not repair the Core. Core HP is the long-term survival clock of an endless run, so even a cleared raid can leave lasting damage.
+      </div>
       <h3>Raid Types</h3>
       <table>
         <thead>
@@ -401,9 +427,7 @@
           </tr>
         </tbody>
       </table>
-      <div class="screenshot-slot">
-        <span>Screenshot placeholder: Raid Forecast showing Normal Hero Raid and Elite Expedition choices.</span>
-      </div>
+      <img class="screenshot-img" src="assets/raid-forecast.png" alt="Raid Forecast showing Normal Hero Raid and Elite Expedition choices beside the dungeon grid." />
     </section>
 
     <section class="page-break">
@@ -414,10 +438,10 @@
       </p>
       <h3>Trap Rooms</h3>
       <p>
-        Trap rooms trigger when heroes enter. They use charges and readiness. A trap showing <code>R1</code> or higher is ready. A trap at <code>R0</code> has spent its charges and waits for reset timing.
+        Trap rooms trigger when heroes enter. They use charges and readiness. A trap showing <code>R1</code> or higher is ready. A trap at <code>R0</code> has spent its charges. Armed traps automatically restore their raid charges when the next build day begins.
       </p>
       <ul>
-        <li>Traps can be armed, disarmed, and rearmed during build phase.</li>
+        <li>Traps can be armed, disarmed, and rearmed during build phase, but ordinary raid resets do not require manual toggling.</li>
         <li>Some artifacts and linked rooms add trap charge or damage bonuses.</li>
         <li>Trap kills can trigger economy effects from artifacts and support rooms.</li>
       </ul>
@@ -491,6 +515,22 @@
           </tr>
         </tbody>
       </table>
+    </section>
+
+    <section class="keep-together">
+      <h2>Saving And Playtest Reports</h2>
+      <p>
+        Dungeonlord auto-saves in the browser and keeps one automatic backup. The Run section under Advanced Management provides manual save, export, import, backup restore, and diagnostic tools.
+      </p>
+      <ul>
+        <li><strong>Export Save:</strong> downloads a portable JSON file that can be moved to another browser or device.</li>
+        <li><strong>Restore Backup:</strong> restores the previous valid automatic save.</li>
+        <li><strong>Copy Diagnostics:</strong> copies build version, seed, day, phase, raid state, validation state, and recent logs.</li>
+        <li><strong>Copy With Save:</strong> includes the full save when a developer needs an exact reproduction.</li>
+      </ul>
+      <div class="callout">
+        When reporting a problem, include the device, browser, build version, run seed, expected result, actual result, reproduction steps, and a screenshot for visual issues.
+      </div>
     </section>
 
     <section class="page-break">
@@ -781,10 +821,10 @@
       <div class="callout">
         Example:
         <br />
-        <code>&lt;img src="guidebook-assets/dungeon-layout.png" alt="Dungeon layout" style="width:100%; border-radius:12px;" /&gt;</code>
+        <code>&lt;img class="screenshot-img" src="assets/dungeon-layout.png" alt="Dungeon layout" /&gt;</code>
       </div>
       <p class="small">
-        Recommended image workflow: create <code>docs/guidebook-assets/</code>, place screenshots there, update the HTML, then print the HTML to PDF again.
+        Recommended image workflow: place screenshots in <code>docs/assets/</code>, update the HTML, then run <code>node scripts/render-guidebook.mjs</code>.
       </p>
     </section>
   </body>

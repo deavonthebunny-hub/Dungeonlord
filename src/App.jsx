@@ -1,5 +1,18 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import "./App.css";
+import { createRunSeed, getRunRandomState, normalizeRunSeed, randomFloat, setRunRandomState } from "./random";
+import {
+  BACKUP_SAVE_KEY,
+  BUILD_VERSION,
+  SAVE_KEY,
+  buildDiagnosticBundle,
+  copyText,
+  downloadTextFile,
+  isValidSaveText,
+  serializeSave,
+  writeSaveWithBackup,
+} from "./playtestSupport";
+import { COUNCIL_INTERVAL, isCouncilDay, isEscalationDay } from "./gameRules";
 import {
   COUNCIL_FAVOR_BANDS,
   COUNCIL_RAID_FACTIONS,
@@ -43,11 +56,8 @@ const HERO_KILL_SOULSHARDS = 5;
 const HERO_CAP = 6;
 
 const DUNGEON_LORD_ATK = 6;
-const SAVE_KEY = "dungeonlord.save.v1";
 const DOMINION_CAP = 4;
 const BASE_MONSTER_ROOM_CAP = 3;
-const COUNCIL_INTERVAL = 10;
-const ESCALATION_INTERVAL = 5;
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const ECONOMY_ROLES = [
   ["Essence", "Build tempo: rooms, upgrades, and trap infrastructure."],
@@ -612,20 +622,20 @@ const DAILY_EVENTS = [
 ];
 
 function rollDailyEvent() {
-  const r = Math.random();
+  const r = randomFloat();
   if (r < 0.35) return pick(DAILY_EVENTS.filter((e) => e.key !== "none"));
   return DAILY_EVENTS[0];
 }
 
 function pick(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
+  return arr[Math.floor(randomFloat() * arr.length)];
 }
 
 function pickUnique(arr, count) {
   const copy = arr.slice();
   const out = [];
   while (copy.length && out.length < count) {
-    const idx = Math.floor(Math.random() * copy.length);
+    const idx = Math.floor(randomFloat() * copy.length);
     out.push(copy.splice(idx, 1)[0]);
   }
   return out;
@@ -642,7 +652,7 @@ function pickWeightedMonsterDef(day = 1, poolKeys = null) {
   const defs = availableStandardMonsterDefs(day, poolKeys);
   if (!defs.length) return null;
   const totalWeight = defs.reduce((sum, monster) => sum + Math.max(1, monster.recruitWeight || 1), 0);
-  let roll = Math.random() * totalWeight;
+  let roll = randomFloat() * totalWeight;
   for (const monster of defs) {
     roll -= Math.max(1, monster.recruitWeight || 1);
     if (roll <= 0) return monster;
@@ -669,7 +679,7 @@ function pickRewardMonsterEntry(day = 1, poolKeys = null) {
     return fallback ? { type: "standard", monster: fallback } : null;
   }
   const totalWeight = entries.reduce((sum, entry) => sum + entry.weight, 0);
-  let roll = Math.random() * totalWeight;
+  let roll = randomFloat() * totalWeight;
   for (const entry of entries) {
     roll -= entry.weight;
     if (roll <= 0) return entry;
@@ -688,7 +698,7 @@ function weightedPickHeroProfile(day = 1, orderKey = null) {
   const profiles = availableHeroProfiles(day, orderKey);
   if (!profiles.length) return STANDARD_HERO_PROFILES[0] || null;
   const totalWeight = profiles.reduce((sum, profile) => sum + Math.max(1, profile.weight || 1), 0);
-  let roll = Math.random() * totalWeight;
+  let roll = randomFloat() * totalWeight;
   for (const profile of profiles) {
     roll -= Math.max(1, profile.weight || 1);
     if (roll <= 0) return profile;
@@ -717,16 +727,6 @@ function pickLeaderTraitKey(orderKey = null) {
   if (orderKey === "rift-collegium") return pick(["scryer", "purger", "fanatic"]);
   if (orderKey === "grave-wardens") return pick(["bulwark", "scryer", "purger"]);
   return pick(all);
-}
-
-function isCouncilDay(day = 1) {
-  const safeDay = Math.max(1, day || 1);
-  return safeDay % COUNCIL_INTERVAL === 0;
-}
-
-function isEscalationDay(day = 1) {
-  const safeDay = Math.max(1, day || 1);
-  return safeDay > 1 && safeDay % ESCALATION_INTERVAL === 0 && !isCouncilDay(safeDay);
 }
 
 function normalizeEscalationLevel(level = 0) {
@@ -1497,17 +1497,6 @@ function buildCouncilRaidFromRoster(roster = [], day = 1, favorMap = {}) {
   };
 }
 
-function rollStars(turnsSurvived = 0, bonusStep = 6) {
-  const r = Math.random();
-  const bonus = Math.min(3, Math.floor(Math.max(0, turnsSurvived) / bonusStep));
-  if (r < 0.02) return 6;
-  if (r < 0.1) return Math.min(6, 5 + bonus);
-  if (r < 0.3) return Math.min(6, 4 + bonus);
-  if (r < 0.55) return Math.min(6, 3 + bonus);
-  if (r < 0.8) return Math.min(6, 2 + bonus);
-  return Math.min(6, 1 + bonus);
-}
-
 function dayMultiplier(day, perDay = 0.03, cap = 2.0) {
   const d = Math.max(1, day || 1);
   return Math.min(cap, 1 + (d - 1) * perDay);
@@ -1538,7 +1527,7 @@ function rollAuthoritativeStar(day = 1, explicitCap) {
   const safeDay = Math.max(1, day || 1);
   const requestedCap = Number.isFinite(explicitCap) ? explicitCap : MAX_MONSTER_STAR;
   const maxStar = Math.min(MAX_MONSTER_STAR, requestedCap, monsterStarCapForDay(safeDay));
-  const r = Math.random();
+  const r = randomFloat();
   if (maxStar <= 2) {
     if (explicitCap == null && safeDay <= 10 && requestedCap >= 3 && r >= 0.99) return 3;
     return r < 0.72 ? 1 : 2;
@@ -1714,7 +1703,7 @@ function weightedPick(weightMap = {}, fallbackKey = "zealot") {
   const entries = Object.entries(weightMap).filter(([, weight]) => Number.isFinite(weight) && weight > 0);
   if (!entries.length) return fallbackKey;
   const total = entries.reduce((sum, [, weight]) => sum + weight, 0);
-  let roll = Math.random() * total;
+  let roll = randomFloat() * total;
   for (const [key, weight] of entries) {
     roll -= weight;
     if (roll <= 0) return key;
@@ -1814,10 +1803,10 @@ function applyRaidStarBias(stars, day = 1, raidType = null, bias = 0, escalation
   const cap = monsterStarCapForDay(day);
   let next = clampMonsterStar(stars);
   const totalBias = bias + (raidDifficultyConfig(raidType, escalationLevel).starBias || 0);
-  if (totalBias > 0 && Math.random() < totalBias) {
+  if (totalBias > 0 && randomFloat() < totalBias) {
     next = Math.min(cap, next + 1);
   }
-  if (totalBias < 0 && Math.random() < Math.abs(totalBias)) {
+  if (totalBias < 0 && randomFloat() < Math.abs(totalBias)) {
     next = Math.max(1, next - 1);
   }
   return next;
@@ -1898,15 +1887,15 @@ function getDungeonRoomCap(stateLike) {
 function rollPassiveCount(stars) {
   switch (clampMonsterStar(stars)) {
     case 1:
-      return Math.random() < 0.55 ? 0 : 1;
+      return randomFloat() < 0.55 ? 0 : 1;
     case 2:
       return 1;
     case 3:
-      return Math.random() < 0.5 ? 1 : 2;
+      return randomFloat() < 0.5 ? 1 : 2;
     case 4:
       return 2;
     default:
-      return Math.random() < 0.55 ? 2 : 3;
+      return randomFloat() < 0.55 ? 2 : 3;
   }
 }
 
@@ -2510,7 +2499,7 @@ function generateHeroParty(turnsSurvived, raidType, day = 1, options = {}) {
   const raidMods = buildRaidModifiers(options.raidBoons || []);
   const escalationLevel = raidType === "escalation" ? Math.max(1, normalizeEscalationLevel(options.escalationLevel) || 1) : 0;
   const difficulty = raidDifficultyConfig(raidType, escalationLevel);
-  const baseSize = DAY_START_PARTY_MIN + Math.floor(Math.random() * (DAY_START_PARTY_MAX - DAY_START_PARTY_MIN + 1));
+  const baseSize = DAY_START_PARTY_MIN + Math.floor(randomFloat() * (DAY_START_PARTY_MAX - DAY_START_PARTY_MIN + 1));
   const size = Math.max(1, baseSize + (difficulty.partySizeDelta || 0) + (raidMods.partySizeDelta || 0));
   const basePos = { x: 0, y: 0 };
   const party = [];
@@ -2599,7 +2588,7 @@ function generateRaidParty(turnsSurvived, raidType, day = 1, options = {}) {
   if (raidType === "council") {
     const raidMods = buildRaidModifiers(options.raidBoons || []);
     const difficulty = raidDifficultyConfig("council");
-    const baseSize = DAY_START_PARTY_MIN + Math.floor(Math.random() * (DAY_START_PARTY_MAX - DAY_START_PARTY_MIN + 1));
+    const baseSize = DAY_START_PARTY_MIN + Math.floor(randomFloat() * (DAY_START_PARTY_MAX - DAY_START_PARTY_MIN + 1));
     const size = Math.max(1, baseSize + (difficulty.partySizeDelta || 0) + (raidMods.partySizeDelta || 0));
     const basePos = { x: 0, y: 0 };
     return applyRaidPartyModifiers(
@@ -2956,7 +2945,7 @@ function normalizeMonsterEntity(monster, roomType, roomTier = 1) {
   return normalized;
 }
 
-function calcArtifactMods(artifacts, day = 1) {
+function calcArtifactMods(artifacts) {
   const mods = {
     essenceOnKill: 0,
     soulshardOnKill: 0,
@@ -3447,7 +3436,7 @@ function rollAshBreachPositions(grid, count, day) {
   function search(remaining, pool) {
     if (picks.length >= needed) return true;
     if (!pool.length || pool.length < remaining) return false;
-    const shuffled = [...pool].sort(() => Math.random() - 0.5);
+    const shuffled = [...pool].sort(() => randomFloat() - 0.5);
     for (const candidate of shuffled) {
       if (picks.some((entry) => inAuraRange(entry.x, entry.y, candidate.x, candidate.y))) continue;
       picks.push(candidate);
@@ -3469,7 +3458,7 @@ function pickSpawnEntrance(grid, ashTrial) {
   const entries = getActiveEntrances(grid, ashTrial);
   if (!entries.length) return null;
   const totalWeight = entries.reduce((sum, entry) => sum + (entry.kind === "ash-breach" ? 3 : 2), 0);
-  let roll = Math.random() * totalWeight;
+  let roll = randomFloat() * totalWeight;
   for (const entry of entries) {
     roll -= entry.kind === "ash-breach" ? 3 : 2;
     if (roll <= 0) return entry;
@@ -4029,7 +4018,12 @@ export default function App() {
   const [selectedInventoryMonsterIndex, setSelectedInventoryMonsterIndex] = useState("");
   const [brokenTileArt, setBrokenTileArt] = useState({});
   const [brokenCouncilArt, setBrokenCouncilArt] = useState({});
-  function defaultState() {
+  const [saveStatus, setSaveStatus] = useState("Saved");
+  const [lastSavedAt, setLastSavedAt] = useState(null);
+  const [advancedToolboxOpen, setAdvancedToolboxOpen] = useState(false);
+  function defaultState(options = {}) {
+    const runSeed = normalizeRunSeed(options.runSeed || createRunSeed());
+    setRunRandomState(runSeed, options.rngCursor || 0);
     const dailyEvent = rollDailyEvent();
     const traderStock = generateTraderStock(0, 1);
     const artifacts = [];
@@ -4129,16 +4123,22 @@ export default function App() {
       movePayload: null,
       fleshMarketStock: [],
       boughtUniqueKeys: [],
+      runSeed,
+      rngCursor: getRunRandomState().cursor,
+      onboardingDismissed: false,
     };
   }
 
-  function loadSavedState() {
+  function loadSavedState(rawOverride = null) {
     try {
-      const raw = localStorage.getItem(SAVE_KEY);
+      const raw = rawOverride || localStorage.getItem(SAVE_KEY);
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       if (!parsed) return null;
-      const base = defaultState();
+      const runSeed = normalizeRunSeed(parsed.runSeed || createRunSeed());
+      const savedRngCursor = Number.isFinite(parsed.rngCursor) ? Math.max(0, parsed.rngCursor) : 0;
+      const base = defaultState({ runSeed, rngCursor: savedRngCursor });
+      setRunRandomState(runSeed, savedRngCursor);
       const normalizeGrid = (rawGrid) => {
         if (!Array.isArray(rawGrid) || rawGrid.length !== H) return base.grid;
         const next = base.grid.map((row, y) => {
@@ -4340,6 +4340,9 @@ export default function App() {
         currentParty: normalizedCurrentParty,
         partyQueue: normalizedPartyQueue,
         scoutQueue: normalizedScoutQueue,
+        runSeed,
+        rngCursor: getRunRandomState().cursor,
+        onboardingDismissed: !!parsed.onboardingDismissed,
         invMonsters: Array.isArray(parsed.invMonsters)
           ? parsed.invMonsters
               .filter((monster) => KNOW_MONSTER_ENTITY(monster))
@@ -4385,11 +4388,18 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+      setSaveStatus("Saving");
+      writeSaveWithBackup(state);
+      setSaveStatus("Saved");
+      setLastSavedAt(new Date());
     } catch {
-      // Ignore save failures (private mode or storage full).
+      setSaveStatus("Save Failed");
     }
   }, [state]);
+
+  useEffect(() => {
+    if (state.day > 1) setAdvancedToolboxOpen(true);
+  }, [state.day]);
 
   useEffect(() => {
     function onKeyDown(e) {
@@ -4415,7 +4425,10 @@ export default function App() {
   const councilSessionActive = state.councilSession && state.councilSession.day === state.day;
   const showCouncilPrompt = councilSessionActive && state.councilSession.status === "pending";
   const councilAwaitingConclusion = councilSessionActive && state.councilSession.status !== "pending";
-  const councilRoster = councilSessionActive ? state.council?.roster || [] : [];
+  const councilRoster = useMemo(
+    () => (councilSessionActive ? state.council?.roster || [] : []),
+    [councilSessionActive, state.council?.roster]
+  );
   const focusedCouncilMember = councilRoster.find((m) => m.key === focusedCouncilKey) || councilRoster[0] || null;
   const absentCouncilMembers = councilSessionActive
     ? COUNCIL_MEMBERS.filter((member) => !councilRoster.some((attendee) => attendee.key === member.key))
@@ -4456,7 +4469,7 @@ export default function App() {
     [ownedArtifactCounts, state.day, unlockedStandardArtifactCount]
   );
   const contentWarnings = useMemo(() => validateGameContent(), []);
-  const coreMaxHp = useMemo(() => getCoreMaxHp(state), [state.doctrines, state.nihazaCurseUntilDay, state.day]);
+  const coreMaxHp = getCoreMaxHp(state);
   const dungeonLevel = clampDungeonLevel(state.dungeonLevel);
   const maxRooms = getDungeonRoomCap(state);
 
@@ -4472,7 +4485,10 @@ export default function App() {
   }, [state.heroes]);
 
   const selectedTile = state.grid[state.selected.y][state.selected.x];
-  const selectedHeroes = heroesByTile.get(keyOf(state.selected.x, state.selected.y)) || [];
+  const selectedHeroes = useMemo(
+    () => heroesByTile.get(keyOf(state.selected.x, state.selected.y)) || [],
+    [heroesByTile, state.selected.x, state.selected.y]
+  );
   const roomUpgradePrice = selectedTile.room ? roomUpgradeCost(selectedTile.roomTier || 1) : null;
   const selectedMonsterRoomCapValue = selectedTile.room === "monster" ? effectiveMonsterRoomCapValue(state, selectedTile.roomTier || 1) : 0;
   const canManageSelectedMonsterRoom = isBuildPhase && !state.movePayload && selectedTile.room === "monster";
@@ -4590,7 +4606,7 @@ export default function App() {
     });
   }
 
-  function placeEntrance() {
+  function _placeEntrance() {
     if (locked) return;
     if (!isBuildPhase) {
       setState((s) => addLog(s, "You can only place rooms during the build phase."));
@@ -4629,7 +4645,7 @@ export default function App() {
     });
   }
 
-  function placeCore() {
+  function _placeCore() {
     if (locked) return;
     if (!isBuildPhase) {
       setState((s) => addLog(s, "You can only place rooms during the build phase."));
@@ -5282,7 +5298,7 @@ export default function App() {
     });
   }
 
-  function useDominionPower(kind) {
+  function activateDominionPower(kind) {
     if (locked) return;
     if (!isBattlePhase) {
       setState((s) => addLog(s, "Dominion powers can only be used in battle."));
@@ -5681,7 +5697,6 @@ export default function App() {
       const logLines = [];
       const push = (msg) => logLines.push(msg);
 
-      const dist = (ax, ay, bx, by) => Math.abs(ax - bx) + Math.abs(ay - by);
       const effectiveUtilityTier = (x, y, key) => {
         const baseTier = utilityTier(grid, x, y, key);
         if (baseTier <= 0) return 0;
@@ -5761,7 +5776,7 @@ export default function App() {
           h.counters.resoluteUsed = true;
           return false;
         }
-        if (heroHasPassive(h, "Focused") && Math.random() < 0.5) return false;
+        if (heroHasPassive(h, "Focused") && randomFloat() < 0.5) return false;
         setStatus(h, key, turns, value);
         if (key === "poison") {
           h.counters = h.counters || {};
@@ -6826,7 +6841,10 @@ export default function App() {
   }
 
   function resetRun() {
+    if (!window.confirm("Reset this run while keeping the current dungeon layout? Monsters, progression, and resources will be cleared.")) return;
     setState((s) => {
+      const runSeed = createRunSeed();
+      setRunRandomState(runSeed, 0);
       const grid = resetLayoutKeepStructure(s.grid);
       const dailyEvent = rollDailyEvent();
       const traderStock = generateTraderStock(0, 1);
@@ -6915,6 +6933,9 @@ export default function App() {
         fleshMarketStock: [],
         boughtUniqueKeys: [],
         evolutionOffer: null,
+        runSeed,
+        rngCursor: getRunRandomState().cursor,
+        onboardingDismissed: false,
       };
       ns = addLog(ns, "Run reset (layout kept). Choose your first invasion.");
       return ns;
@@ -6922,6 +6943,7 @@ export default function App() {
   }
 
   function newRun() {
+    if (!window.confirm("Start a completely new run? The current run will remain available only in the automatic backup.")) return;
     setState(() => ({
       ...defaultState(),
       log: ["Day 1 begins. Choose your first invasion."],
@@ -6939,10 +6961,67 @@ export default function App() {
 
   function saveRun() {
     try {
-      localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+      writeSaveWithBackup(state);
+      setSaveStatus("Saved");
+      setLastSavedAt(new Date());
       setState((s) => addLog(s, "Run saved."));
     } catch {
+      setSaveStatus("Save Failed");
       setState((s) => addLog(s, "Save failed."));
+    }
+  }
+
+  function exportRun() {
+    try {
+      const safeSeed = String(state.runSeed || "run").replace(/[^a-zA-Z0-9-]/g, "-");
+      downloadTextFile(`dungeonlord-${safeSeed}-day-${state.day}.json`, serializeSave(state));
+      setState((s) => addLog(s, "Run exported."));
+    } catch {
+      setState((s) => addLog(s, "Run export failed."));
+    }
+  }
+
+  async function importRun(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      const raw = await file.text();
+      if (!isValidSaveText(raw)) throw new Error("Invalid save file");
+      const loaded = loadSavedState(raw);
+      if (!loaded) throw new Error("Save migration failed");
+      const previousRaw = localStorage.getItem(SAVE_KEY);
+      if (previousRaw && isValidSaveText(previousRaw)) localStorage.setItem(BACKUP_SAVE_KEY, previousRaw);
+      localStorage.setItem(SAVE_KEY, raw);
+      setState(() => addLog(loaded, `Run imported from ${file.name}.`));
+      setSaveStatus("Saved");
+    } catch {
+      setState((s) => addLog(s, "Import failed. Choose a Dungeonlord JSON save file."));
+    }
+  }
+
+  function restoreBackup() {
+    const raw = localStorage.getItem(BACKUP_SAVE_KEY);
+    if (!raw || !isValidSaveText(raw)) {
+      setState((s) => addLog(s, "No valid backup save found."));
+      return;
+    }
+    if (!window.confirm("Restore the automatic backup? The current run will be replaced, but exported files are unaffected.")) return;
+    const loaded = loadSavedState(raw);
+    if (!loaded) {
+      setState((s) => addLog(s, "Backup could not be loaded."));
+      return;
+    }
+    localStorage.setItem(SAVE_KEY, raw);
+    setState(() => addLog(loaded, "Automatic backup restored."));
+  }
+
+  async function copyDiagnosticsBundle(includeSave = false) {
+    try {
+      await copyText(buildDiagnosticBundle(state, validation, { includeSave }));
+      setState((s) => addLog(s, includeSave ? "Diagnostics and save copied." : "Diagnostics copied."));
+    } catch {
+      setState((s) => addLog(s, "Could not copy diagnostics."));
     }
   }
 
@@ -7323,7 +7402,7 @@ export default function App() {
     });
   }
 
-  function tileLabel(x, y, t) {
+  function _tileLabel(x, y, t) {
     if (t.entrance) return "E";
     if (t.core) return "C";
     if (t.room === "trap") return TRAP_ICONS[t.trapType] || "TR";
@@ -7332,7 +7411,7 @@ export default function App() {
     return "";
   }
 
-  function getTileGlyph(tile, x, y, heroesOnTileCount, monstersOnTileCount) {
+  function getTileGlyph(tile, x, y) {
     if (isAshBreachAt(state.ashTrial, x, y)) {
       return { text: "AE", tone: "ash-breach" };
     }
@@ -7508,7 +7587,7 @@ export default function App() {
     return "";
   }
 
-  function monsterPassiveInfo(monster) {
+  function _monsterPassiveInfo(monster) {
     if (!monster) return null;
     const keys = monsterPassiveKeys(monster);
     if (keys.length > 0) return MONSTER_PASSIVE_MAP[keys[0]] || null;
@@ -7595,7 +7674,7 @@ export default function App() {
     );
   }
 
-  function tileStateChip(tile, x, y) {
+  function tileStateChip(tile) {
     if (tile.room === "trap") {
       if (tile.trapBroken) return "BRK";
       if (!tile.trap) return "OFF";
@@ -7634,7 +7713,6 @@ export default function App() {
   const focusedCouncilBoons = focusedCouncilMember
     ? (state.nextRaidBoons || []).filter((boon) => boon.sponsorKey === focusedCouncilMember.key)
     : [];
-  const activeCouncilQuestProgress = state.councilQuest?.active ? councilQuestProgressValue(state, state.councilQuest) : 0;
   const councilQuestPlacementBlock = (quest) => {
     if (!quest || quest.questType !== "ash-breach-trial") return "";
     const breachCount = Math.max(1, quest.breachCount || 1);
@@ -7676,7 +7754,7 @@ export default function App() {
       return paths;
     }
     return new Set();
-  }, [selectedHeroes, state.grid, core, activeEntrances, state.activeRaidBoons, doctrineEffects, state.raidIntel]);
+  }, [selectedHeroes, state.grid, core, activeEntrances, state.activeRaidBoons, doctrineEffects, state.raidIntel, artifactMods]);
 
   const lureCandidateKeys = useMemo(() => {
     if (!selectedHeroes[0] || !core) return new Set();
@@ -7686,7 +7764,7 @@ export default function App() {
         .filter((option) => option.lure >= 4 && !option.tile.core)
         .map((option) => keyOf(option.next.x, option.next.y))
     );
-  }, [selectedHeroes, state.grid, core, state.activeRaidBoons, doctrineEffects, state.raidIntel]);
+  }, [selectedHeroes, state.grid, core, state.activeRaidBoons, doctrineEffects, state.raidIntel, artifactMods]);
 
   const pendingRaidType = state.pendingPunitiveRaid ? "council" : state.nextRaidType;
   const pendingEscalationLevel =
@@ -7735,7 +7813,7 @@ export default function App() {
   const nextUpgradeCost = atDungeonLevelCap ? null : dungeonUpgradeCost(dungeonLevel, state.day, artifactMods);
   const selectedIsAshBreach = isAshBreachAt(state.ashTrial, state.selected.x, state.selected.y);
   const selectedLinkInfo = roomLinkInfoAt(state.grid, state.selected.x, state.selected.y);
-  const selectedReadiness = tileStateChip(selectedTile, state.selected.x, state.selected.y) || "n/a";
+  const selectedReadiness = tileStateChip(selectedTile) || "n/a";
   const selectedTileEffect = roomTypeDesc(selectedTile, state.selected.x, state.selected.y) || "n/a";
   const selectedLinkLabel = selectedLinkInfo.tag ? `${selectedLinkInfo.tag} | ${selectedLinkInfo.linked ? "Linked" : "Unlinked"}` : "none";
   const selectedLinkBonus = selectedLinkInfo.linked ? selectedLinkInfo.linkDesc || "Active link bonus." : "n/a";
@@ -7772,6 +7850,20 @@ export default function App() {
     : atDungeonLevelCap
     ? `Dungeon level capped at ${MAX_DUNGEON_LEVEL}. ${validation.ok ? "Dungeon route is ready." : "Connect every entrance to the Core."}`
     : `Upgrade cost: ${nextUpgradeCost} Essence. ${validation.ok ? "Dungeon route is ready." : "Connect every entrance to the Core."}`;
+  const onboardingComplete = state.day > 1 || !!state.lastRaidReport;
+  const onboardingStep = onboardingComplete
+    ? { number: 7, title: "Review and expand", desc: "Review the raid report, then build toward your next invasion." }
+    : state.raidActive
+    ? { number: 6, title: "Advance the raid", desc: "Use End Turn while invaders move and rooms resolve combat." }
+    : isBattlePhase
+    ? { number: 5, title: "Release the expedition", desc: "Select Start Raid to let the prepared party enter." }
+    : state.selectedInvasionKey
+    ? { number: 4, title: "Commit to battle", desc: "Select Begin Battle. Your invasion choice locks when battle begins." }
+    : activeTab === "toolbox"
+    ? { number: 3, title: "Choose an invasion", desc: "In Raid Forecast, choose Normal Hero Raid or Elite Expedition." }
+    : selectedTile.roomType === "training-den"
+    ? { number: 2, title: "Open Raid Forecast", desc: "Open Toolbox from the menu to find today’s invasion choices." }
+    : { number: 1, title: "Inspect your defenders", desc: "Select the starter Training Den beside the Entrance." };
 
   function evolutionButtonLabel(monster) {
     const cost = monsterEvolutionCost(monster);
@@ -7822,7 +7914,13 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <div className="title">Dungeonlord</div>
+        <div className="titleBlock">
+          <div className="title">Dungeonlord</div>
+          <div className="releaseMeta">
+            Alpha {BUILD_VERSION} | Seed {state.runSeed} | <span className={saveStatus === "Save Failed" ? "saveBad" : ""}>{saveStatus}</span>
+            {lastSavedAt ? ` ${lastSavedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}
+          </div>
+        </div>
         <div className="mobileNav">
           <button
             className={`mobileMenuBtn ${mobileMenuOpen ? "active" : ""}`}
@@ -7852,6 +7950,15 @@ export default function App() {
                   <span className="mobileNavMeta">{tab.desc}</span>
                 </button>
               ))}
+              <a
+                className="mobileNavBtn"
+                href={`${import.meta.env.BASE_URL}guidebook/Dungeonlord_Guidebook.pdf`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <span>Guidebook</span>
+                <span className="mobileNavMeta">Open the player field guide</span>
+              </a>
             </div>
           )}
         </div>
@@ -8279,6 +8386,32 @@ export default function App() {
                       Moving {state.movePayload.type === "core" ? "Core" : "Room"} - click a new tile to place it. Press Esc or Cancel to abort.
                     </div>
                   )}
+                  {!state.onboardingDismissed ? (
+                    <div className={`firstRunGuide ${onboardingComplete ? "complete" : ""}`}>
+                      <div className="firstRunGuideHeader">
+                        <span>First Run {onboardingStep.number}/7</span>
+                        <button
+                          className="textButton"
+                          type="button"
+                          onClick={() => setState((s) => ({ ...s, onboardingDismissed: true }))}
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                      <div className="firstRunGuideTitle">{onboardingStep.title}</div>
+                      <div className="muted small">{onboardingStep.desc}</div>
+                      <div className="firstRunGuideActions">
+                        {onboardingStep.number === 2 || onboardingStep.number === 3 ? (
+                          <button className="btn small" type="button" onClick={() => selectMobileTab("toolbox")}>
+                            Open Raid Forecast
+                          </button>
+                        ) : null}
+                        <button className="btn small" type="button" onClick={() => selectMobileTab("glossary")}>
+                          ? Rules
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="dungeonActionRail">
                     <div className="dungeonActionMeta">
                       <div className="dungeonActionStats">
@@ -8325,8 +8458,8 @@ export default function App() {
                       (() => {
                         const heroesHere = heroesByTile.get(keyOf(x, y)) || [];
                         const monstersHere = t.room === "monster" ? t.monsters.length : 0;
-                        const glyph = getTileGlyph(t, x, y, heroesHere.length, monstersHere);
-                        const stateChip = tileStateChip(t, x, y);
+                        const glyph = getTileGlyph(t, x, y);
+                        const stateChip = tileStateChip(t);
                         const artSpec = getTileArtSpec(t, x, y, state.grid, state.ashTrial, brokenTileArt);
                         const utilityArtSpec = getUtilityArtSpec(t, brokenTileArt);
                         const emptyArtSpec = getEmptyTileArtSpec(t, x, y, state.ashTrial, brokenTileArt);
@@ -8621,6 +8754,13 @@ export default function App() {
               )}
             </div>
 
+            <details
+              className="toolboxAdvanced"
+              open={advancedToolboxOpen}
+              onToggle={(event) => setAdvancedToolboxOpen(event.currentTarget.open)}
+            >
+              <summary>Advanced Management</summary>
+              <div className="toolboxAdvancedBody">
             <div className="card">
               <div className="cardTitle">Tile Details</div>
               <div className="kv">
@@ -9242,7 +9382,7 @@ export default function App() {
               <div className="row">
                 <button
                   className="btn"
-                  onClick={() => useDominionPower("pulse")}
+                  onClick={() => activateDominionPower("pulse")}
                   disabled={locked || !isBattlePhase || state.currency.dominion < 2}
                 >
                   Pulse (2 DP)
@@ -9252,7 +9392,7 @@ export default function App() {
               <div className="row">
                 <button
                   className="btn"
-                  onClick={() => useDominionPower("shield")}
+                  onClick={() => activateDominionPower("shield")}
                   disabled={locked || !isBattlePhase || state.currency.dominion < 2}
                 >
                   Shield (2 DP)
@@ -9262,7 +9402,7 @@ export default function App() {
               <div className="row">
                 <button
                   className="btn"
-                  onClick={() => useDominionPower("speed")}
+                  onClick={() => activateDominionPower("speed")}
                   disabled={locked || !isBattlePhase || state.currency.dominion < 1}
                 >
                   Speed (1 DP)
@@ -9272,7 +9412,7 @@ export default function App() {
               <div className="row">
                 <button
                   className="btn"
-                  onClick={() => useDominionPower("strength")}
+                  onClick={() => activateDominionPower("strength")}
                   disabled={locked || !isBattlePhase || state.currency.dominion < 1}
                 >
                   Strength (1 DP)
@@ -9375,7 +9515,27 @@ export default function App() {
                 <button className="btn" onClick={saveRun}>Save Now</button>
                 <div className="muted">Manual save for testing.</div>
               </div>
+              <div className="row">
+                <button className="btn" onClick={exportRun}>Export Save</button>
+                <div className="muted">Downloads a portable JSON save.</div>
+              </div>
+              <div className="row">
+                <button className="btn" type="button" onClick={() => document.getElementById("run-import-input")?.click()}>Import Save</button>
+                <input id="run-import-input" className="visuallyHidden" type="file" accept="application/json,.json" onChange={importRun} />
+                <div className="muted">Loads a JSON save from another device.</div>
+              </div>
+              <div className="row">
+                <button className="btn" onClick={restoreBackup}>Restore Backup</button>
+                <div className="muted">Returns to the previous automatic save.</div>
+              </div>
+              <div className="row">
+                <button className="btn" onClick={() => copyDiagnosticsBundle(false)}>Copy Diagnostics</button>
+                <button className="btn" onClick={() => copyDiagnosticsBundle(true)}>Copy With Save</button>
+              </div>
+              <div className="muted small">Build {BUILD_VERSION} | Seed {state.runSeed} | {saveStatus}</div>
             </div>
+              </div>
+            </details>
           </div>
         </section>
 
@@ -9806,6 +9966,35 @@ export default function App() {
         <section className="panel panel--glossary">
           {drawerPanelTitle("Glossary")}
           <div className="toolboxScroll">
+            <div className="card glossaryEssentials">
+              <div className="cardTitle">First Run Essentials</div>
+              <div className="entityList">
+                <div className="entityItem">
+                  <div className="entityName">Build and Battle</div>
+                  <div className="entityMeta">Build is for construction, staffing, markets, and choosing the next invasion. Begin Battle locks the invasion; Start Raid releases it; End Turn resolves movement and room combat.</div>
+                </div>
+                <div className="entityItem">
+                  <div className="entityName">Currencies</div>
+                  <div className="entityMeta">Essence builds the dungeon. Soulshards grow the roster. Evolution advances monsters. Dominion powers tactical actions. Darkcrystals fund doctrines and the Flesh Market.</div>
+                </div>
+                <div className="entityItem">
+                  <div className="entityName">Core Pressure</div>
+                  <div className="entityMeta">Core damage persists between raids. Protecting it is the long-term survival clock of an endless run; ordinary build phases do not repair it.</div>
+                </div>
+                <div className="entityItem">
+                  <div className="entityName">Traps</div>
+                  <div className="entityMeta">Armed traps spend charges when triggered. Remaining charges and cooldowns reset automatically when the next build day begins.</div>
+                </div>
+                <div className="entityItem">
+                  <div className="entityName">Links and Auras</div>
+                  <div className="entityMeta">Blood, Ward, and Hunt rooms link only to an orthogonally adjacent room with the same tag. Utility auras are separate radius effects and do not create links.</div>
+                </div>
+                <div className="entityItem">
+                  <div className="entityName">Raid Cadence</div>
+                  <div className="entityMeta">Choose Normal or Elite on ordinary days. Every fifth non-Council day is a forced Escalation Raid. Days divisible by 10 belong to the Council.</div>
+                </div>
+              </div>
+            </div>
             <div className="card">
               <div className="cardTitle">Room Rules</div>
               <div className="entityList">

@@ -30,6 +30,62 @@ body {
   min-height: 100vh;
 }
 
+.crashScreen {
+  min-height: 100vh;
+  padding: 32px;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at top, #1d2940, #080d17 70%);
+  color: #f4ead8;
+}
+
+.crashCard {
+  width: min(680px, 100%);
+  padding: 28px;
+  border: 1px solid #3b4b66;
+  border-radius: 18px;
+  background: rgba(12, 18, 31, 0.96);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+}
+
+.crashCard h1 {
+  margin: 6px 0 12px;
+  font-family: Georgia, serif;
+}
+
+.crashCard pre {
+  max-height: 180px;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 10px;
+  background: #070b13;
+  color: #ffb4b4;
+  white-space: pre-wrap;
+}
+
+.crashEyebrow {
+  color: #d9a857;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.crashActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.crashActions button {
+  padding: 10px 14px;
+  border: 1px solid #596b88;
+  border-radius: 10px;
+  background: #18243a;
+  color: #f4ead8;
+  cursor: pointer;
+}
+
 h1 {
   font-size: 3.2em;
   line-height: 1.1;
