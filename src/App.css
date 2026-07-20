@@ -2302,6 +2302,66 @@ button.entityItem {
   }
 }
 
+@media (min-width: 981px) and (max-height: 760px),
+  (min-width: 981px) and (pointer: coarse) {
+  .app {
+    height: 100dvh;
+    min-height: 100dvh;
+  }
+
+  .dungeonControlRail,
+  .shellSidePanel .toolboxScroll,
+  .shellSidePanel .logScroll {
+    max-height: 100%;
+    overflow-y: scroll;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(104, 132, 170, 0.82) rgba(8, 14, 25, 0.42);
+  }
+
+  .dungeonControlRail {
+    padding-right: 8px;
+    padding-bottom: 18px;
+  }
+
+  .shellSidePanel .toolboxScroll,
+  .shellSidePanel .logScroll {
+    padding-right: 14px;
+  }
+
+  .dungeonControlRail::-webkit-scrollbar,
+  .shellSidePanel .toolboxScroll::-webkit-scrollbar,
+  .shellSidePanel .logScroll::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .dungeonControlRail::-webkit-scrollbar-track,
+  .shellSidePanel .toolboxScroll::-webkit-scrollbar-track,
+  .shellSidePanel .logScroll::-webkit-scrollbar-track {
+    background: rgba(8, 14, 25, 0.42);
+    border-radius: 999px;
+  }
+
+  .dungeonControlRail::-webkit-scrollbar-thumb,
+  .shellSidePanel .toolboxScroll::-webkit-scrollbar-thumb,
+  .shellSidePanel .logScroll::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: rgba(104, 132, 170, 0.82);
+    background-clip: padding-box;
+  }
+
+  .dungeonControlRail::-webkit-scrollbar-thumb:hover,
+  .shellSidePanel .toolboxScroll::-webkit-scrollbar-thumb:hover,
+  .shellSidePanel .logScroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(142, 172, 211, 0.96);
+    background-clip: padding-box;
+  }
+}
+
 .councilPrompt {
   position: fixed;
   inset: 0;

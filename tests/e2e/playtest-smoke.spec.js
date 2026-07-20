@@ -39,6 +39,58 @@ test("grid and control rail remain available", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Upgrade Dungeon" })).toBeVisible();
 });
 
+test("short wide tablet can scroll controls and invasion choices", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "tablet-short-landscape", "Dedicated short tablet contract.");
+
+  const grid = page.locator(".grid");
+  const controlRail = page.locator(".dungeonControlRail");
+  await expect(grid).toBeVisible();
+  await expect(controlRail).toBeVisible();
+
+  const railMetrics = await controlRail.evaluate((element) => ({
+    clientHeight: element.clientHeight,
+    scrollHeight: element.scrollHeight,
+    overflowY: getComputedStyle(element).overflowY,
+  }));
+  expect(railMetrics.overflowY).toBe("scroll");
+  expect(railMetrics.scrollHeight).toBeGreaterThanOrEqual(railMetrics.clientHeight);
+
+  const viewportFit = await page.evaluate(() => ({
+    appHeight: document.querySelector(".app")?.getBoundingClientRect().height || 0,
+    viewportHeight: window.innerHeight,
+  }));
+  expect(viewportFit.appHeight).toBeLessThanOrEqual(viewportFit.viewportHeight);
+
+  await page.locator(".dungeonGutter").evaluate((element) => {
+    element.style.minHeight = "520px";
+  });
+  const forcedOverflow = await controlRail.evaluate((element) => ({
+    clientHeight: element.clientHeight,
+    scrollHeight: element.scrollHeight,
+  }));
+  expect(forcedOverflow.scrollHeight).toBeGreaterThan(forcedOverflow.clientHeight);
+
+  const upgradeDungeon = page.getByRole("button", { name: "Upgrade Dungeon" });
+  await upgradeDungeon.scrollIntoViewIfNeeded();
+  await expect(upgradeDungeon).toBeVisible();
+  expect(await controlRail.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+
+  await page.getByRole("button", { name: /Menu Dungeon/i }).click();
+  await page.getByRole("button", { name: /Toolbox/i }).click();
+  const toolboxScroll = page.locator(".panel--toolbox .toolboxScroll");
+  await expect(toolboxScroll).toBeVisible();
+  expect(await toolboxScroll.evaluate((element) => getComputedStyle(element).overflowY)).toBe("scroll");
+
+  const normalChoice = page.getByRole("button", { name: /Normal Hero Raid/i });
+  const eliteChoice = page.getByRole("button", { name: /Elite Expedition/i });
+  await normalChoice.scrollIntoViewIfNeeded();
+  await normalChoice.click();
+  await eliteChoice.scrollIntoViewIfNeeded();
+  await eliteChoice.click();
+  await expect(page.locator(".invasionChoice.active")).toContainText("Elite Expedition");
+  await expect(grid).toBeVisible();
+});
+
 test("portable save export produces a JSON download", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "One browser project is sufficient for the download contract.");
 
