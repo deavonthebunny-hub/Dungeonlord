@@ -52,11 +52,13 @@ The smoke suite covers desktop, tablet landscape, tablet portrait, and phone lay
 - `Copy Diagnostics` includes the build, seed, day, phase, raid metadata, validation state, and recent logs.
 - `Copy With Save` includes the full state for exact reproduction.
 
-Old saves are normalized by the load path in `src/App.jsx`. New persisted fields must always have safe defaults so existing runs remain loadable.
+Old saves are normalized by `src/systems/runState.js`. New persisted fields must always have safe defaults so existing runs remain loadable.
 
 ## Project Structure
 
-- `src/App.jsx` - current game shell, state transitions, combat, Council, markets, and UI
+- `src/App.jsx` - central React state owner and subsystem/UI coordinator
+- `src/systems/` - dungeon, monster, economy, market, raid, Council, pathing, combat, and save-state logic
+- `src/components/` - dungeon, Council, Toolbox, inventory, progression, glossary, and log presentation
 - `src/gameContent.js` - authored monsters, rooms, artifacts, raids, statuses, and sponsor content
 - `src/random.js` - deterministic seeded run randomness
 - `src/gameRules.js` - extracted cadence rules
@@ -69,7 +71,7 @@ Old saves are normalized by the load path in `src/App.jsx`. New persisted fields
 - `docs/BUG_REPORT_TEMPLATE.md` - reusable tester report format
 - `tests/e2e/` - responsive browser smoke tests
 
-Future refactors should continue extracting pure gameplay rules from `App.jsx` without changing save semantics.
+Future changes should preserve the subsystem dependency direction, keep React and browser effects out of game-state transitions, and retain current save semantics.
 
 ## Private Alpha Release Checklist
 
