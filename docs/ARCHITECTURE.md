@@ -1,6 +1,6 @@
 # Dungeonlord Architecture
 
-Last updated: 2026-07-28
+Last updated: 2026-07-29
 Current release: `0.1.0-alpha.2`
 
 ## Technology
@@ -33,7 +33,7 @@ src/main.jsx
 
 The application now uses explicit subsystem and presentation boundaries:
 
-- `src/App.jsx`: approximately 1,192 lines
+- `src/App.jsx`: approximately 1,175 lines
 - `src/App.css`: approximately 2,846 lines
 - `src/gameContent.js`: approximately 1,838 lines
 - `src/systems/combat.js`: approximately 1,290 lines
@@ -279,5 +279,16 @@ npm.cmd run check:alpha
 5. `combat` owns full raid-turn resolution.
 6. `App` owns the authoritative state and browser effects.
 7. `components` render props and invoke callbacks without changing game rules.
+
+## Verified Boundary Baseline
+
+Verified on 2026-07-29:
+
+- 16 production modules under `src/systems/`
+- no circular imports in the production subsystem graph
+- no React, DOM, clipboard, download, or browser-storage APIs in production subsystem modules
+- 12 presentational modules under `src/components/`
+- 6 Vitest files with 17 passing unit tests
+- 12 applicable Playwright tests passing, with 8 profile-specific skips
 
 Keep `gameContent.js` as the authored data layer. Further refinement should split a focused module only when its internal responsibilities become independently testable; do not recreate a generic catch-all utilities file.

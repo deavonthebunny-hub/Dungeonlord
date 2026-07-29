@@ -1,6 +1,6 @@
 # Dungeonlord Handoff
 
-Last updated: 2026-07-28
+Last updated: 2026-07-29
 Current release: `0.1.0-alpha.2`
 
 This is the starting document for a new Codex session. Read it first, then follow the linked detail documents rather than reconstructing the project from chat history.
@@ -57,7 +57,7 @@ System detail: [SYSTEMS.md](SYSTEMS.md)
 
 | Path | Purpose |
 |---|---|
-| `src/App.jsx` | React state owner, browser effects, derived view data, and subsystem coordination; about 1,192 lines |
+| `src/App.jsx` | React state owner, browser effects, derived view data, and subsystem coordination; about 1,175 lines |
 | `src/App.css` | Main visual and responsive system; about 2,846 lines |
 | `src/gameContent.js` | Authored content and validation |
 | `src/systems/` | Run state, dungeon, economy, monsters, markets, raids, Council, pathing, combat, and pure transitions |
@@ -91,12 +91,12 @@ Existing tester documents:
 
 ## Current Branch and Repository Workflow
 
-At the start of this documentation pass:
+Phase 1 baseline verified on 2026-07-29:
 
 - branch: `main`
-- base commit: `9982161 Improve short tablet scrolling and add responsive E2E coverage`
+- baseline commit: `20a5fbd Extract game systems and UI components`
 - remote: `origin https://github.com/deavonthebunny-hub/Dungeonlord.git`
-- working tree: clean before these documentation files were added
+- working tree: clean before the Phase 1 documentation edits
 
 Do not commit or push without explicit user authorization.
 
@@ -113,7 +113,17 @@ npm.cmd run check:alpha
 
 `npm.cmd run check:alpha` is the release-candidate gate.
 
-It last passed on 2026-07-28 after subsystem extraction: lint, 17 unit tests, production build, and 12 applicable Playwright tests passed with 8 profile-specific skips. In a managed Codex filesystem sandbox, Vitest/esbuild may require an approved rerun if it reports `Cannot read directory "../..": Access is denied`.
+It last passed on 2026-07-29 after subsystem extraction: lint, 17 unit tests across 6 files, production build, and 12 applicable Playwright tests passed with 8 profile-specific skips. In a managed Codex filesystem sandbox, Vitest/esbuild may require an approved rerun if it reports `Cannot read directory "../..": Access is denied`.
+
+### Verified subsystem boundary baseline
+
+Verified on 2026-07-29:
+
+- `src/systems/` contains 16 production modules with an acyclic internal import graph.
+- Production subsystem modules contain no React, DOM, clipboard, download, or browser-storage APIs.
+- `src/components/` contains 12 presentational component modules.
+- `App.jsx` remains the authoritative React state and browser-effect coordinator.
+- Domain changes continue to enter through pure state-in/state-out subsystem transitions.
 
 GitHub Pages deploys from `main` with base `/Dungeonlord/`.
 
@@ -173,7 +183,6 @@ Not implemented:
 - later-stage Nihaza eligibility gate
 - hero/monster combat sprite presentation
 - room-local combat staging
-- extracted combat/pathing/Council modules
 - cloud saves/accounts
 - scripted tutorial mode
 - final boss/final floor

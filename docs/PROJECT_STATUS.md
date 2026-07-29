@@ -1,6 +1,6 @@
 # Dungeonlord Project Status
 
-Last updated: 2026-07-28
+Last updated: 2026-07-29
 Release: `0.1.0-alpha.2`
 Release stage: Private-alpha release candidate
 
@@ -110,7 +110,7 @@ Always re-run `git status --short` before changing code. Do not assume this snap
 - state-in/state-out transitions for dungeon, monster, market, raid, Council, and combat actions
 - save creation and hydration isolated from browser storage
 - major JSX surfaces split into focused presentational components
-- `App.jsx` reduced from approximately 10,277 to 1,192 lines
+- `App.jsx` reduced from approximately 10,277 to 1,175 lines
 
 ### First-run support
 
@@ -160,7 +160,7 @@ Profiles:
 
 ### Verification snapshot
 
-Verified on 2026-07-28 with `npm.cmd run check:alpha`:
+Verified on 2026-07-29 with `npm.cmd run check:alpha`:
 
 - ESLint passed
 - 6 Vitest files passed

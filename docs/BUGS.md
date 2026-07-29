@@ -1,6 +1,6 @@
 # Dungeonlord Bugs, Risks, and Known Constraints
 
-Last updated: 2026-07-28
+Last updated: 2026-07-29
 Current release: `0.1.0-alpha.2`
 
 ## Current Blockers
@@ -86,7 +86,7 @@ No analytics or reports are uploaded automatically. Tester quality depends on co
 
 ### R-001 — Subsystem boundary regression
 
-`src/App.jsx` has been reduced to approximately 1,192 lines and now coordinates focused modules under `src/systems/` and `src/components/`. The original monolith risk is substantially mitigated, but cross-system gameplay still shares one authoritative run-state object.
+`src/App.jsx` has been reduced to approximately 1,175 lines and now coordinates focused modules under `src/systems/` and `src/components/`. The original monolith risk is substantially mitigated, but cross-system gameplay still shares one authoritative run-state object.
 
 Mitigation:
 
@@ -102,7 +102,7 @@ The current 17 unit tests cover content, cadence, RNG, save support, run hydrati
 Mitigation:
 
 - add a regression test with every confirmed Major fix
-- extract combat and migration logic into pure modules
+- expand regression coverage for the existing pure combat and save-normalization modules
 
 ### R-003 — CSS responsive-rule layering
 
