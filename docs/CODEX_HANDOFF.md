@@ -91,12 +91,11 @@ Existing tester documents:
 
 ## Current Branch and Repository Workflow
 
-Phase 1 baseline verified on 2026-07-29:
+Phase 1 baseline published on 2026-07-29:
 
 - branch: `main`
-- baseline commit: `20a5fbd Extract game systems and UI components`
+- Phase 1 verification commit: `78af118 Verify Phase 1 architecture baseline`
 - remote: `origin https://github.com/deavonthebunny-hub/Dungeonlord.git`
-- working tree: clean before the Phase 1 documentation edits
 
 Do not commit or push without explicit user authorization.
 
@@ -125,7 +124,7 @@ Verified on 2026-07-29:
 - `App.jsx` remains the authoritative React state and browser-effect coordinator.
 - Domain changes continue to enter through pure state-in/state-out subsystem transitions.
 
-GitHub Pages deploys from `main` with base `/Dungeonlord/`.
+GitHub Pages deploys from `main` with base `/Dungeonlord/`. The workflow pins Node 24, installs with `npm ci`, runs the full `check:alpha` gate, and creates the Pages artifact only after lint, unit tests, the production build, and Playwright pass. The deploy job depends on that verified artifact.
 
 ## Design Decisions
 

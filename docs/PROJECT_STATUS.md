@@ -111,6 +111,7 @@ Always re-run `git status --short` before changing code. Do not assume this snap
 - save creation and hydration isolated from browser storage
 - major JSX surfaces split into focused presentational components
 - `App.jsx` reduced from approximately 10,277 to 1,175 lines
+- GitHub Pages deployment gated by locked installation, lint, unit tests, production build, and Playwright
 
 ### First-run support
 

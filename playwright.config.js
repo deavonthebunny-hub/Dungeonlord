@@ -1,17 +1,20 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const isCI = Boolean(globalThis.process?.env?.CI);
+
 export default defineConfig({
   testDir: "./tests/e2e",
   timeout: 60_000,
+  forbidOnly: isCI,
   use: {
     baseURL: "http://127.0.0.1:4173/Dungeonlord/",
-    channel: "chrome",
+    channel: isCI ? undefined : "chrome",
     trace: "retain-on-failure",
   },
   webServer: {
     command: "npm run dev -- --host 127.0.0.1 --port 4173",
     url: "http://127.0.0.1:4173/Dungeonlord/",
-    reuseExistingServer: true,
+    reuseExistingServer: !isCI,
   },
   projects: [
     { name: "desktop", use: { viewport: { width: 1440, height: 900 } } },

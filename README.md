@@ -8,13 +8,14 @@ Current release target: **private alpha 0.1.0-alpha.2**.
 
 Requirements:
 
-- Node.js 20 or newer
+- Node.js 24.x, matching CI
 - npm
+- Google Chrome for the default local smoke-test run
 
 Commands:
 
 ```powershell
-npm install
+npm ci
 npm run dev
 npm run lint
 npm run test
@@ -29,13 +30,16 @@ The deployed GitHub Pages base path is `/Dungeonlord/`, configured in `vite.conf
 
 ## Browser Smoke Tests
 
-Install the Playwright Chromium runtime once:
+Local smoke tests use installed Chrome. GitHub Actions uses Playwright's pinned Chromium runtime. To reproduce the CI browser locally, install Chromium once and set `CI` for the test command:
 
 ```powershell
 npx playwright install chromium
+$env:CI = "true"
+npm run test:e2e
+Remove-Item Env:CI
 ```
 
-Then run:
+For the usual local Chrome run:
 
 ```powershell
 npm run test:e2e

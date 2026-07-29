@@ -257,7 +257,10 @@ npm.cmd run check:alpha
 - `check:alpha`: full check plus Playwright
 - Vite base path: `/Dungeonlord/`
 - GitHub workflow: `.github/workflows/main.yml`
-- Pushes to `main` build and deploy `dist` to GitHub Pages.
+- GitHub Actions pins Node 24 and installs the locked dependency graph with `npm ci`.
+- Pushes to `main` must pass `check:alpha` before the Pages artifact is created.
+- The deployment job depends on the verified build job and deploys only its `dist` artifact.
+- CI uses Playwright's pinned Chromium runtime; ordinary local smoke tests continue to use installed Chrome.
 
 ## Architectural Constraints
 
