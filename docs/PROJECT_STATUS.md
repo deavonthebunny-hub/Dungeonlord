@@ -1,6 +1,6 @@
 # Dungeonlord Project Status
 
-Last updated: 2026-07-29
+Last updated: 2026-08-03
 Release: `0.1.0-alpha.2`
 Release stage: Private-alpha release candidate
 
@@ -140,8 +140,12 @@ Current unit suite:
 - ordinary/Escalation/Council cadence
 - deterministic RNG replay and cursor persistence
 - save snapshot/version metadata and import validation
-- deterministic run creation and legacy/active-raid hydration
-- representative dungeon, market, raid, combat, and Council transitions
+- deterministic run creation, legacy defaults, malformed optional data, active-raid hydration, and attended-Council hydration
+- trap reset, linked effects, raid completion, Core destruction, and clean-run reset
+- Council attend/decline/conclusion, punitive raids, ordinary quest completion/expiry, and Nihaza placement/success/failure
+- monster staffing, withdrawal, room clearing, fusion completion, and fusion rejection paths
+- artifact unlocks, copy caps, modifier stacking, doctrine thresholds, discounts, and Core Doctrine HP changes
+- representative dungeon, market, raid, and combat transitions
 
 Current browser suite:
 
@@ -161,11 +165,11 @@ Profiles:
 
 ### Verification snapshot
 
-Verified on 2026-07-29 with `npm.cmd run check:alpha`:
+Verified on 2026-08-03 with `npm.cmd run check:alpha`:
 
 - ESLint passed
-- 6 Vitest files passed
-- 17 unit tests passed
+- 10 Vitest files passed
+- 48 unit tests passed
 - production build passed
 - Playwright: 12 applicable tests passed
 - Playwright: 8 project-specific tests skipped as designed

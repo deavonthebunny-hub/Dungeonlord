@@ -1,6 +1,6 @@
 # Dungeonlord Architecture
 
-Last updated: 2026-07-29
+Last updated: 2026-08-03
 Current release: `0.1.0-alpha.2`
 
 ## Technology
@@ -291,7 +291,7 @@ Verified on 2026-07-29:
 - no circular imports in the production subsystem graph
 - no React, DOM, clipboard, download, or browser-storage APIs in production subsystem modules
 - 12 presentational modules under `src/components/`
-- 6 Vitest files with 17 passing unit tests
+- 10 Vitest files with 48 passing unit tests; the Phase 3 additions cover save hydration, raid/Core lifecycle, Council/Nihaza, monster management/fusion, artifacts, and doctrines
 - 12 applicable Playwright tests passing, with 8 profile-specific skips
 
 Keep `gameContent.js` as the authored data layer. Further refinement should split a focused module only when its internal responsibilities become independently testable; do not recreate a generic catch-all utilities file.

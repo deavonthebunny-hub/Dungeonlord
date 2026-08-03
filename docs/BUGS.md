@@ -1,6 +1,6 @@
 # Dungeonlord Bugs, Risks, and Known Constraints
 
-Last updated: 2026-07-29
+Last updated: 2026-08-03
 Current release: `0.1.0-alpha.2`
 
 ## Current Blockers
@@ -95,14 +95,14 @@ Mitigation:
 - keep browser effects in the coordinator/support adapter
 - run the full alpha gate after changes that cross domain boundaries
 
-### R-002 — Unit tests do not yet cover full combat resolution
+### R-002 — Unit tests do not exhaust full combat resolution
 
-The current 17 unit tests cover content, cadence, RNG, save support, run hydration, representative dungeon/market/Council transitions, and an opening raid through combat. Browser smoke tests cover the opening flow and responsive access, but not every combat hook, Council quest, artifact, or migration path.
+The current 48 unit tests cover content, cadence, RNG, save support, defensive run hydration, raid/Core lifecycle, Council and Nihaza outcomes, monster staffing and fusion, artifact/doctrine progression, representative subsystem transitions, and an opening raid through combat. Browser smoke tests cover the opening flow and responsive access, but the suite does not exercise every status, passive, room, artifact, doctrine, Council quest definition, or migration path in combination.
 
 Mitigation:
 
 - add a regression test with every confirmed Major fix
-- expand regression coverage for the existing pure combat and save-normalization modules
+- add focused combat-hook and migration cases alongside changes to those contracts
 
 ### R-003 — CSS responsive-rule layering
 
@@ -122,7 +122,7 @@ The save is the large runtime state object rather than a separately versioned sc
 Mitigation:
 
 - preserve safe defaults
-- test active-raid and Council-state migrations
+- extend migration coverage whenever persisted state fields change
 - extract save normalization before a large state change
 
 ## Recently Stabilized Regressions

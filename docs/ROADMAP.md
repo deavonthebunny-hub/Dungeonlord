@@ -1,6 +1,6 @@
 # Dungeonlord Roadmap
 
-Last updated: 2026-07-28
+Last updated: 2026-08-03
 Current release: `0.1.0-alpha.2`
 
 ## Roadmap Principle
@@ -105,7 +105,7 @@ Completed:
 
 `App.jsx` is now the authoritative state coordinator rather than the domain implementation.
 
-Expand tests for:
+Phase 3 regression expansion completed on 2026-08-03 for:
 
 - trap reset and linked effects
 - active-raid save migration
@@ -115,6 +115,8 @@ Expand tests for:
 - fusion completion
 - artifact unlock/cap/mod hooks
 - Core destruction and reset
+
+The resulting baseline is 48 passing unit tests across 10 files. Continue adding focused tests for individual combat hooks, save migrations, and confirmed alpha defects rather than treating this pass as exhaustive coverage.
 
 ## Milestone 5 — Late-Run Identity
 

@@ -1,6 +1,6 @@
 # Dungeonlord Implemented Systems
 
-Last updated: 2026-07-28
+Last updated: 2026-08-03
 Current release: `0.1.0-alpha.2`
 
 This document describes systems present in the current checkout. Proposed features are listed in [ROADMAP.md](ROADMAP.md), not here.
@@ -12,7 +12,7 @@ This document describes systems present in the current checkout. Proposed featur
 - `src/components/` owns the major presentational panels.
 - Subsystem actions accept state and return state without calling React setters.
 - Gameplay randomness continues through the seeded run RNG.
-- The current unit suite contains 17 tests across 6 files.
+- The current unit suite contains 48 tests across 10 files, including focused lifecycle coverage for saves, raids/Core, Council/Nihaza, monster management/fusion, artifacts, and doctrines.
 
 ## Content Inventory
 

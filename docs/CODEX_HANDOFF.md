@@ -1,6 +1,6 @@
 # Dungeonlord Handoff
 
-Last updated: 2026-07-29
+Last updated: 2026-08-03
 Current release: `0.1.0-alpha.2`
 
 This is the starting document for a new Codex session. Read it first, then follow the linked detail documents rather than reconstructing the project from chat history.
@@ -112,7 +112,7 @@ npm.cmd run check:alpha
 
 `npm.cmd run check:alpha` is the release-candidate gate.
 
-It last passed on 2026-07-29 after subsystem extraction: lint, 17 unit tests across 6 files, production build, and 12 applicable Playwright tests passed with 8 profile-specific skips. In a managed Codex filesystem sandbox, Vitest/esbuild may require an approved rerun if it reports `Cannot read directory "../..": Access is denied`.
+It last passed on 2026-08-03 after the Phase 3 regression expansion: lint, 48 unit tests across 10 files, production build, and 12 applicable Playwright tests passed with 8 profile-specific skips. In a managed Codex filesystem sandbox, Vitest/esbuild may require an approved rerun if it reports `Cannot read directory "../..": Access is denied`.
 
 ### Verified subsystem boundary baseline
 
@@ -154,8 +154,8 @@ Open items:
 
 1. **Room-cap discrepancy:** code yields 22 Level 10 rooms before permanent bonuses; earlier design target was 35.
 2. **Physical tablet verification:** re-test internal scrolling on the actual Samsung playtest tablet after the latest CSS/E2E change.
-3. **Focused-module depth:** combat and Toolbox are now isolated, but remain the largest modules and need targeted regression coverage.
-4. **Test depth:** current unit suite does not cover full combat, Council, Nihaza, or every save migration.
+3. **Focused-module depth:** combat and Toolbox are now isolated, but remain the largest modules. Lifecycle coverage exists; individual combat hooks and complex UI interactions still need targeted regressions when changed.
+4. **Test depth:** Council, Nihaza, save hydration, raid/Core lifecycle, monster management, artifacts, and doctrines now have regression coverage, but the suite does not exhaust every combat hook or save migration.
 5. **Browser-local durability:** current and backup saves can both be lost if site storage is cleared.
 6. **Chromium-first alpha:** other browser engines are not release gates.
 7. **Tracked empty file:** root `Selected` file appears unused.
