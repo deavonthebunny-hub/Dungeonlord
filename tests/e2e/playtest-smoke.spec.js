@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { Buffer } from "node:buffer";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("./");
@@ -108,4 +109,38 @@ test("portable save export produces a JSON download", async ({ page }, testInfo)
   await page.getByRole("link", { name: "Bug Report Template" }).click();
   const templateDownload = await templateDownloadPromise;
   expect(templateDownload.suggestedFilename()).toBe("Dungeonlord_Bug_Report_Template.txt");
+});
+
+test("legacy import preserves the previous run as a restorable backup", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "One browser project is sufficient for persistence integration.");
+
+  await page.getByRole("button", { name: /Menu Dungeon/i }).click();
+  await page.getByRole("button", { name: /Toolbox/i }).click();
+  await page.locator("summary").filter({ hasText: "Advanced Management" }).click();
+
+  const legacyGrid = Array.from({ length: 8 }, () => Array.from({ length: 8 }, () => ({})));
+  await page.locator("#run-import-input").setInputFiles({
+    name: "legacy-dungeonlord-save.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(
+      JSON.stringify({
+        grid: legacyGrid,
+        day: 3,
+        essence: 42,
+        runSeed: "DL-E2E-LEGACY",
+        rngCursor: 11,
+      })
+    ),
+  });
+
+  await expect(page.getByText("Day: 3", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Seed DL-E2E-LEGACY/).first()).toBeVisible();
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Restore Backup" }).click();
+  await expect(page.getByText("Day: 1", { exact: true })).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByText("Day: 1", { exact: true })).toBeVisible();
+  await expect(page.getByText("Dungeonlord", { exact: true }).first()).toBeVisible();
 });

@@ -22,7 +22,9 @@ The project is in a private-alpha feature freeze. The current goal is tester rea
 - Authored data in `src/gameContent.js`
 - Seeded RNG in `src/random.js`
 - Day cadence in `src/gameRules.js`
-- Save/backup/export/diagnostics in `src/playtestSupport.js`
+- Save schema and migrations in `src/persistence/`
+- Autosave and save/load/import/export/restore commands in `src/hooks/usePersistence.js`
+- Local export/clipboard/diagnostic support in `src/playtestSupport.js`
 - Top-level crash recovery in `src/ErrorBoundary.jsx`
 - Browser-local save plus one browser-local backup
 - Vitest unit tests and Playwright responsive smoke tests
@@ -57,14 +59,16 @@ System detail: [SYSTEMS.md](SYSTEMS.md)
 
 | Path | Purpose |
 |---|---|
-| `src/App.jsx` | React state owner, browser effects, derived view data, and subsystem coordination; about 1,175 lines |
+| `src/App.jsx` | React state owner, derived view data, and subsystem coordination; about 1,089 lines |
 | `src/App.css` | Main visual and responsive system; about 2,846 lines |
 | `src/gameContent.js` | Authored content and validation |
 | `src/systems/` | Run state, dungeon, economy, monsters, markets, raids, Council, pathing, combat, and pure transitions |
 | `src/components/` | Top bar, dungeon, Council, Toolbox, inventory, evolution, glossary, and log presentation |
 | `src/gameRules.js` | Council/Escalation cadence |
 | `src/random.js` | Seeded RNG and cursor |
-| `src/playtestSupport.js` | Build version, saves, backups, exports, diagnostics |
+| `src/persistence/` | Current save schema, compatibility-sensitive fields, pure migrations, and browser storage |
+| `src/hooks/usePersistence.js` | Autosave state plus save/load/import/export/restore/diagnostic commands |
+| `src/playtestSupport.js` | Download/clipboard helpers and local diagnostic bundles |
 | `src/ErrorBoundary.jsx` | Crash recovery |
 | `tests/e2e/playtest-smoke.spec.js` | Responsive opening-flow and tablet tests |
 | `playwright.config.js` | Five browser/device profiles |
@@ -112,7 +116,7 @@ npm.cmd run check:alpha
 
 `npm.cmd run check:alpha` is the release-candidate gate.
 
-It last passed on 2026-08-03 after the Phase 3 regression expansion: lint, 48 unit tests across 10 files, production build, and 12 applicable Playwright tests passed with 8 profile-specific skips. In a managed Codex filesystem sandbox, Vitest/esbuild may require an approved rerun if it reports `Cannot read directory "../..": Access is denied`.
+It last passed on 2026-08-03 after the Phase 4 persistence extraction: lint, 59 unit tests across 13 files, production build, and 13 applicable Playwright tests passed with 12 profile-specific skips. In a managed Codex filesystem sandbox, Vitest/esbuild may require an approved rerun if it reports `Cannot read directory "../..": Access is denied`.
 
 ### Verified subsystem boundary baseline
 
@@ -121,7 +125,7 @@ Verified on 2026-07-29:
 - `src/systems/` contains 16 production modules with an acyclic internal import graph.
 - Production subsystem modules contain no React, DOM, clipboard, download, or browser-storage APIs.
 - `src/components/` contains 12 presentational component modules.
-- `App.jsx` remains the authoritative React state and browser-effect coordinator.
+- `App.jsx` remains the authoritative React state coordinator; `usePersistence` owns browser save effects and commands.
 - Domain changes continue to enter through pure state-in/state-out subsystem transitions.
 
 GitHub Pages deploys from `main` with base `/Dungeonlord/`. The workflow pins Node 24, installs with `npm ci`, runs the full `check:alpha` gate, and creates the Pages artifact only after lint, unit tests, the production build, and Playwright pass. The deploy job depends on that verified artifact.
@@ -155,7 +159,7 @@ Open items:
 1. **Room-cap discrepancy:** code yields 22 Level 10 rooms before permanent bonuses; earlier design target was 35.
 2. **Physical tablet verification:** re-test internal scrolling on the actual Samsung playtest tablet after the latest CSS/E2E change.
 3. **Focused-module depth:** combat and Toolbox are now isolated, but remain the largest modules. Lifecycle coverage exists; individual combat hooks and complex UI interactions still need targeted regressions when changed.
-4. **Test depth:** Council, Nihaza, save hydration, raid/Core lifecycle, monster management, artifacts, and doctrines now have regression coverage, but the suite does not exhaust every combat hook or save migration.
+4. **Test depth:** schema, migration, storage, Council, Nihaza, raid/Core lifecycle, monster management, artifacts, and doctrines now have regression coverage, but the suite does not exhaust every combat-hook combination or future migration.
 5. **Browser-local durability:** current and backup saves can both be lost if site storage is cleared.
 6. **Chromium-first alpha:** other browser engines are not release gates.
 7. **Tracked empty file:** root `Selected` file appears unused.

@@ -1,6 +1,6 @@
 # Dungeonlord Design and Engineering Decisions
 
-Last updated: 2026-07-28
+Last updated: 2026-08-03
 Status vocabulary: **Active**, **Proposed**, **Deferred**, **Superseded**
 
 ## Active Decisions
@@ -120,6 +120,8 @@ There is no analytics or automatic upload. Current save, backup, exports, and di
 
 New persisted fields receive defaults during normalization. Old runs should not be rejected simply because new metadata is absent.
 
+The compatibility boundary is explicit: `saveSchema.js` declares the current version and sensitive fields, pure transformations live in `saveMigrations.js`, and `runState.js` remains the final defensive normalizer.
+
 ### D-019 — First-run guidance is contextual, not a tutorial mode
 
 **Status:** Active
@@ -142,7 +144,7 @@ Reproducible Blocker and Major defects take precedence over new monsters, rooms,
 
 **Status:** Active
 
-`App.jsx` owns the authoritative React state and browser-facing effects. Gameplay rules, deterministic state transitions, save hydration, combat, pathing, and Council/market behavior live in focused modules under `src/systems/`. Presentational panels live under `src/components/`.
+`App.jsx` owns the authoritative React state. Gameplay rules, deterministic state transitions, final save hydration, combat, pathing, and Council/market behavior live in focused modules under `src/systems/`. Presentational panels live under `src/components/`; browser save effects and commands live under `src/hooks/` and `src/persistence/`.
 
 Subsystem actions receive state and return state. They do not call React setters, the DOM, downloads, clipboard APIs, or browser storage. Imports must remain acyclic, and save fields retain soft-migration defaults.
 

@@ -86,18 +86,18 @@ No analytics or reports are uploaded automatically. Tester quality depends on co
 
 ### R-001 — Subsystem boundary regression
 
-`src/App.jsx` has been reduced to approximately 1,175 lines and now coordinates focused modules under `src/systems/` and `src/components/`. The original monolith risk is substantially mitigated, but cross-system gameplay still shares one authoritative run-state object.
+`src/App.jsx` has been reduced to approximately 1,089 lines and now coordinates focused modules under `src/systems/`, `src/components/`, and `src/hooks/`. The original monolith risk is substantially mitigated, but cross-system gameplay still shares one authoritative run-state object.
 
 Mitigation:
 
 - keep state transitions pure and state-in/state-out
 - prevent circular subsystem imports
-- keep browser effects in the coordinator/support adapter
+- keep browser effects in the persistence/support adapters
 - run the full alpha gate after changes that cross domain boundaries
 
 ### R-002 — Unit tests do not exhaust full combat resolution
 
-The current 48 unit tests cover content, cadence, RNG, save support, defensive run hydration, raid/Core lifecycle, Council and Nihaza outcomes, monster staffing and fusion, artifact/doctrine progression, representative subsystem transitions, and an opening raid through combat. Browser smoke tests cover the opening flow and responsive access, but the suite does not exercise every status, passive, room, artifact, doctrine, Council quest definition, or migration path in combination.
+The current 59 unit tests cover content, cadence, RNG, save schema/migrations/storage, defensive run hydration, raid/Core lifecycle, Council and Nihaza outcomes, monster staffing and fusion, artifact/doctrine progression, representative subsystem transitions, and an opening raid through combat. Browser smoke tests cover the opening flow, responsive access, and legacy import/backup restore, but the suite does not exercise every status, passive, room, artifact, doctrine, Council quest definition, or migration path in combination.
 
 Mitigation:
 
@@ -115,15 +115,16 @@ Mitigation:
 - prefer one responsibility per breakpoint
 - verify on the physical tablet
 
-### R-004 — Save schema remains implicit
+### R-004 — Save compatibility boundary can regress
 
-The save is the large runtime state object rather than a separately versioned schema definition. Normalization is defensive and isolated in `src/systems/runState.js`, but the schema remains implicit.
+The game still persists the large runtime state object, so field changes remain compatibility-sensitive. The current version, minimum shape, legacy transformations, and browser-storage keys are now explicit under `src/persistence/`, with final defensive normalization isolated in `src/systems/runState.js`.
 
 Mitigation:
 
 - preserve safe defaults
 - extend migration coverage whenever persisted state fields change
-- extract save normalization before a large state change
+- preserve both existing browser-storage keys
+- keep migration transforms pure and storage access outside domain systems
 
 ## Recently Stabilized Regressions
 

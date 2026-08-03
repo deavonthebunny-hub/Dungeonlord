@@ -1,8 +1,8 @@
 import { STANDARD_ARTIFACTS, UTILITY_ROOMS, validateGameContent } from "./gameContent";
 import { isEscalationDay } from "./gameRules";
-import { BACKUP_SAVE_KEY, SAVE_KEY, buildDiagnosticBundle, copyText, downloadTextFile, isValidSaveText, serializeSave, writeSaveWithBackup } from "./playtestSupport";
 import { createRunSeed, getRunRandomState, setRunRandomState } from "./random";
 import { useEffect, useMemo, useState } from "react";
+import { loadInitialRunState, usePersistence } from "./hooks/usePersistence";
 import { COUNCIL_CHAMBER_ART, COUNCIL_MEMBERS, COUNCIL_MEMBER_CRESTS, createEmptyCouncilQuestCounters, getCouncilFavorInfo } from "./systems/council";
 import { MONSTER_ROOM_MAP, TRAP_MAP, UTILITY_MAP, ashBreachRequirementText, canPlaceAshBreaches, createEmptyAshTrial, findEntranceAndCore, getActiveEntrances, huntTrapFlatDamageBonus, isAshBreachAt, keyOf, radarNoise, resetLayoutKeepStructure, roomLinkInfoAt, trapChargesForTile, trapCooldownAfterTrigger, utilityTier } from "./systems/dungeon";
 import { artifactCopyCap, calcArtifactMods, countOwnedArtifacts, getCoreMaxHp, getDoctrineEffects, getDungeonRoomCap, hydrateArtifactDefinition } from "./systems/economy";
@@ -12,7 +12,7 @@ import { aStarPath, chooseInvaderMove, countRooms, validateDungeon } from "./sys
 import { MONSTER_ROOM_ICONS, TILE_RADAR_MAX_DOTS, TILE_RADAR_SLOTS, TRAP_GLYPHS, TRAP_ICONS, UTILITY_GLYPHS, UTILITY_ICONS } from "./systems/presentation";
 import { EXPEDITION_ORDER_CRESTS, HERO_LEADER_TRAIT_MAP, HERO_ORDER_MAP, buildDailyInvasionChoices, getRaidDirectiveRule, partyArchetypeSummary, raidDifficultyConfig, raidDirectiveArchetypeSummary, raidTypeMeta, resolveRaidDirectiveKey, topArchetypesFromWeights } from "./systems/raids";
 import { MAX_DUNGEON_LEVEL, MAX_EVOLUTION_STAGE, addLog, clampDungeonLevel, clampMonsterStar, formatStars, rollDailyEvent, safeEntityMaxHp } from "./systems/shared";
-import { createDefaultState, loadRunState } from "./systems/runState";
+import { createDefaultState } from "./systems/runState";
 import { resolveCombatTurn } from "./systems/combat";
 import { setSelectedTransition, clearTileTransition, _placeEntranceTransition, _placeCoreTransition, buildTrapRoomTransition, buildMonsterRoomTransition, buildUtilityRoomTransition, armTrapTransition, startMoveTransition, cancelMoveTransition, upgradeDungeonTransition, upgradeDoctrineTransition, upgradeRoomTransition, roomUpgradeCost } from "./systems/dungeonActions";
 import { recruitMonsterTransition, startEvolutionTransition, chooseEvolutionTransition, cancelEvolutionTransition, placeInventoryMonsterInSelectedRoomTransition, returnMonsterFromSelectedRoomTransition, returnAllMonstersFromSelectedRoomTransition } from "./systems/monsterActions";
@@ -23,14 +23,6 @@ import GameView from "./components/GameView";
 import "./App.css";
 
 export default function App() {
-  function loadBrowserState(rawOverride = null) {
-    try {
-      const raw = rawOverride || localStorage.getItem(SAVE_KEY);
-      return loadRunState(raw);
-    } catch {
-      return null;
-    }
-  }
   const [activeTab, setActiveTab] = useState("dungeon"); // "dungeon" | "toolbox" | "log"
   const [sidePanel, setSidePanel] = useState("log"); // "log" | "inventory" | "evolution" | "glossary" | "council"
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -42,11 +34,9 @@ export default function App() {
   const [selectedInventoryMonsterIndex, setSelectedInventoryMonsterIndex] = useState("");
   const [brokenTileArt, setBrokenTileArt] = useState({});
   const [brokenCouncilArt, setBrokenCouncilArt] = useState({});
-  const [saveStatus, setSaveStatus] = useState("Saved");
-  const [lastSavedAt, setLastSavedAt] = useState(null);
   const [advancedToolboxOpen, setAdvancedToolboxOpen] = useState(false);
 
-  const [state, setState] = useState(() => loadBrowserState() || createDefaultState());
+  const [state, setState] = useState(() => loadInitialRunState() || createDefaultState());
 
   function noteBrokenTileArt(src) {
     if (!src) return;
@@ -57,17 +47,6 @@ export default function App() {
     if (!src) return;
     setBrokenCouncilArt((prev) => (prev[src] ? prev : { ...prev, [src]: true }));
   }
-
-  useEffect(() => {
-    try {
-      setSaveStatus("Saving");
-      writeSaveWithBackup(state);
-      setSaveStatus("Saved");
-      setLastSavedAt(new Date());
-    } catch {
-      setSaveStatus("Save Failed");
-    }
-  }, [state]);
 
   useEffect(() => {
     if (state.day > 1) setAdvancedToolboxOpen(true);
@@ -116,6 +95,16 @@ export default function App() {
   const { entrance, core } = useMemo(() => findEntranceAndCore(state.grid), [state.grid]);
   const activeEntrances = useMemo(() => getActiveEntrances(state.grid, state.ashTrial), [state.grid, state.ashTrial]);
   const validation = useMemo(() => validateDungeon(state.grid, state.ashTrial), [state.grid, state.ashTrial]);
+  const {
+    saveStatus,
+    lastSavedAt,
+    loadRun,
+    saveRun,
+    exportRun,
+    importRun,
+    restoreBackup,
+    copyDiagnosticsBundle,
+  } = usePersistence({ state, setState, validation });
   const roomsPlaced = useMemo(() => countRooms(state.grid), [state.grid]);
   const doctrineEffects = useMemo(() => getDoctrineEffects(state.doctrines || {}), [state.doctrines]);
   const artifactMods = useMemo(() => calcArtifactMods(state.artifacts, state.day), [state.artifacts, state.day]);
@@ -417,81 +406,6 @@ export default function App() {
       ...createDefaultState(),
       log: ["Day 1 begins. Choose your first invasion."],
     }));
-  }
-
-  function loadRun() {
-    const loaded = loadBrowserState();
-    if (!loaded) {
-      setState((s) => addLog(s, "No saved run found."));
-      return;
-    }
-    setState(() => loaded);
-  }
-
-  function saveRun() {
-    try {
-      writeSaveWithBackup(state);
-      setSaveStatus("Saved");
-      setLastSavedAt(new Date());
-      setState((s) => addLog(s, "Run saved."));
-    } catch {
-      setSaveStatus("Save Failed");
-      setState((s) => addLog(s, "Save failed."));
-    }
-  }
-
-  function exportRun() {
-    try {
-      const safeSeed = String(state.runSeed || "run").replace(/[^a-zA-Z0-9-]/g, "-");
-      downloadTextFile(`dungeonlord-${safeSeed}-day-${state.day}.json`, serializeSave(state));
-      setState((s) => addLog(s, "Run exported."));
-    } catch {
-      setState((s) => addLog(s, "Run export failed."));
-    }
-  }
-
-  async function importRun(event) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    try {
-      const raw = await file.text();
-      if (!isValidSaveText(raw)) throw new Error("Invalid save file");
-      const loaded = loadBrowserState(raw);
-      if (!loaded) throw new Error("Save migration failed");
-      const previousRaw = localStorage.getItem(SAVE_KEY);
-      if (previousRaw && isValidSaveText(previousRaw)) localStorage.setItem(BACKUP_SAVE_KEY, previousRaw);
-      localStorage.setItem(SAVE_KEY, raw);
-      setState(() => addLog(loaded, `Run imported from ${file.name}.`));
-      setSaveStatus("Saved");
-    } catch {
-      setState((s) => addLog(s, "Import failed. Choose a Dungeonlord JSON save file."));
-    }
-  }
-
-  function restoreBackup() {
-    const raw = localStorage.getItem(BACKUP_SAVE_KEY);
-    if (!raw || !isValidSaveText(raw)) {
-      setState((s) => addLog(s, "No valid backup save found."));
-      return;
-    }
-    if (!window.confirm("Restore the automatic backup? The current run will be replaced, but exported files are unaffected.")) return;
-    const loaded = loadBrowserState(raw);
-    if (!loaded) {
-      setState((s) => addLog(s, "Backup could not be loaded."));
-      return;
-    }
-    localStorage.setItem(SAVE_KEY, raw);
-    setState(() => addLog(loaded, "Automatic backup restored."));
-  }
-
-  async function copyDiagnosticsBundle(includeSave = false) {
-    try {
-      await copyText(buildDiagnosticBundle(state, validation, { includeSave }));
-      setState((s) => addLog(s, includeSave ? "Diagnostics and save copied." : "Diagnostics copied."));
-    } catch {
-      setState((s) => addLog(s, "Could not copy diagnostics."));
-    }
   }
 
   function attendCouncil() {

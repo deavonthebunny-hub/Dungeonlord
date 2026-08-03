@@ -1,5 +1,7 @@
 import React from "react";
-import { BACKUP_SAVE_KEY, BUILD_VERSION, SAVE_KEY, copyText } from "./playtestSupport";
+import { hasBackupSave, readCurrentSave } from "./persistence/browserStorage";
+import { BUILD_VERSION } from "./persistence/saveSchema";
+import { copyText } from "./playtestSupport";
 
 export default class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -19,8 +21,8 @@ export default class ErrorBoundary extends React.Component {
     let currentSave = null;
     let backupAvailable = false;
     try {
-      currentSave = localStorage.getItem(SAVE_KEY);
-      backupAvailable = !!localStorage.getItem(BACKUP_SAVE_KEY);
+      currentSave = readCurrentSave();
+      backupAvailable = hasBackupSave();
     } catch {
       currentSave = "Browser storage could not be read.";
     }

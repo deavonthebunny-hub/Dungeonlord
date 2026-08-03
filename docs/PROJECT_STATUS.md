@@ -109,8 +109,10 @@ Always re-run `git status --short` before changing code. Do not assume this snap
 - domain rules split into acyclic modules under `src/systems/`
 - state-in/state-out transitions for dungeon, monster, market, raid, Council, and combat actions
 - save creation and hydration isolated from browser storage
+- explicit versioned save schema and pure legacy migration stage
+- browser storage isolated from React persistence commands
 - major JSX surfaces split into focused presentational components
-- `App.jsx` reduced from approximately 10,277 to 1,175 lines
+- `App.jsx` reduced from approximately 10,277 to 1,089 lines
 - GitHub Pages deployment gated by locked installation, lint, unit tests, production build, and Playwright
 
 ### First-run support
@@ -140,6 +142,7 @@ Current unit suite:
 - ordinary/Escalation/Council cadence
 - deterministic RNG replay and cursor persistence
 - save snapshot/version metadata and import validation
+- explicit schema fields, unversioned-save migrations, current-save round trips, backup rotation, and backup restoration
 - deterministic run creation, legacy defaults, malformed optional data, active-raid hydration, and attended-Council hydration
 - trap reset, linked effects, raid completion, Core destruction, and clean-run reset
 - Council attend/decline/conclusion, punitive raids, ordinary quest completion/expiry, and Nihaza placement/success/failure
@@ -154,6 +157,7 @@ Current browser suite:
 - short-landscape tablet scrolling
 - invasion selection in the tablet Toolbox
 - portable save export
+- unversioned legacy import, prior-run backup preservation, restore, and reload persistence
 
 Profiles:
 
@@ -168,11 +172,11 @@ Profiles:
 Verified on 2026-08-03 with `npm.cmd run check:alpha`:
 
 - ESLint passed
-- 10 Vitest files passed
-- 48 unit tests passed
+- 13 Vitest files passed
+- 59 unit tests passed
 - production build passed
-- Playwright: 12 applicable tests passed
-- Playwright: 8 project-specific tests skipped as designed
+- Playwright: 13 applicable tests passed
+- Playwright: 12 project-specific tests skipped as designed
 
 The first sandboxed Codex attempt could not let Vitest/esbuild read the config path; rerunning the same command with the required filesystem permission passed. This was an execution-sandbox limitation, not a repository test failure.
 

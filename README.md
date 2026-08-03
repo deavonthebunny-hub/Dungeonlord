@@ -56,17 +56,19 @@ The smoke suite covers desktop, tablet landscape, tablet portrait, and phone lay
 - `Copy Diagnostics` includes the build, seed, day, phase, raid metadata, validation state, and recent logs.
 - `Copy With Save` includes the full state for exact reproduction.
 
-Old saves are normalized by `src/systems/runState.js`. New persisted fields must always have safe defaults so existing runs remain loadable.
+Old saves pass through `src/persistence/saveMigrations.js` and are then defensively normalized by `src/systems/runState.js`. New persisted fields must always have safe defaults so existing runs remain loadable.
 
 ## Project Structure
 
 - `src/App.jsx` - central React state owner and subsystem/UI coordinator
+- `src/hooks/usePersistence.js` - React autosave status and save/load/import/export/restore commands
+- `src/persistence/` - explicit save schema, pure migrations, and browser-storage adapter
 - `src/systems/` - dungeon, monster, economy, market, raid, Council, pathing, combat, and save-state logic
 - `src/components/` - dungeon, Council, Toolbox, inventory, progression, glossary, and log presentation
 - `src/gameContent.js` - authored monsters, rooms, artifacts, raids, statuses, and sponsor content
 - `src/random.js` - deterministic seeded run randomness
 - `src/gameRules.js` - extracted cadence rules
-- `src/playtestSupport.js` - saves, backups, exports, and diagnostic bundles
+- `src/playtestSupport.js` - download/clipboard support and local diagnostic bundles
 - `docs/Dungeonlord_Guidebook.html` - editable guidebook source
 - `docs/Dungeonlord_Guidebook.pdf` - rendered player guide
 - `docs/PRIVATE_ALPHA_RELEASE_NOTES.md` - current alpha changes and test focus

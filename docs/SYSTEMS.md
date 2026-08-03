@@ -7,12 +7,14 @@ This document describes systems present in the current checkout. Proposed featur
 
 ## Runtime Organization
 
-- `App.jsx` owns the authoritative React state and browser-facing effects.
+- `App.jsx` owns the authoritative React state and coordinates the game view.
+- `src/hooks/usePersistence.js` owns browser save effects, status, and player-facing persistence commands.
+- `src/persistence/` owns the current schema, legacy migrations, and browser-storage access.
 - `src/systems/` owns run hydration, dungeon, economy, monster, market, raid, Council, pathing, combat, and state-transition logic.
 - `src/components/` owns the major presentational panels.
 - Subsystem actions accept state and return state without calling React setters.
 - Gameplay randomness continues through the seeded run RNG.
-- The current unit suite contains 48 tests across 10 files, including focused lifecycle coverage for saves, raids/Core, Council/Nihaza, monster management/fusion, artifacts, and doctrines.
+- The current unit suite contains 59 tests across 13 files, including focused coverage for save schema/migrations/storage, raids/Core, Council/Nihaza, monster management/fusion, artifacts, and doctrines.
 
 ## Content Inventory
 
@@ -440,6 +442,10 @@ Failure:
 
 ## Save, Backup, Import, and Diagnostics
 
+- Explicit current save version and compatibility-sensitive field list
+- Pure legacy currency/trap-field migrations before final `runState` normalization
+- Browser storage isolated from domain systems and React coordination
+- Autosave status and save/load/import/export/restore commands isolated in `usePersistence`
 - Automatic browser-local current save
 - One automatic browser-local backup
 - Visible save status
@@ -447,6 +453,7 @@ Failure:
 - Export Save
 - Import Save
 - Restore Backup with confirmation
+- Imported/restored runs preserve the prior backup through their first normalized autosave
 - Reset Run confirmation
 - New Run confirmation
 - build version, seed, and RNG cursor in save

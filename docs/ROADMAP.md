@@ -118,6 +118,15 @@ Phase 3 regression expansion completed on 2026-08-03 for:
 
 The resulting baseline is 48 passing unit tests across 10 files. Continue adding focused tests for individual combat hooks, save migrations, and confirmed alpha defects rather than treating this pass as exhaustive coverage.
 
+Phase 4 persistence extraction completed on 2026-08-03:
+
+- current save version and compatibility-sensitive fields are explicit
+- legacy transformations are pure and precede defensive run-state normalization
+- all browser-storage access is isolated in `src/persistence/browserStorage.js`
+- `usePersistence` owns autosave status and save/load/import/export/restore/diagnostic commands
+- import and restore preserve the prior backup through the first normalized autosave
+- persistence coverage raises the baseline to 59 unit tests across 13 files, plus a browser import/restore contract
+
 ## Milestone 5 — Late-Run Identity
 
 **Status:** Candidate; validate after alpha

@@ -1,42 +1,21 @@
 import { getRunRandomState } from "./random";
+import { BUILD_VERSION, buildSaveSnapshot } from "./persistence/saveSchema";
 
-export const BUILD_VERSION = "0.1.0-alpha.2";
-export const SAVE_KEY = "dungeonlord.save.v1";
-export const BACKUP_SAVE_KEY = "dungeonlord.save.backup.v1";
-
-export function buildSaveSnapshot(state) {
-  const rng = getRunRandomState();
-  return {
-    ...state,
-    runSeed: state?.runSeed || rng.seed,
-    rngCursor: rng.cursor,
-    saveVersion: BUILD_VERSION,
-  };
-}
-
-export function serializeSave(state) {
-  return JSON.stringify(buildSaveSnapshot(state), null, 2);
-}
-
-export function isValidSaveText(raw) {
-  if (!raw || typeof raw !== "string") return false;
-  try {
-    const parsed = JSON.parse(raw);
-    return !!parsed && typeof parsed === "object" && Array.isArray(parsed.grid);
-  } catch {
-    return false;
-  }
-}
-
-export function writeSaveWithBackup(state) {
-  const nextRaw = serializeSave(state);
-  const previousRaw = localStorage.getItem(SAVE_KEY);
-  if (previousRaw && previousRaw !== nextRaw && isValidSaveText(previousRaw)) {
-    localStorage.setItem(BACKUP_SAVE_KEY, previousRaw);
-  }
-  localStorage.setItem(SAVE_KEY, nextRaw);
-  return nextRaw;
-}
+export {
+  BUILD_VERSION,
+  CURRENT_SAVE_VERSION,
+  COMPATIBILITY_SENSITIVE_SAVE_FIELDS,
+  buildSaveSnapshot,
+  hasMinimumSaveShape,
+  isValidSaveText,
+  parseSaveText,
+  serializeSave,
+} from "./persistence/saveSchema";
+export {
+  BACKUP_SAVE_KEY,
+  SAVE_KEY,
+  writeSaveWithBackup,
+} from "./persistence/browserStorage";
 
 export function downloadTextFile(filename, contents, type = "application/json") {
   const blob = new Blob([contents], { type });

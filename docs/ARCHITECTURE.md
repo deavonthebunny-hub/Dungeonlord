@@ -22,18 +22,21 @@ Dungeonlord is a browser-only static application. It has no backend, database, r
 src/main.jsx
   -> ErrorBoundary
     -> App
-      -> state creation and hydration from systems/runState.js
+      -> authoritative React run state
+      -> autosave and persistence commands from hooks/usePersistence.js
+        -> schema and pure migrations from persistence/
+        -> final defensive hydration from systems/runState.js
       -> domain rules and transitions from systems/
       -> presentational panels from components/
       -> authored data from gameContent.js
       -> seeded RNG from random.js
-      -> browser save/diagnostic support from playtestSupport.js
+      -> local download/clipboard/diagnostic support from playtestSupport.js
       -> presentation rules from App.css and static art from public/assets
 ```
 
 The application now uses explicit subsystem and presentation boundaries:
 
-- `src/App.jsx`: approximately 1,175 lines
+- `src/App.jsx`: approximately 1,089 lines
 - `src/App.css`: approximately 2,846 lines
 - `src/gameContent.js`: approximately 1,838 lines
 - `src/systems/combat.js`: approximately 1,290 lines
@@ -49,7 +52,13 @@ The application now uses explicit subsystem and presentation boundaries:
   React entry point and application error-boundary mounting.
 
 - [`../src/App.jsx`](../src/App.jsx)
-  Main game coordinator. Owns React state, browser-facing effects, derived view data, and thin subsystem dispatch handlers.
+  Main game coordinator. Owns React state, derived view data, and thin subsystem dispatch handlers while delegating persistence effects.
+
+- [`../src/hooks/usePersistence.js`](../src/hooks/usePersistence.js)
+  React adapter for autosave status plus save, load, import, export, restore, and diagnostic commands.
+
+- `../src/persistence/`
+  Explicit save schema/version, pure compatibility migrations, and the only browser-storage adapter.
 
 - `../src/systems/`
   Pure or deterministic domain helpers and state transitions for run hydration, dungeon actions, monsters, economy, markets, raids, Council, pathing, combat, and presentation selectors.
@@ -78,7 +87,7 @@ The application now uses explicit subsystem and presentation boundaries:
   Deterministic seeded random stream with a persisted cursor.
 
 - [`../src/playtestSupport.js`](../src/playtestSupport.js)
-  Build version, save keys, save snapshots, backup writes, export helpers, clipboard fallback, and diagnostics.
+  Local download helper, clipboard fallback, diagnostics, and compatibility re-exports for existing callers.
 
 ### Tests
 
@@ -86,6 +95,7 @@ The application now uses explicit subsystem and presentation boundaries:
 - [`../src/gameRules.test.js`](../src/gameRules.test.js)
 - [`../src/random.test.js`](../src/random.test.js)
 - [`../src/playtestSupport.test.js`](../src/playtestSupport.test.js)
+- `../src/persistence/*.test.js`
 - [`../tests/e2e/playtest-smoke.spec.js`](../tests/e2e/playtest-smoke.spec.js)
 - [`../vitest.config.js`](../vitest.config.js)
 - [`../playwright.config.js`](../playwright.config.js)
@@ -166,13 +176,16 @@ Current keys:
 
 Save behavior:
 
-1. `buildSaveSnapshot()` adds build version, seed, and RNG cursor.
-2. Autosave/manual save serializes the complete state.
-3. The previous valid save becomes the automatic backup before the current slot is replaced.
-4. Load runs through the defensive normalization path in `systems/runState.js`.
-5. Missing fields receive safe defaults, allowing older saves to migrate softly.
+1. `saveSchema.js` declares the current save version, minimum accepted shape, and compatibility-sensitive fields.
+2. `buildSaveSnapshot()` adds the current version, seed, and RNG cursor before serializing the complete state.
+3. Pure transforms in `saveMigrations.js` upgrade known legacy aliases without mutating the parsed source.
+4. Migrated data runs through the final defensive normalization path in `systems/runState.js`.
+5. `browserStorage.js` owns all `localStorage` reads/writes and preserves both existing keys.
+6. The previous valid current save becomes the automatic backup before the current slot is replaced.
+7. `usePersistence.js` owns autosave status and the UI save/load/import/export/restore/diagnostic commands.
+8. The first normalized autosave after import or restore does not overwrite the preserved backup.
 
-Exported saves are JSON files. Imports are validated for an object containing a grid before normalization.
+Exported saves are JSON files. Imports are validated for an object containing a grid before migration and normalization.
 
 Important rule: any new persisted field must have a safe load default. Do not make old saves depend on the new field already existing.
 
@@ -278,20 +291,21 @@ npm.cmd run check:alpha
 1. `shared`, `economy`, `dungeon`, and `monsters` provide foundational calculations.
 2. `markets`, `raids`, `council`, and `pathing` compose those foundations without importing React.
 3. `*Actions` modules expose state-in/state-out transitions.
-4. `runState` owns initial-state creation and defensive save hydration.
-5. `combat` owns full raid-turn resolution.
-6. `App` owns the authoritative state and browser effects.
-7. `components` render props and invoke callbacks without changing game rules.
+4. `runState` owns initial-state creation and final defensive save hydration.
+5. `persistence` owns schema, pure migrations, and browser-storage access; `usePersistence` connects that boundary to React.
+6. `combat` owns full raid-turn resolution.
+7. `App` owns the authoritative state and composition.
+8. `components` render props and invoke callbacks without changing game rules.
 
 ## Verified Boundary Baseline
 
-Verified on 2026-07-29:
+Production boundaries verified on 2026-07-29; persistence and test baselines refreshed on 2026-08-03:
 
 - 16 production modules under `src/systems/`
 - no circular imports in the production subsystem graph
 - no React, DOM, clipboard, download, or browser-storage APIs in production subsystem modules
 - 12 presentational modules under `src/components/`
-- 10 Vitest files with 48 passing unit tests; the Phase 3 additions cover save hydration, raid/Core lifecycle, Council/Nihaza, monster management/fusion, artifacts, and doctrines
-- 12 applicable Playwright tests passing, with 8 profile-specific skips
+- 13 Vitest files with 59 passing unit tests; save schema/migrations/storage, run hydration, raid/Core lifecycle, Council/Nihaza, monster management/fusion, artifacts, and doctrines have focused coverage
+- 13 applicable Playwright tests passing, with 12 profile-specific skips
 
 Keep `gameContent.js` as the authored data layer. Further refinement should split a focused module only when its internal responsibilities become independently testable; do not recreate a generic catch-all utilities file.
