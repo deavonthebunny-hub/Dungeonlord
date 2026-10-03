@@ -87,13 +87,15 @@ export default function ToolboxPanel(props) {
     selectedTile,
     selectedTileAuras,
     selectInvasionChoice,
+    selectMonsterRoomType,
+    selectTrapType,
+    selectUtilityRoomType,
     setActiveTab,
     setAdvancedToolboxOpen,
     setFuseA,
     setFuseB,
     setSacrificeIdx,
     setSelectedInventoryMonsterIndex,
-    setState,
     showInvasionChoiceCards,
     standardArtifactAtCapCount,
     standardArtifactCollectedCount,
@@ -609,7 +611,7 @@ export default function ToolboxPanel(props) {
                           <select
                             className="select"
                             value={state.selectedTrapType}
-                            onChange={(e) => setState((s) => ({ ...s, selectedTrapType: e.target.value }))}
+                            onChange={(e) => selectTrapType(e.target.value)}
                             disabled={locked || state.movePayload || !isBuildPhase}
                           >
                             {TRAP_TYPES.map((trap) => (
@@ -637,7 +639,7 @@ export default function ToolboxPanel(props) {
                           <select
                             className="select"
                             value={state.selectedMonsterRoomType}
-                            onChange={(e) => setState((s) => ({ ...s, selectedMonsterRoomType: e.target.value }))}
+                            onChange={(e) => selectMonsterRoomType(e.target.value)}
                             disabled={locked || state.movePayload || !isBuildPhase}
                           >
                             {MONSTER_ROOMS.map((room) => (
@@ -666,7 +668,7 @@ export default function ToolboxPanel(props) {
                           <select
                             className="select"
                             value={state.selectedUtilityRoomType}
-                            onChange={(e) => setState((s) => ({ ...s, selectedUtilityRoomType: e.target.value }))}
+                            onChange={(e) => selectUtilityRoomType(e.target.value)}
             disabled={locked || state.movePayload || !isBuildPhase}
                           >
                             {UTILITY_ROOMS.map((room) => (

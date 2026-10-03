@@ -8,6 +8,7 @@ import {
   selectInvasionChoiceTransition,
   startRaidTransition,
 } from "./raidActions";
+import { resetRunKeepingLayoutTransition } from "./runActions";
 import { createDefaultState } from "./runState";
 
 describe("subsystem state transitions", () => {
@@ -79,5 +80,59 @@ describe("subsystem state transitions", () => {
     expect(attended.council.active).toBe(false);
     expect(attended.councilSession.status).toBe("attended");
     expect(attended.invasionChoices).toEqual([]);
+  });
+
+  it("resets run progress while preserving the dungeon layout", () => {
+    let state = createDefaultState({ runSeed: "DL-RESET-ACTION", rngCursor: 0 });
+    state = buildTrapRoomTransition(setSelectedTransition(state, 3, 0));
+    const progressed = {
+      ...state,
+      day: 9,
+      phase: "battle",
+      raidActive: true,
+      heroes: [{ id: 99, hp: 1 }],
+      doctrines: { trap: 2, monster: 1, utility: 3, core: 4 },
+      currency: {
+        ...state.currency,
+        soulshards: 999,
+        essence: 888,
+        evolution: 7,
+        dominion: 6,
+        darkcrystals: 5,
+      },
+      councilSession: { day: 9, status: "attended" },
+      onboardingDismissed: true,
+    };
+    const layout = progressed.grid.map((row) =>
+      row.map(({ entrance, core, room, roomType }) => ({ entrance, core, room, roomType }))
+    );
+
+    const reset = resetRunKeepingLayoutTransition(progressed);
+
+    expect(progressed.day).toBe(9);
+    expect(reset.grid.map((row) =>
+      row.map(({ entrance, core, room, roomType }) => ({ entrance, core, room, roomType }))
+    )).toEqual(layout);
+    expect(reset.grid.flat().every((tile) => tile.monsters.length === 0)).toBe(true);
+    expect(reset).toMatchObject({
+      day: 1,
+      phase: "build",
+      raidActive: false,
+      heroes: [],
+      doctrines: { trap: 0, monster: 0, utility: 0, core: 0 },
+      currency: {
+        soulshards: 30,
+        essence: 10,
+        evolution: 0,
+        dominion: 0,
+        darkcrystals: 0,
+      },
+      councilSession: null,
+      onboardingDismissed: false,
+    });
+    expect(reset.invMonsters).toHaveLength(2);
+    expect(reset.invasionChoices.length).toBeGreaterThan(0);
+    expect(reset.runSeed).not.toBe(progressed.runSeed);
+    expect(reset.log[0]).toBe("Run reset (layout kept). Choose your first invasion.");
   });
 });

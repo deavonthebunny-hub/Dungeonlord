@@ -127,6 +127,16 @@ Phase 4 persistence extraction completed on 2026-08-03:
 - import and restore preserve the prior backup through the first normalized autosave
 - persistence coverage raises the baseline to 59 unit tests across 13 files, plus a browser import/restore contract
 
+Phase 5 application-coordination extraction completed on 2026-08-03:
+
+- `useGameController` groups dungeon, monster, market, raid, Council, combat, and run commands while calling the existing subsystem transitions
+- `useGameViewModel` owns derived validation, tile, raid-forecast, Council, artifact, inventory, onboarding, and shell presentation data
+- `GameView` now receives seven domain contracts: `run`, `dungeon`, `raid`, `council`, `inventory`, `shell`, and `actions`
+- leaf components no longer receive the raw React run-state setter
+- the layout-preserving run reset is a pure tested transition in `src/systems/runActions.js`
+- `App.jsx` is now a 192-line authoritative state owner and composition root
+- the verified baseline is 60 unit tests across 13 files plus 13 applicable Playwright tests
+
 ## Milestone 5 — Late-Run Identity
 
 **Status:** Candidate; validate after alpha

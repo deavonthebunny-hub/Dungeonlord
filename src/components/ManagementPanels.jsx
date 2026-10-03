@@ -106,6 +106,9 @@ export default function ManagementPanels(props) {
     selectedTile,
     selectedTileAuras,
     selectInvasionChoice,
+    selectMonsterRoomType,
+    selectTrapType,
+    selectUtilityRoomType,
     setActiveTab,
     setAdvancedToolboxOpen,
     setFocusedCouncilKey,
@@ -113,7 +116,6 @@ export default function ManagementPanels(props) {
     setFuseB,
     setSacrificeIdx,
     setSelectedInventoryMonsterIndex,
-    setState,
     showInvasionChoiceCards,
     standardArtifactAtCapCount,
     standardArtifactCollectedCount,
@@ -128,7 +130,7 @@ export default function ManagementPanels(props) {
 
   return (
     <div className="shellSidePanel">
-                <ToolboxPanel {...{ activateDominionPower, activeEntrances, addMonsterToRoom, advancedToolboxOpen, armTrap, artifactMods, attendCouncil, buildMonsterRoom, buildTrapRoom, buildUtilityRoom, buyArtifact, buyFromFleshMarket, buyFromTrader, canManageSelectedMonsterRoom, checklist, clearTile, concludeCouncil, copyDiagnosticsBundle, core, councilAwaitingConclusion, councilSessionActive, dealerCatalogExhausted, declineCouncil, drawerPanelTitle, effectiveMonsterRoomCap, evolutionStageLabel, exportRun, fuseA, fuseB, fusionPreview, importRun, invPreview, isBattlePhase, isBuildPhase, loadRun, locked, maxRooms, newRun, ownedArtifactCounts, pendingDirective, pendingEscalationLevel, pendingRaidCrestSrc, pendingRaidDifficulty, pendingRaidLeaderTrait, pendingRaidMeta, pendingRaidOrder, pendingRaidType, projectedTrapDamage, raidForecastMix, recruitMonster, resetRun, restoreBackup, returnAllMonstersFromSelectedRoom, returnMonsterFromSelectedRoom, roomsPlaced, roomTypeDesc, roomTypeIcon, roomTypeName, roomUpgradePrice, sacrificeIdx, sacrificeMonster, saveRun, saveStatus, selectedHeroes, selectedHeroIntent, selectedInventoryMonsterIndex, selectedIsAshBreach, selectedLinkBonus, selectedLinkInfo, selectedMonsterRoomCapValue, selectedMonsterRoomHasSpace, selectedReadiness, selectedTile, selectedTileAuras, selectInvasionChoice, setActiveTab, setAdvancedToolboxOpen, setFuseA, setFuseB, setSacrificeIdx, setSelectedInventoryMonsterIndex, setState, showInvasionChoiceCards, standardArtifactAtCapCount, standardArtifactCollectedCount, state, triggerFusion, upgradeDoctrine, upgradeRoom, usePendingRaidCrest, validation }} />
+                <ToolboxPanel {...{ activateDominionPower, activeEntrances, addMonsterToRoom, advancedToolboxOpen, armTrap, artifactMods, attendCouncil, buildMonsterRoom, buildTrapRoom, buildUtilityRoom, buyArtifact, buyFromFleshMarket, buyFromTrader, canManageSelectedMonsterRoom, checklist, clearTile, concludeCouncil, copyDiagnosticsBundle, core, councilAwaitingConclusion, councilSessionActive, dealerCatalogExhausted, declineCouncil, drawerPanelTitle, effectiveMonsterRoomCap, evolutionStageLabel, exportRun, fuseA, fuseB, fusionPreview, importRun, invPreview, isBattlePhase, isBuildPhase, loadRun, locked, maxRooms, newRun, ownedArtifactCounts, pendingDirective, pendingEscalationLevel, pendingRaidCrestSrc, pendingRaidDifficulty, pendingRaidLeaderTrait, pendingRaidMeta, pendingRaidOrder, pendingRaidType, projectedTrapDamage, raidForecastMix, recruitMonster, resetRun, restoreBackup, returnAllMonstersFromSelectedRoom, returnMonsterFromSelectedRoom, roomsPlaced, roomTypeDesc, roomTypeIcon, roomTypeName, roomUpgradePrice, sacrificeIdx, sacrificeMonster, saveRun, saveStatus, selectedHeroes, selectedHeroIntent, selectedInventoryMonsterIndex, selectedIsAshBreach, selectedLinkBonus, selectedLinkInfo, selectedMonsterRoomCapValue, selectedMonsterRoomHasSpace, selectedReadiness, selectedTile, selectedTileAuras, selectInvasionChoice, selectMonsterRoomType, selectTrapType, selectUtilityRoomType, setActiveTab, setAdvancedToolboxOpen, setFuseA, setFuseB, setSacrificeIdx, setSelectedInventoryMonsterIndex, showInvasionChoiceCards, standardArtifactAtCapCount, standardArtifactCollectedCount, state, triggerFusion, upgradeDoctrine, upgradeRoom, usePendingRaidCrest, validation }} />
 
               <InventoryPanel {...{ cancelEvolution, canManageSelectedMonsterRoom, chooseEvolution, drawerPanelTitle, evolutionButtonLabel, evolutionStageLabel, isBuildPhase, ownedArtifactGroups, placeInventoryMonsterInSelectedRoom, selectedMonsterRoomCapValue, selectedMonsterRoomHasSpace, selectedTile, standardArtifactCollectedCount, startEvolution, state }} />
 

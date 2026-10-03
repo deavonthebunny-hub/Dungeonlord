@@ -60,7 +60,9 @@ Old saves pass through `src/persistence/saveMigrations.js` and are then defensiv
 
 ## Project Structure
 
-- `src/App.jsx` - central React state owner and subsystem/UI coordinator
+- `src/App.jsx` - authoritative React state owner and application composition root
+- `src/hooks/useGameController.js` - grouped gameplay commands that dispatch existing subsystem transitions
+- `src/hooks/useGameViewModel.js` - grouped derived presentation data for the game view
 - `src/hooks/usePersistence.js` - React autosave status and save/load/import/export/restore commands
 - `src/persistence/` - explicit save schema, pure migrations, and browser-storage adapter
 - `src/systems/` - dungeon, monster, economy, market, raid, Council, pathing, combat, and save-state logic
@@ -77,7 +79,7 @@ Old saves pass through `src/persistence/saveMigrations.js` and are then defensiv
 - `docs/BUG_REPORT_TEMPLATE.md` - reusable tester report format
 - `tests/e2e/` - responsive browser smoke tests
 
-Future changes should preserve the subsystem dependency direction, keep React and browser effects out of game-state transitions, and retain current save semantics.
+`GameView` receives seven domain contracts: `run`, `dungeon`, `raid`, `council`, `inventory`, `shell`, and `actions`. Future changes should preserve those application boundaries, the subsystem dependency direction, and current save semantics.
 
 ## Private Alpha Release Checklist
 

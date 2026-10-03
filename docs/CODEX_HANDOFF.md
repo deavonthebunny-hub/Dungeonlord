@@ -17,6 +17,9 @@ The project is in a private-alpha feature freeze. The current goal is tester rea
 - No backend, database, router, TypeScript, state library, or analytics
 - 8x8 grid
 - One authoritative React state object coordinated by `src/App.jsx`
+- Gameplay command dispatch grouped by domain in `src/hooks/useGameController.js`
+- Derived presentation data grouped by domain in `src/hooks/useGameViewModel.js`
+- `GameView` receives seven contracts: `run`, `dungeon`, `raid`, `council`, `inventory`, `shell`, and `actions`
 - Domain rules and state transitions in `src/systems/`
 - Presentational panels in `src/components/`
 - Authored data in `src/gameContent.js`
@@ -59,7 +62,7 @@ System detail: [SYSTEMS.md](SYSTEMS.md)
 
 | Path | Purpose |
 |---|---|
-| `src/App.jsx` | React state owner, derived view data, and subsystem coordination; about 1,089 lines |
+| `src/App.jsx` | Authoritative React state owner and application composition root; about 192 lines |
 | `src/App.css` | Main visual and responsive system; about 2,846 lines |
 | `src/gameContent.js` | Authored content and validation |
 | `src/systems/` | Run state, dungeon, economy, monsters, markets, raids, Council, pathing, combat, and pure transitions |
@@ -67,6 +70,8 @@ System detail: [SYSTEMS.md](SYSTEMS.md)
 | `src/gameRules.js` | Council/Escalation cadence |
 | `src/random.js` | Seeded RNG and cursor |
 | `src/persistence/` | Current save schema, compatibility-sensitive fields, pure migrations, and browser storage |
+| `src/hooks/useGameController.js` | Domain-grouped gameplay command dispatch through existing transitions |
+| `src/hooks/useGameViewModel.js` | Domain-grouped derived presentation data without gameplay-state ownership |
 | `src/hooks/usePersistence.js` | Autosave state plus save/load/import/export/restore/diagnostic commands |
 | `src/playtestSupport.js` | Download/clipboard helpers and local diagnostic bundles |
 | `src/ErrorBoundary.jsx` | Crash recovery |
@@ -116,16 +121,18 @@ npm.cmd run check:alpha
 
 `npm.cmd run check:alpha` is the release-candidate gate.
 
-It last passed on 2026-08-03 after the Phase 4 persistence extraction: lint, 59 unit tests across 13 files, production build, and 13 applicable Playwright tests passed with 12 profile-specific skips. In a managed Codex filesystem sandbox, Vitest/esbuild may require an approved rerun if it reports `Cannot read directory "../..": Access is denied`.
+It last passed on 2026-08-03 after the Phase 5 application-coordination extraction: lint, 60 unit tests across 13 files, production build, and 13 applicable Playwright tests passed with 12 profile-specific skips. In a managed Codex filesystem sandbox, Vitest/esbuild may require an approved rerun if it reports `Cannot read directory "../..": Access is denied`.
 
 ### Verified subsystem boundary baseline
 
-Verified on 2026-07-29:
+Verified on 2026-08-03:
 
-- `src/systems/` contains 16 production modules with an acyclic internal import graph.
+- `src/systems/` contains 17 production modules with an acyclic internal import graph.
 - Production subsystem modules contain no React, DOM, clipboard, download, or browser-storage APIs.
 - `src/components/` contains 12 presentational component modules.
-- `App.jsx` remains the authoritative React state coordinator; `usePersistence` owns browser save effects and commands.
+- `App.jsx` is a 192-line authoritative state owner and composition root.
+- `useGameController` owns grouped command dispatch, `useGameViewModel` owns derived view data, and `usePersistence` owns browser save effects and commands.
+- `GameView` receives seven grouped domain contracts rather than the former flat prop bundle.
 - Domain changes continue to enter through pure state-in/state-out subsystem transitions.
 
 GitHub Pages deploys from `main` with base `/Dungeonlord/`. The workflow pins Node 24, installs with `npm ci`, runs the full `check:alpha` gate, and creates the Pages artifact only after lint, unit tests, the production build, and Playwright pass. The deploy job depends on that verified artifact.
@@ -171,7 +178,7 @@ Full register: [BUGS.md](BUGS.md)
 - Preserve old saves with safe normalization defaults.
 - Route gameplay randomness through `randomFloat()`.
 - Keep diagnostics local; do not add automatic transmission.
-- Keep `App.jsx` as a coordinator; add game rules to the owning subsystem and UI to the owning component.
+- Keep `App.jsx` as the composition root; add game rules to the owning subsystem, command wiring to `useGameController`, derived display data to `useGameViewModel`, and UI to the owning component.
 - Preserve the acyclic subsystem dependency direction and state-in/state-out action contracts.
 - Test every CSS shell change at all Playwright profiles.
 - Keep art fallbacks functional.

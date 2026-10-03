@@ -86,18 +86,20 @@ No analytics or reports are uploaded automatically. Tester quality depends on co
 
 ### R-001 — Subsystem boundary regression
 
-`src/App.jsx` has been reduced to approximately 1,089 lines and now coordinates focused modules under `src/systems/`, `src/components/`, and `src/hooks/`. The original monolith risk is substantially mitigated, but cross-system gameplay still shares one authoritative run-state object.
+`src/App.jsx` has been reduced to approximately 192 lines and now composes separate controller, view-model, persistence, system, and component boundaries. `GameView` receives seven grouped domain contracts. The original monolith risk is substantially mitigated, but cross-system gameplay still shares one authoritative run-state object and the grouped contracts must not drift back into catch-all bundles.
 
 Mitigation:
 
 - keep state transitions pure and state-in/state-out
+- keep gameplay command wiring in `useGameController` and derived display data in `useGameViewModel`
+- keep the seven `GameView` contracts domain-focused
 - prevent circular subsystem imports
 - keep browser effects in the persistence/support adapters
 - run the full alpha gate after changes that cross domain boundaries
 
 ### R-002 — Unit tests do not exhaust full combat resolution
 
-The current 59 unit tests cover content, cadence, RNG, save schema/migrations/storage, defensive run hydration, raid/Core lifecycle, Council and Nihaza outcomes, monster staffing and fusion, artifact/doctrine progression, representative subsystem transitions, and an opening raid through combat. Browser smoke tests cover the opening flow, responsive access, and legacy import/backup restore, but the suite does not exercise every status, passive, room, artifact, doctrine, Council quest definition, or migration path in combination.
+The current 60 unit tests cover content, cadence, RNG, save schema/migrations/storage, defensive run hydration, layout-preserving run reset, raid/Core lifecycle, Council and Nihaza outcomes, monster staffing and fusion, artifact/doctrine progression, representative subsystem transitions, and an opening raid through combat. Browser smoke tests cover the opening flow, responsive access, and legacy import/backup restore, but the suite does not exercise every status, passive, room, artifact, doctrine, Council quest definition, or migration path in combination.
 
 Mitigation:
 

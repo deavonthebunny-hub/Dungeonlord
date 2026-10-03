@@ -148,6 +148,14 @@ Reproducible Blocker and Major defects take precedence over new monsters, rooms,
 
 Subsystem actions receive state and return state. They do not call React setters, the DOM, downloads, clipboard APIs, or browser storage. Imports must remain acyclic, and save fields retain soft-migration defaults.
 
+### D-023 — Application coordination uses explicit controller and view-model boundaries
+
+**Status:** Active
+
+`App.jsx` remains the authoritative state owner and application composition root. `useGameController` groups command dispatch by domain while calling the existing subsystem transitions; it does not recreate gameplay rules. `useGameViewModel` derives presentation data without owning or mutating gameplay state.
+
+`GameView` receives seven grouped contracts: `run`, `dungeon`, `raid`, `council`, `inventory`, `shell`, and `actions`. Additions should enter the smallest owning contract rather than rebuilding a single flat prop bundle or introducing a global state library.
+
 ## Proposed Decisions
 
 ### P-001 — Gate Nihaza as a later-stage Dungeonlord

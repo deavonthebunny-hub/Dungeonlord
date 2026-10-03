@@ -40,8 +40,8 @@ export default function DungeonPanel(props) {
     selectedTileFlags,
     selectedTrapSummary,
     selectMobileTab,
+    dismissOnboarding,
     setSelected,
-    setState,
     startMove,
     startRaid,
     state,
@@ -156,7 +156,7 @@ export default function DungeonPanel(props) {
                               <button
                                 className="textButton"
                                 type="button"
-                                onClick={() => setState((s) => ({ ...s, onboardingDismissed: true }))}
+                                onClick={dismissOnboarding}
                               >
                                 Dismiss
                               </button>

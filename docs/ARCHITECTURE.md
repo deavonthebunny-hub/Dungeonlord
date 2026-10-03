@@ -23,11 +23,14 @@ src/main.jsx
   -> ErrorBoundary
     -> App
       -> authoritative React run state
+      -> grouped gameplay commands from hooks/useGameController.js
+        -> domain rules and state-in/state-out transitions from systems/
+      -> grouped derived presentation data from hooks/useGameViewModel.js
       -> autosave and persistence commands from hooks/usePersistence.js
         -> schema and pure migrations from persistence/
         -> final defensive hydration from systems/runState.js
-      -> domain rules and transitions from systems/
-      -> presentational panels from components/
+      -> GameView domain contracts: run, dungeon, raid, council, inventory, shell, actions
+        -> presentational panels from components/
       -> authored data from gameContent.js
       -> seeded RNG from random.js
       -> local download/clipboard/diagnostic support from playtestSupport.js
@@ -36,13 +39,15 @@ src/main.jsx
 
 The application now uses explicit subsystem and presentation boundaries:
 
-- `src/App.jsx`: approximately 1,089 lines
+- `src/App.jsx`: approximately 192 lines
+- `src/hooks/useGameController.js`: approximately 294 lines
+- `src/hooks/useGameViewModel.js`: approximately 888 lines
 - `src/App.css`: approximately 2,846 lines
 - `src/gameContent.js`: approximately 1,838 lines
 - `src/systems/combat.js`: approximately 1,290 lines
-- `src/components/ToolboxPanel.jsx`: approximately 1,074 lines
+- `src/components/ToolboxPanel.jsx`: approximately 1,076 lines
 
-`App.jsx` remains the authoritative React state owner, but it no longer contains domain algorithms or the full JSX tree. Combat and Toolbox are the largest remaining focused modules.
+`App.jsx` remains the authoritative React state owner and composition root. Gameplay dispatch, derived presentation data, persistence, and rendering now have separate application-layer boundaries. Combat and Toolbox are the largest remaining focused modules.
 
 ## Important Files
 
@@ -52,7 +57,13 @@ The application now uses explicit subsystem and presentation boundaries:
   React entry point and application error-boundary mounting.
 
 - [`../src/App.jsx`](../src/App.jsx)
-  Main game coordinator. Owns React state, derived view data, and thin subsystem dispatch handlers while delegating persistence effects.
+  Application composition root. Owns authoritative run state and transient shell state, connects the three hooks below, and passes seven grouped contracts to `GameView`.
+
+- [`../src/hooks/useGameController.js`](../src/hooks/useGameController.js)
+  Groups dungeon, monster, market, raid, Council, and run commands while delegating gameplay rules to existing state-in/state-out transitions.
+
+- [`../src/hooks/useGameViewModel.js`](../src/hooks/useGameViewModel.js)
+  Derives validation, tile inspection, raid forecast, Council, artifact, inventory, onboarding, and shell presentation data without owning gameplay state.
 
 - [`../src/hooks/usePersistence.js`](../src/hooks/usePersistence.js)
   React adapter for autosave status plus save, load, import, export, restore, and diagnostic commands.
@@ -209,7 +220,7 @@ Do not use `Math.random()` for gameplay. Non-gameplay visual animation may remai
 - Anti-loop behavior penalizes recent patterns and low-value backtracking.
 - Pathfinding and invader decisions live in `systems/pathing.js`.
 - Combat turns, rewards, Core pressure, and raid completion live in `systems/combat.js`.
-- `App.jsx` dispatches `resolveCombatTurn()` without containing the simulation.
+- `useGameController.js` dispatches `resolveCombatTurn()` without containing the simulation.
 
 ## Responsive Shell
 
@@ -278,6 +289,9 @@ npm.cmd run check:alpha
 ## Architectural Constraints
 
 - `App.jsx` must remain a coordinator; domain rules belong in `systems/`.
+- `useGameController` may coordinate commands but must call the owning subsystem transition instead of recreating rules.
+- `useGameViewModel` may derive presentation data but must not own or mutate gameplay state.
+- `GameView` receives the seven grouped domain contracts rather than a new flat prop bundle.
 - State-transition modules must not call React setters, the DOM, clipboard APIs, downloads, or `localStorage`.
 - Cross-system imports must remain acyclic and flow from shared foundations toward composed systems.
 - Save semantics are compatibility-sensitive.
@@ -292,20 +306,24 @@ npm.cmd run check:alpha
 2. `markets`, `raids`, `council`, and `pathing` compose those foundations without importing React.
 3. `*Actions` modules expose state-in/state-out transitions.
 4. `runState` owns initial-state creation and final defensive save hydration.
-5. `persistence` owns schema, pure migrations, and browser-storage access; `usePersistence` connects that boundary to React.
-6. `combat` owns full raid-turn resolution.
-7. `App` owns the authoritative state and composition.
-8. `components` render props and invoke callbacks without changing game rules.
+5. `runActions` owns whole-run transitions that do not belong to one gameplay domain.
+6. `persistence` owns schema, pure migrations, and browser-storage access; `usePersistence` connects that boundary to React.
+7. `combat` owns full raid-turn resolution.
+8. `useGameController` groups command dispatch; `useGameViewModel` groups derived presentation data.
+9. `App` owns authoritative state and application composition.
+10. `GameView` receives `run`, `dungeon`, `raid`, `council`, `inventory`, `shell`, and `actions`; leaf components render data and invoke callbacks without changing game rules.
 
 ## Verified Boundary Baseline
 
-Production boundaries verified on 2026-07-29; persistence and test baselines refreshed on 2026-08-03:
+Production boundaries verified on 2026-07-29; application coordination and test baselines refreshed on 2026-08-03:
 
-- 16 production modules under `src/systems/`
+- 17 production modules under `src/systems/`
 - no circular imports in the production subsystem graph
 - no React, DOM, clipboard, download, or browser-storage APIs in production subsystem modules
 - 12 presentational modules under `src/components/`
-- 13 Vitest files with 59 passing unit tests; save schema/migrations/storage, run hydration, raid/Core lifecycle, Council/Nihaza, monster management/fusion, artifacts, and doctrines have focused coverage
+- `App.jsx` is a 192-line composition root, with controller, view-model, and persistence hooks separated
+- `GameView` has seven grouped domain props instead of the former flat bundle
+- 13 Vitest files with 60 passing unit tests; save schema/migrations/storage, run hydration/reset, raid/Core lifecycle, Council/Nihaza, monster management/fusion, artifacts, and doctrines have focused coverage
 - 13 applicable Playwright tests passing, with 12 profile-specific skips
 
 Keep `gameContent.js` as the authored data layer. Further refinement should split a focused module only when its internal responsibilities become independently testable; do not recreate a generic catch-all utilities file.

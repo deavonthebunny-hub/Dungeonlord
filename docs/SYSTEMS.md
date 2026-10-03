@@ -7,14 +7,16 @@ This document describes systems present in the current checkout. Proposed featur
 
 ## Runtime Organization
 
-- `App.jsx` owns the authoritative React state and coordinates the game view.
+- `App.jsx` owns authoritative React state and composes the application boundaries.
+- `src/hooks/useGameController.js` groups gameplay commands by domain and dispatches existing pure transitions.
+- `src/hooks/useGameViewModel.js` groups derived dungeon, raid, Council, inventory, onboarding, and shell presentation data.
 - `src/hooks/usePersistence.js` owns browser save effects, status, and player-facing persistence commands.
 - `src/persistence/` owns the current schema, legacy migrations, and browser-storage access.
 - `src/systems/` owns run hydration, dungeon, economy, monster, market, raid, Council, pathing, combat, and state-transition logic.
-- `src/components/` owns the major presentational panels.
+- `GameView` receives `run`, `dungeon`, `raid`, `council`, `inventory`, `shell`, and `actions`; `src/components/` owns the major presentational panels.
 - Subsystem actions accept state and return state without calling React setters.
 - Gameplay randomness continues through the seeded run RNG.
-- The current unit suite contains 59 tests across 13 files, including focused coverage for save schema/migrations/storage, raids/Core, Council/Nihaza, monster management/fusion, artifacts, and doctrines.
+- The current unit suite contains 60 tests across 13 files, including focused coverage for save schema/migrations/storage, run reset, raids/Core, Council/Nihaza, monster management/fusion, artifacts, and doctrines.
 
 ## Content Inventory
 

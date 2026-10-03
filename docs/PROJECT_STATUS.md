@@ -112,7 +112,10 @@ Always re-run `git status --short` before changing code. Do not assume this snap
 - explicit versioned save schema and pure legacy migration stage
 - browser storage isolated from React persistence commands
 - major JSX surfaces split into focused presentational components
-- `App.jsx` reduced from approximately 10,277 to 1,089 lines
+- gameplay command dispatch grouped by domain in `useGameController`
+- derived presentation data grouped by domain in `useGameViewModel`
+- `GameView` reduced from a flat prop bundle to seven domain contracts
+- `App.jsx` reduced from approximately 10,277 to 192 lines
 - GitHub Pages deployment gated by locked installation, lint, unit tests, production build, and Playwright
 
 ### First-run support
@@ -173,7 +176,7 @@ Verified on 2026-08-03 with `npm.cmd run check:alpha`:
 
 - ESLint passed
 - 13 Vitest files passed
-- 59 unit tests passed
+- 60 unit tests passed
 - production build passed
 - Playwright: 13 applicable tests passed
 - Playwright: 12 project-specific tests skipped as designed

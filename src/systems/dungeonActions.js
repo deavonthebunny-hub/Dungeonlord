@@ -9,6 +9,15 @@ import { applyMonsterRoomPlacement } from "./monsterActions";
 function roomUpgradeCost(tier) {
   return 20 + tier * 10;
 }
+function selectTrapTypeTransition(state, value) {
+  return { ...state, selectedTrapType: value };
+}
+function selectMonsterRoomTypeTransition(state, value) {
+  return { ...state, selectedMonsterRoomType: value };
+}
+function selectUtilityRoomTypeTransition(state, value) {
+  return { ...state, selectedUtilityRoomType: value };
+}
 function setSelectedTransition(state, x, y) {
   let nextState = state;
   const setState = updater => {
@@ -635,4 +644,4 @@ function upgradeRoomTransition(state) {
   return nextState;
 }
 
-export { roomUpgradeCost, setSelectedTransition, clearTileTransition, _placeEntranceTransition, _placeCoreTransition, buildTrapRoomTransition, buildMonsterRoomTransition, buildUtilityRoomTransition, armTrapTransition, startMoveTransition, cancelMoveTransition, upgradeDungeonTransition, upgradeDoctrineTransition, upgradeRoomTransition };
+export { roomUpgradeCost, selectTrapTypeTransition, selectMonsterRoomTypeTransition, selectUtilityRoomTypeTransition, setSelectedTransition, clearTileTransition, _placeEntranceTransition, _placeCoreTransition, buildTrapRoomTransition, buildMonsterRoomTransition, buildUtilityRoomTransition, armTrapTransition, startMoveTransition, cancelMoveTransition, upgradeDungeonTransition, upgradeDoctrineTransition, upgradeRoomTransition };
