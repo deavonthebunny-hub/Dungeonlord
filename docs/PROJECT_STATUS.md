@@ -1,6 +1,6 @@
 # Dungeonlord Project Status
 
-Last updated: 2026-08-03
+Last updated: 2026-10-03
 Release: `0.1.0-alpha.2`
 Release stage: Private-alpha release candidate
 
@@ -172,14 +172,16 @@ Profiles:
 
 ### Verification snapshot
 
-Verified on 2026-08-03 with `npm.cmd run check:alpha`:
+Verified on 2026-10-03 after B1 with `npm.cmd run check:alpha` and the optional local checkpoint directory enabled:
 
 - ESLint passed
-- 13 Vitest files passed
-- 60 unit tests passed
+- 15 Vitest files passed
+- 77 unit tests passed
 - production build passed
-- Playwright: 13 applicable tests passed
-- Playwright: 12 project-specific tests skipped as designed
+- Playwright: 16 applicable tests passed
+- Playwright: 24 project-specific tests skipped as designed
+
+B1 fixes duplicate/no-benefit tactical spending and the reproduced raid/HP displays. It adds a deterministic opening report and verifies nonempty diagnostic copy plus preserved-export import/reload/backup restore in isolated contexts. No numerical balance tuning has started. See [B1_RESULTS.md](B1_RESULTS.md); B2 is next.
 
 The first sandboxed Codex attempt could not let Vitest/esbuild read the config path; rerunning the same command with the required filesystem permission passed. This was an execution-sandbox limitation, not a repository test failure.
 

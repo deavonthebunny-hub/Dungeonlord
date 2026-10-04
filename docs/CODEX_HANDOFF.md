@@ -1,6 +1,6 @@
 # Dungeonlord Handoff
 
-Last updated: 2026-08-03
+Last updated: 2026-10-03
 Current release: `0.1.0-alpha.2`
 
 This is the starting document for a new Codex session. Read it first, then follow the linked detail documents rather than reconstructing the project from chat history.
@@ -90,6 +90,8 @@ System detail: [SYSTEMS.md](SYSTEMS.md)
 - [PROJECT_STATUS.md](PROJECT_STATUS.md) — current release and readiness state
 - [BUGS.md](BUGS.md) — open discrepancies, risks, and constraints
 - [ROADMAP.md](ROADMAP.md) — ordered next milestones
+- [PLAYTEST_FOLLOW_UP_PLAN.md](PLAYTEST_FOLLOW_UP_PLAN.md) — B1-B6 objectives from the October 3 Day 1-30 run; B1 complete locally, B2 next
+- [B1_RESULTS.md](B1_RESULTS.md) — tactical/display fixes, local baseline command, capture/restore evidence, and verification limits
 
 Existing tester documents:
 
@@ -121,7 +123,7 @@ npm.cmd run check:alpha
 
 `npm.cmd run check:alpha` is the release-candidate gate.
 
-It last passed on 2026-08-03 after the Phase 5 application-coordination extraction: lint, 60 unit tests across 13 files, production build, and 13 applicable Playwright tests passed with 12 profile-specific skips. In a managed Codex filesystem sandbox, Vitest/esbuild may require an approved rerun if it reports `Cannot read directory "../..": Access is denied`.
+It last passed on 2026-10-03 after B1 with local checkpoint verification enabled: lint, 77 unit tests across 15 files, production build, and 16 applicable Playwright tests passed with 24 profile-specific skips. Without the untracked checkpoint folder/environment variable, its optional desktop verification case also skips. In a managed Codex filesystem sandbox, Vitest/esbuild may require an approved rerun if it reports `Cannot read directory "../..": Access is denied`.
 
 ### Verified subsystem boundary baseline
 
@@ -202,6 +204,10 @@ Not implemented:
 ## Current Priority
 
 Run the private alpha and fix evidence-backed Blocker/Major defects.
+
+The chat **Play Dungeonlord through Day 30** and its report provide a completed Day 30 baseline: five defender deaths on Days 1-2, 160 Core damage by Day 5, then no Core damage from Day 6 onward. The output evidence remains untracked. Its original reproduction bundle is zero bytes, but B1's fresh copy/capture verification succeeded without altering that artifact; the cause of the empty file is not established. Ward Lantern placement is a strategy tradeoff, not a requested gameplay fix.
+
+B1 is completed locally and verified: tactical spending guards, the active Escalation heading, effective monster maximum-HP displays, diagnostic capture, isolated Day 11/15/31 import/reload/backup restore, and the deterministic opening reference. The original evidence files are unchanged; new nonempty capture evidence is separate in `output/b1-verification/`. The gate passed with 77 unit tests across 15 files and 16 applicable browser tests with 24 profile-specific skips when local checkpoint verification is enabled. No balance values changed. **B2 opening recovery is next.** See [B1_RESULTS.md](B1_RESULTS.md).
 
 Do not begin the Combat Presentation Pass until:
 

@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "balance:baseline": "node scripts/balance-baseline.mjs",
     "check": "npm run lint && npm run test && npm run build",
     "check:alpha": "npm run check && npm run test:e2e",
     "guidebook": "node scripts/render-guidebook.mjs",

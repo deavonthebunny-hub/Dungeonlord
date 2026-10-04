@@ -46,6 +46,7 @@ export default function GameView({ run, dungeon, raid, council, inventory, shell
     checklist,
   } = dungeon;
   const {
+    dominionPowers,
     selectedHeroIntent,
     pendingRaidType,
     pendingEscalationLevel,
@@ -324,6 +325,7 @@ export default function GameView({ run, dungeon, raid, council, inventory, shell
             councilSessionActive,
             dealerCatalogExhausted,
             declineCouncil,
+            dominionPowers,
             drawerPanelTitle,
             effectiveMonsterRoomCap,
             evolutionButtonLabel,

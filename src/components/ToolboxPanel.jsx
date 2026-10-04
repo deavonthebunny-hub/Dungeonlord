@@ -4,7 +4,7 @@ import { COUNCIL_FAVOR_RULES, councilFavorBadgeTone, formatCouncilFavorLabel, ge
 import { anyUtilityRoom, isAshBreachAt, isAshTrialActive } from "../systems/dungeon";
 import { artifactCopyCap, artifactTagsForDisplay, hydrateArtifactDefinition } from "../systems/economy";
 import { traderPrice } from "../systems/marketActions";
-import { MONSTER_PASSIVE_MAP, doctrineUpgradeCost, effectiveMonsterRoomCapValue, entityStatusSummary, formatMonsterPassiveList, monsterEvolutionStageValue, monsterSpeedValue } from "../systems/monsters";
+import { MONSTER_PASSIVE_MAP, doctrineUpgradeCost, effectiveMonsterRoomCapValue, effectiveMonsterMaxHp, entityStatusSummary, formatMonsterPassiveList, monsterEvolutionStageValue, monsterSpeedValue } from "../systems/monsters";
 import { objectiveTargetLabel } from "../systems/pathing";
 import { MONSTER_ROOM_ICONS, TRAP_ICONS, UTILITY_ICONS, invaderLabel, invaderPassiveSummary } from "../systems/presentation";
 import { HERO_LEADER_TRAIT_MAP, HERO_ORDER_MAP, MARKET_ART, getRaidDirectiveRule, resolveRaidDirectiveKey, topArchetypesFromWeights } from "../systems/raids";
@@ -35,6 +35,7 @@ export default function ToolboxPanel(props) {
     councilSessionActive,
     dealerCatalogExhausted,
     declineCouncil,
+    dominionPowers,
     drawerPanelTitle,
     effectiveMonsterRoomCap,
     evolutionStageLabel,
@@ -44,7 +45,6 @@ export default function ToolboxPanel(props) {
     fusionPreview,
     importRun,
     invPreview,
-    isBattlePhase,
     isBuildPhase,
     loadRun,
     locked,
@@ -362,7 +362,7 @@ export default function ToolboxPanel(props) {
                                       {safeEntityLabel(m.passive, "None")}
                                     </div>
                                     <div className="entityStats">
-                                      HP {m.hp}/{safeEntityMaxHp(m)} | ATK {m.atk} | DEF {m.def || 0} | SPD {monsterSpeedValue(m)} | Evo {m.evoPoints || 0}
+                                      HP {m.hp}/{effectiveMonsterMaxHp(m, state.doctrines)} | ATK {m.atk} | DEF {m.def || 0} | SPD {monsterSpeedValue(m)} | Evo {m.evoPoints || 0}
                                     </div>
                                     <div className="muted">
                                       {evolutionStageLabel(m)}{m.branchClass ? ` | Branch ${m.branchClass}` : ""}{m.fusionParents?.length ? ` | ${m.fusionParents.join(" + ")}` : ""}
@@ -784,7 +784,7 @@ export default function ToolboxPanel(props) {
                                       {monster.isFused ? <span className="badge unique">Fused</span> : null} | {formatStars(safeEntityStars(monster))}
                                     </div>
                                     <div className="entityStats">
-                                      HP {monster.hp}/{safeEntityMaxHp(monster)} | ATK {monster.atk} | DEF {monster.def || 0} | SPD {monsterSpeedValue(monster)}
+                                      HP {monster.hp}/{effectiveMonsterMaxHp(monster, state.doctrines)} | ATK {monster.atk} | DEF {monster.def || 0} | SPD {monsterSpeedValue(monster)}
                                     </div>
                                     <div className="muted">Status: {entityStatusSummary(monster)}</div>
                                     <div className="row">
@@ -824,7 +824,7 @@ export default function ToolboxPanel(props) {
                                   <span className="badge class">{safeEntityLabel(m.class, "Brute")}</span> | {formatStars(safeEntityStars(m))}
                                 </div>
                                 <div className="entityStats">
-                                  HP {m.hp}/{safeEntityMaxHp(m)} | ATK {m.atk} | DEF {m.def || 0}
+                                  HP {m.hp}/{effectiveMonsterMaxHp(m, state.doctrines)} | ATK {m.atk} | DEF {m.def || 0}
                                 </div>
                                 <div className="row">
                                   <button className="btn" onClick={() => buyFromTrader(idx)} disabled={!isBuildPhase}>
@@ -890,41 +890,45 @@ export default function ToolboxPanel(props) {
                           <button
                             className="btn"
                             onClick={() => activateDominionPower("pulse")}
-                            disabled={locked || !isBattlePhase || state.currency.dominion < 2}
+                            disabled={dominionPowers.pulse.disabled}
+                            title={dominionPowers.pulse.reason || undefined}
                           >
                             Pulse (2 DP)
                           </button>
-                          <div className="muted">Damages all heroes before they act.</div>
+                          <div className="muted">{state.dominionEffects?.pulsePending ? "Pulse queued for the next turn. Only one Pulse can be queued." : dominionPowers.pulse.reason || "Damages all heroes before they act. One Pulse per turn."}</div>
                         </div>
                         <div className="row">
                           <button
                             className="btn"
                             onClick={() => activateDominionPower("shield")}
-                            disabled={locked || !isBattlePhase || state.currency.dominion < 2}
+                            disabled={dominionPowers.shield.disabled}
+                            title={dominionPowers.shield.reason || undefined}
                           >
                             Shield (2 DP)
                           </button>
-                          <div className="muted">Adds +10 Core Shield.</div>
+                          <div className="muted">{(state.coreShield || 0) >= 30 ? "Core Shield is at the 30-point power cap." : "Adds up to +10 Core Shield, capped at 30."}</div>
                         </div>
                         <div className="row">
                           <button
                             className="btn"
                             onClick={() => activateDominionPower("speed")}
-                            disabled={locked || !isBattlePhase || state.currency.dominion < 1}
+                            disabled={dominionPowers.speed.disabled}
+                            title={dominionPowers.speed.reason || undefined}
                           >
                             Speed (1 DP)
                           </button>
-                          <div className="muted">Monsters act first this turn.</div>
+                          <div className="muted">{state.dominionEffects?.monsterFirstStrike ? "Speed active for the next turn; repeated purchases do not stack." : dominionPowers.speed.reason || "Monsters act first this turn."}</div>
                         </div>
                         <div className="row">
                           <button
                             className="btn"
                             onClick={() => activateDominionPower("strength")}
-                            disabled={locked || !isBattlePhase || state.currency.dominion < 1}
+                            disabled={dominionPowers.strength.disabled}
+                            title={dominionPowers.strength.reason || undefined}
                           >
                             Strength (1 DP)
                           </button>
-                          <div className="muted">Monsters gain +1 ATK this turn.</div>
+                          <div className="muted">{(state.dominionEffects?.monsterAtk || 0) >= 1 ? "Strength active for the next turn; repeated purchases do not stack." : dominionPowers.strength.reason || "Monsters gain +1 ATK this turn."}</div>
                         </div>
                       </div>
 

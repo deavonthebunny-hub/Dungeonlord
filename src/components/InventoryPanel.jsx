@@ -1,7 +1,7 @@
 import { STANDARD_ARTIFACTS } from "../gameContent";
 import { artifactCopyCap, artifactTagsForDisplay } from "../systems/economy";
-import { entityStatusSummary, monsterCanEvolve, monsterSpeedValue } from "../systems/monsters";
-import { formatStars, safeEntityLabel, safeEntityMaxHp, safeEntityStars } from "../systems/shared";
+import { effectiveMonsterMaxHp, entityStatusSummary, monsterCanEvolve, monsterSpeedValue } from "../systems/monsters";
+import { formatStars, safeEntityLabel, safeEntityStars } from "../systems/shared";
 
 export default function InventoryPanel(props) {
   const {
@@ -68,7 +68,7 @@ export default function InventoryPanel(props) {
                                   {safeEntityLabel(m.passive, "None")}
                                 </div>
                                 <div className="entityStats">
-                                  HP {m.hp}/{safeEntityMaxHp(m)} | ATK {m.atk} | DEF {m.def || 0} | SPD {monsterSpeedValue(m)} | Evo {m.evoPoints || 0}
+                                  HP {m.hp}/{effectiveMonsterMaxHp(m, state.doctrines)} | ATK {m.atk} | DEF {m.def || 0} | SPD {monsterSpeedValue(m)} | Evo {m.evoPoints || 0}
                                 </div>
                                 <div className="muted">
                                   {evolutionStageLabel(m)}{m.branchClass ? ` | Branch ${m.branchClass}` : ""}{m.fusionParents?.length ? ` | ${m.fusionParents.join(" + ")}` : ""}

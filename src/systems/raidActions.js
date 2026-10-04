@@ -8,31 +8,33 @@ import { invaderLabel } from "./presentation";
 import { applyInvasionChoiceToState, buildDailyInvasionChoices, buildRaidModifiers, buildRaidPartyWithIntel, buildScoutRevealQueue, getRaidDirectiveRule, normalizeInvasionChoice, normalizeRaidIntel, plannedRaidFromState, raidPlanningState, raidTypeMeta, resolveRaidDirectiveKey } from "./raids";
 import { H, HERO_CAP, UNIQUE_ARTIFACT_MAP, W, addLog, formatGridPos, formatStars, safeEntityStars } from "./shared";
 
+export function dominionPowerAvailability(state, kind) {
+  const cost = { pulse: 2, shield: 2, speed: 1, strength: 1 }[kind];
+  let reason = null;
+  if (!Number.isFinite(cost)) reason = "Unknown Dominion power.";
+  else if (state.coreHp <= 0) reason = "The Core is destroyed.";
+  else if (state.phase !== "battle") reason = "Dominion powers can only be used in battle.";
+  else if (!state.raidActive && state.heroes.length === 0) reason = "No active raid to target.";
+  else if (kind === "pulse" && state.dominionEffects?.pulsePending) reason = "Dominion Pulse is already queued for this turn.";
+  else if (kind === "speed" && state.dominionEffects?.monsterFirstStrike) reason = "Dominion Speed is already active for this turn.";
+  else if (kind === "strength" && (state.dominionEffects?.monsterAtk || 0) >= 1) reason = "Dominion Strength is already active for this turn.";
+  else if (kind === "shield" && (state.coreShield || 0) >= 30) reason = "Core Shield is already at the 30-point power cap.";
+  else if (kind === "pulse" && state.heroes.length === 0) reason = "No heroes on the grid to target with Pulse.";
+  else if (["speed", "strength"].includes(kind) && !state.grid.some((row) => row.some((tile) => tile.room === "monster" && tile.monsters.some((monster) => monster.hp > 0)))) reason = "No defending monsters on the grid to empower.";
+  else if (state.currency.dominion < cost) reason = "Not enough Dominion.";
+  return { cost: Number.isFinite(cost) ? cost : 0, disabled: !!reason, reason };
+}
+
 function activateDominionPowerTransition(state, kind) {
   let nextState = state;
   const setState = updater => {
     nextState = typeof updater === "function" ? updater(nextState) : updater;
   };
   const locked = state.coreHp <= 0;
-  const isBattlePhase = state.phase === "battle";
   if (locked) return nextState;
-  if (!isBattlePhase) {
-    setState(s => addLog(s, "Dominion powers can only be used in battle."));
-    return nextState;
-  }
-  if (!state.raidActive && state.heroes.length === 0) {
-    setState(s => addLog(s, "No active raid to target."));
-    return nextState;
-  }
-  const costByKind = {
-    pulse: 2,
-    shield: 2,
-    speed: 1,
-    strength: 1
-  };
-  const cost = costByKind[kind] || 1;
   setState(s => {
-    if (s.currency.dominion < cost) return addLog(s, "Not enough Dominion.");
+    const { cost, disabled, reason } = dominionPowerAvailability(s, kind);
+    if (disabled) return addLog(s, reason);
     let dominionEffects = {
       ...s.dominionEffects
     };

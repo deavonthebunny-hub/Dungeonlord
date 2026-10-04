@@ -579,6 +579,11 @@ function buildRaidModifiers(raidBoons = []) {
     }
   );
 }
+export function displayedRaidType(state) {
+  if (state.raidActive) return state.raidType || state.currentPartyRaidType || state.nextRaidType || null;
+  return state.pendingPunitiveRaid ? "council" : state.nextRaidType || null;
+}
+
 function raidTypeMeta(raidType, councilRaid = null) {
   if (raidType === "council" && councilRaid) {
     return {

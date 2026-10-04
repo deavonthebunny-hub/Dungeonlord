@@ -241,6 +241,11 @@ function entityStatusSummary(entity) {
   }
   return statuses.length ? statuses.join(", ") : "none";
 }
+export function effectiveMonsterMaxHp(monster, doctrines = {}) {
+  const baseMax = Number.isFinite(monster?.stats?.maxHp) ? monster.stats.maxHp : monster?.hp || 0;
+  return baseMax + getDoctrineEffects(doctrines).monsterHpBonus;
+}
+
 function monsterEvolutionStageValue(monster) {
   const raw = Number.isFinite(monster?.evolutionStage) ? monster.evolutionStage : monster?.evolution || 0;
   return clamp(raw, 0, MAX_EVOLUTION_STAGE);

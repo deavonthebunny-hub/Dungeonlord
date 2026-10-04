@@ -10,6 +10,12 @@ Version: `0.1.0-alpha.2`
 - The interface contains dense management panels. The first-run checklist and guidebook explain the intended opening flow, but advanced systems remain intentionally discoverable rather than tutorial-locked.
 - Diagnostic and save sharing is manual and player-controlled. No report is uploaded automatically.
 
+## October 3 Working-Tree Follow-Up
+
+B1 locally fixes duplicate/no-benefit Dominion purchases, the active Escalation heading, and doctrine-adjusted monster HP readouts. These changes are not yet published. Copy With Save and preserved Day 11/15/31 import/reload/backup workflows passed in isolated test contexts; the original empty diagnostic artifact remains unexplained and preserved.
+
+Opening roster wipes, later trap dominance, small Elites, transaction previews, and other clarity gaps remain under investigation. Construction-star reroll abuse was not demonstrated. See [PLAYTEST_FOLLOW_UP_PLAN.md](PLAYTEST_FOLLOW_UP_PLAN.md) and [B1_RESULTS.md](B1_RESULTS.md).
+
 ## Release Gate
 
 There are no intentionally accepted save-loss, blank-screen, hard-lock, or inaccessible-control defects. Any reproducible example should be reported as a Blocker with diagnostics and, when possible, an exported save.

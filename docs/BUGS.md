@@ -1,6 +1,6 @@
 # Dungeonlord Bugs, Risks, and Known Constraints
 
-Last updated: 2026-08-03
+Last updated: 2026-10-03
 Current release: `0.1.0-alpha.2`
 
 ## Current Blockers
@@ -55,6 +55,45 @@ If this fails, capture viewport size, device scale, browser version, screenshot,
 **Status:** Open
 
 The repository root contains a tracked empty file named `Selected`. It has no code references. Remove it only after confirming it is not part of an external workflow.
+
+## October 3 Playtest Follow-Up
+
+### B-004 — Dominion powers can spend without an additional effect
+
+**Severity:** Major
+**Status:** Fixed locally in B1; not yet published
+
+The playtest reproduced two Pulse purchases resolving as one. The action/UI now reject duplicate queued Pulse, already-active Speed/Strength, capped Shield, and powers with no possible present target, without spending. Costs, effect strength, and Shield cap are unchanged. Direct-action/combat and browser regressions cover the fix.
+
+### B-005 — Active Escalation heading falls back to Normal
+
+**Severity:** Minor
+**Status:** Fixed locally in B1; not yet published
+
+The heading now uses active encounter identity after `nextRaidType` is cleared. A browser regression verifies Escalation identity and level before and after a combat turn.
+
+### B-006 — Doctrine maximum HP missing from monster readouts
+
+**Severity:** Minor
+**Status:** Fixed locally in B1; not yet published
+
+Monster displays and combat share the effective-maximum helper. The preserved Day 31 fused defender displays 38/38. Base stats and save schema remain unchanged.
+
+### B-007 — Opening roster losses followed by late trap dominance
+
+**Severity:** Balance observation
+**Status:** Open; next investigation is B2
+
+One autonomous seed lost five defenders across Days 1-2, then sustained no Core damage after Day 5 with a developed trap lane. Small late Elites, accumulated income, and low monster participation require controlled comparisons. No numerical tuning has been performed. Other clarity gaps and the untested construction-reroll hypothesis are tracked in [PLAYTEST_FOLLOW_UP_PLAN.md](PLAYTEST_FOLLOW_UP_PLAN.md).
+
+Capture/restore evidence and limitations are in [B1_RESULTS.md](B1_RESULTS.md). The earlier empty bundle remains preserved; current copy passed, so an in-game clipboard defect was not established.
+
+### B-008 — Forced-day Build-phase hydration regenerates the raid plan
+
+**Severity:** Reproducibility risk / intent review
+**Status:** Open; existing behavior retained in B1
+
+Importing the preserved Day 15 Build save advances the RNG cursor from 1641 to 1643 while `prepareRaidPlanForDay()` regenerates the forced encounter plan. Core, currencies, and layout restore successfully; active-raid cursor preservation remains tested. Decide whether the saved pending plan should be reused before using forced-day checkpoints for matched encounter comparisons. B1's fresh seeded mechanical baseline does not depend on save hydration.
 
 ## Known Constraints, Not Bugs
 

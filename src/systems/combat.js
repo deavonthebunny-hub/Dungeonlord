@@ -35,6 +35,7 @@ import {
 import { calcArtifactMods, getCoreMaxHp, getDoctrineEffects } from "./economy";
 import { generateArtifactStock, generateFleshMarketStock, generateTraderStock } from "./markets";
 import {
+  effectiveMonsterMaxHp,
   monsterHasPassive,
   monsterPassiveRank,
   monsterSpeedValue,
@@ -415,8 +416,7 @@ function monsterAtkBonus(room, x, y) {
 }
 
 function monsterMaxHp(m) {
-  const baseMax = m.stats && Number.isFinite(m.stats.maxHp) ? m.stats.maxHp : m.hp;
-  return baseMax + (doctrineEffectsLocal.monsterHpBonus || 0);
+  return effectiveMonsterMaxHp(m, s.doctrines);
 }
 
 function monsterDefBonus(x, y) {

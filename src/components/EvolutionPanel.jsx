@@ -1,7 +1,7 @@
 import { MONSTER_ROOM_MAP } from "../systems/dungeon";
 import { evoSourceKey } from "../systems/monsterActions";
-import { entityStatusSummary, monsterCanEvolve, monsterSpeedValue } from "../systems/monsters";
-import { formatStars, safeEntityLabel, safeEntityMaxHp, safeEntityStars } from "../systems/shared";
+import { effectiveMonsterMaxHp, entityStatusSummary, monsterCanEvolve, monsterSpeedValue } from "../systems/monsters";
+import { formatStars, safeEntityLabel, safeEntityStars } from "../systems/shared";
 
 export default function EvolutionPanel(props) {
   const {
@@ -64,7 +64,7 @@ export default function EvolutionPanel(props) {
                                     {safeEntityLabel(item.monster.passive, "None")}
                                   </div>
                                   <div className="entityStats">
-                                    HP {item.monster.hp}/{safeEntityMaxHp(item.monster)} | ATK {item.monster.atk} | DEF {item.monster.def || 0} | SPD {monsterSpeedValue(item.monster)}
+                                    HP {item.monster.hp}/{effectiveMonsterMaxHp(item.monster, state.doctrines)} | ATK {item.monster.atk} | DEF {item.monster.def || 0} | SPD {monsterSpeedValue(item.monster)}
                                   </div>
                                   <div className="muted">Location: {item.label}</div>
                                   <div className="muted">

@@ -56,6 +56,7 @@ import {
   EXPEDITION_ORDER_CRESTS,
   HERO_LEADER_TRAIT_MAP,
   HERO_ORDER_MAP,
+  displayedRaidType,
   getRaidDirectiveRule,
   partyArchetypeSummary,
   raidDifficultyConfig,
@@ -73,11 +74,15 @@ import {
   safeEntityMaxHp,
 } from "../systems/shared";
 import { roomUpgradeCost } from "../systems/dungeonActions";
+import { dominionPowerAvailability } from "../systems/raidActions";
 
 export function useGameViewModel({ state, ui }) {
   const locked = state.coreHp <= 0;
   const isBuildPhase = state.phase === "build";
   const isBattlePhase = state.phase === "battle";
+  const dominionPowers = Object.fromEntries(
+    ["pulse", "shield", "speed", "strength"].map((kind) => [kind, dominionPowerAvailability(state, kind)])
+  );
   const councilSessionActive = state.councilSession && state.councilSession.day === state.day;
   const showCouncilPrompt = councilSessionActive && state.councilSession.status === "pending";
   const councilAwaitingConclusion = councilSessionActive && state.councilSession.status !== "pending";
@@ -594,7 +599,7 @@ export function useGameViewModel({ state, ui }) {
     return `tile${selected}${path}${lure}${aura}`;
   }
 
-  const pendingRaidType = state.pendingPunitiveRaid ? "council" : state.nextRaidType;
+  const pendingRaidType = displayedRaidType(state);
   const pendingEscalationLevel =
     pendingRaidType === "escalation"
       ? Math.max(
@@ -832,6 +837,7 @@ export function useGameViewModel({ state, ui }) {
       checklist,
     },
     raid: {
+      dominionPowers,
       selectedHeroIntent,
       pendingRaidType,
       pendingEscalationLevel,
