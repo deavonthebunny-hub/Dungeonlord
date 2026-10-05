@@ -90,8 +90,9 @@ System detail: [SYSTEMS.md](SYSTEMS.md)
 - [PROJECT_STATUS.md](PROJECT_STATUS.md) — current release and readiness state
 - [BUGS.md](BUGS.md) — open discrepancies, risks, and constraints
 - [ROADMAP.md](ROADMAP.md) — ordered next milestones
-- [PLAYTEST_FOLLOW_UP_PLAN.md](PLAYTEST_FOLLOW_UP_PLAN.md) — B1-B6 objectives from the October 3 Day 1-30 run; B1 complete locally, B2 next
+- [PLAYTEST_FOLLOW_UP_PLAN.md](PLAYTEST_FOLLOW_UP_PLAN.md) — B1-B6 objectives from the October 3 Day 1-30 run; B1 pushed, B2 complete locally, B3 next
 - [B1_RESULTS.md](B1_RESULTS.md) — tactical/display fixes, local baseline command, capture/restore evidence, and verification limits
+- [B2_RESULTS.md](B2_RESULTS.md) — authored opening defense, paid recovery, declared ten-seed policy, results, and human-validation limits
 
 Existing tester documents:
 
@@ -123,7 +124,7 @@ npm.cmd run check:alpha
 
 `npm.cmd run check:alpha` is the release-candidate gate.
 
-It last passed on 2026-10-03 after B1 with local checkpoint verification enabled: lint, 77 unit tests across 15 files, production build, and 16 applicable Playwright tests passed with 24 profile-specific skips. Without the untracked checkpoint folder/environment variable, its optional desktop verification case also skips. In a managed Codex filesystem sandbox, Vitest/esbuild may require an approved rerun if it reports `Cannot read directory "../..": Access is denied`.
+It last passed on 2026-10-03 after B2 with local checkpoint verification enabled: lint, 86 unit tests across 17 files, production build, and 18 applicable Playwright tests passed with 32 profile-specific skips. Without the untracked checkpoint folder/environment variable, its optional desktop verification case also skips. In a managed Codex filesystem sandbox, Vitest/esbuild may require an approved rerun if it reports `Cannot read directory "../..": Access is denied`.
 
 ### Verified subsystem boundary baseline
 
@@ -207,7 +208,11 @@ Run the private alpha and fix evidence-backed Blocker/Major defects.
 
 The chat **Play Dungeonlord through Day 30** and its report provide a completed Day 30 baseline: five defender deaths on Days 1-2, 160 Core damage by Day 5, then no Core damage from Day 6 onward. The output evidence remains untracked. Its original reproduction bundle is zero bytes, but B1's fresh copy/capture verification succeeded without altering that artifact; the cause of the empty file is not established. Ward Lantern placement is a strategy tradeoff, not a requested gameplay fix.
 
-B1 is completed locally and verified: tactical spending guards, the active Escalation heading, effective monster maximum-HP displays, diagnostic capture, isolated Day 11/15/31 import/reload/backup restore, and the deterministic opening reference. The original evidence files are unchanged; new nonempty capture evidence is separate in `output/b1-verification/`. The gate passed with 77 unit tests across 15 files and 16 applicable browser tests with 24 profile-specific skips when local checkpoint verification is enabled. No balance values changed. **B2 opening recovery is next.** See [B1_RESULTS.md](B1_RESULTS.md).
+B1 is committed and pushed to the existing `origin/main` as `98c753d`: tactical spending guards, active Escalation heading, effective monster HP displays, capture/restore checks, and a deterministic opening reference. Original evidence is unchanged; new capture evidence is separate in `output/b1-verification/`. See [B1_RESULTS.md](B1_RESULTS.md).
+
+B2 is implemented locally, not yet committed or pushed: ordinary two-star Ogre/Boar starters, the normal initial Training Den bonus applied once, and one optional 20-Soulshard two-star Ogre recovery offer on Day 2 if no living owned monsters remain after Day 1. Existing valid saves retain their roster; layout resets receive the pair in inventory. Raid counts, hero scaling, general prices/rewards, and persistent Core damage are unchanged.
+
+The fixed ten-seed mixed pilot retains Day 1 defenders in 10/10 runs; 9/10 reach Council without repeated complete wipes. Core is 250 after Day 3 and 183–250 after Day 5 for that policy. Deliberately setting Day 1 defenders to 1 HP causes eight wipe cases; all eight retain a paid replacement after Day 2, keep 10–18 Shards, and still afford an Essence development choice. Later stress wipes remain possible. These are mechanical results, not proof that first-time humans discover the strategy without coaching. The final alpha gate passed with 86 unit tests and 18 browser tests. **B3 coherent encounter pressure is next.** See [B2_RESULTS.md](B2_RESULTS.md).
 
 Do not begin the Combat Presentation Pass until:
 
@@ -225,6 +230,8 @@ Do not begin the Combat Presentation Pass until:
    git status --short
    npm.cmd run check:alpha
    ```
+
+   Review B2's local changes and commit/push only on explicit user request. For the next gameplay implementation, proceed to B3 in [PLAYTEST_FOLLOW_UP_PLAN.md](PLAYTEST_FOLLOW_UP_PLAN.md), using `npm.cmd run balance:opening` as the opening regression reference. Preserve untracked evidence in `output/`; do not bulk-add it to commits.
 
 2. On the physical Samsung tablet:
    - open Toolbox

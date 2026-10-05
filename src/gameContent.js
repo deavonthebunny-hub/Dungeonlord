@@ -1515,6 +1515,14 @@ export const FLESH_MARKET_UNIQUE_ARTIFACTS = [
   },
 ];
 
+// Fresh-run defenders are an authored front line, not two independent weak
+// recruit rolls. They use ordinary stats/passives and remain mortal/tradeable.
+export const STARTER_DEFENDERS = Object.freeze([
+  Object.freeze({ key: "ogre", stars: 2 }),
+  Object.freeze({ key: "boar", stars: 2 }),
+]);
+export const OPENING_RECOVERY_OFFER = Object.freeze({ day: 2, key: "ogre", stars: 2, cost: 20 });
+
 export const DOCTRINE_RULES = {
   trap: {
     key: "trap",

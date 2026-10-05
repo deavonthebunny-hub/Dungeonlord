@@ -172,16 +172,16 @@ Profiles:
 
 ### Verification snapshot
 
-Verified on 2026-10-03 after B1 with `npm.cmd run check:alpha` and the optional local checkpoint directory enabled:
+Verified on 2026-10-03 after B2 with `npm.cmd run check:alpha` and the optional local checkpoint directory enabled:
 
 - ESLint passed
-- 15 Vitest files passed
-- 77 unit tests passed
+- 17 Vitest files passed
+- 86 unit tests passed
 - production build passed
-- Playwright: 16 applicable tests passed
-- Playwright: 24 project-specific tests skipped as designed
+- Playwright: 18 applicable tests passed
+- Playwright: 32 project-specific tests skipped as designed
 
-B1 fixes duplicate/no-benefit tactical spending and the reproduced raid/HP displays. It adds a deterministic opening report and verifies nonempty diagnostic copy plus preserved-export import/reload/backup restore in isolated contexts. No numerical balance tuning has started. See [B1_RESULTS.md](B1_RESULTS.md); B2 is next.
+B1 is committed/pushed as `98c753d` and fixes tactical spending and the reproduced raid/HP displays. B2 is implemented locally: ordinary two-star Ogre/Boar starters, a correct initial Training Den bonus, and one paid Day 2 empty-roster recovery offer. Its ten-seed normal pilot retains defenders in 10/10 runs and reaches Council without repeated complete wipes in 9/10; the deliberate casualty stress recovers Day 2 defenders in 8/8 wipe cases. Human first-time validation and broad encounter/economy balance are still outstanding. See [B1_RESULTS.md](B1_RESULTS.md) and [B2_RESULTS.md](B2_RESULTS.md); B3 is next. B2 has not been committed or pushed.
 
 The first sandboxed Codex attempt could not let Vitest/esbuild read the config path; rerunning the same command with the required filesystem permission passed. This was an execution-sandbox limitation, not a repository test failure.
 

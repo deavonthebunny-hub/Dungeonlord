@@ -3,7 +3,7 @@ import { createEmptyCouncilQuestCounters } from "./council";
 import { createEmptyAshTrial, resetLayoutKeepStructure } from "./dungeon";
 import { getCoreMaxHp } from "./economy";
 import { generateArtifactStock, generateTraderStock } from "./markets";
-import { initMonsterInventory } from "./monsters";
+import { initStarterDefenders } from "./monsters";
 import { buildDailyInvasionChoices } from "./raids";
 import { createDefaultState } from "./runState";
 import { addLog, rollDailyEvent } from "./shared";
@@ -52,7 +52,7 @@ export function resetRunKeepingLayoutTransition(state) {
     bonusRoomCapPermanent: 0,
     heroes: [],
     nextHeroId: 1,
-    invMonsters: initMonsterInventory(0, 2, 2, 1),
+    invMonsters: initStarterDefenders(),
     raidActive: false,
     raidRemaining: 0,
     turnsSurvived: 0,

@@ -19,6 +19,12 @@ Target: 5-15 invited testers on `0.1.0-alpha.2`.
 - Any device, browser, layout, or control issue.
 - Whether defeat felt earned, unclear, or unavoidable.
 
+## B2 Opening Validation
+
+The local B2 mechanical pilot uses ten declared seeds; reproduce with `npm.cmd run balance:opening` and `npm.cmd run balance:opening -- --poor-first-raid`. The stress command explicitly sets Day 1 defenders to 1 HP once and is not a natural playthrough. Exact policy and measured Core bands are in [B2_RESULTS.md](B2_RESULTS.md).
+
+Fresh human runs should record Day 1 survivors, purchases, whether the paid Day 2 recovery offer was understood/used after losing all monsters, Core HP after Days 3 and 5, complete roster wipes, and arrival at Council. Test checklist-only players separately from players shown the pilot layout. Existing saves retain their roster and should not be mistaken for a fresh authored-pair run. Confirm that casualties remain understandable and that a replacement leaves a useful development choice.
+
 ## Defect Triage
 
 - **Blocker:** crash, save loss, hard lock, or unusable required controls.

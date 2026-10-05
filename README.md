@@ -55,6 +55,15 @@ npm.cmd run balance:baseline -- --seed DL--1F0BD67D --days 5
 
 This generates a timestamped report using production raid/combat transitions and an unchanged-starter, Normal-raid policy with no purchases or powers. It records every opening turn and stops on defeat or the requested day; it is a mechanical reference, not a replay of the autonomous player's strategy. Supported limits are Days 1-9, before Council. It does not touch browser saves. See [B1 results and verification instructions](docs/B1_RESULTS.md) and the [playtest follow-up objectives](docs/PLAYTEST_FOLLOW_UP_PLAN.md).
 
+## Fixed-Seed Mixed Opening Pilot
+
+```powershell
+npm.cmd run balance:opening
+npm.cmd run balance:opening -- --poor-first-raid
+```
+
+These run the declared ten-seed mixed strategy through Day 9, stopping at first Council entry or defeat. Reports include source hashes, purchases, casualties, Core attrition, party composition, and every turn. The second command explicitly damages defenders to 1 HP once on Day 1 to stress next-day recovery. Reports are new local files under `output/balance-openings/`; browser saves are untouched. See [B2 implementation, policy, and results](docs/B2_RESULTS.md). These mechanical pilots do not replace first-time human testing.
+
 ## Saves And Reproduction
 
 - Current save key: `dungeonlord.save.v1`

@@ -1,4 +1,4 @@
-import { FUSION_ARCHETYPE_RULES } from "../gameContent";
+import { FUSION_ARCHETYPE_RULES, STARTER_DEFENDERS } from "../gameContent";
 import { randomFloat } from "../random";
 import { calcArtifactMods, getDoctrineEffects } from "./economy";
 import { BASE_MONSTER_ROOM_CAP, EVOLUTION_COSTS, KNOW_MONSTER_ENTITY, KNOW_MONSTER_KEY, MAX_EVOLUTION_STAGE, MONSTERS, MONSTER_KEYS, STATUS_RULE_LIST, UNIQUE_MONSTER_MAP, clamp, clampMonsterStar, isTimedBlessingActive, monsterStarMultiplier, pick, pickUnique, rollAuthoritativeStar, scaleByDay } from "./shared";
@@ -366,9 +366,9 @@ function spendEvolutionPoints(personalPoints, globalPoints, cost) {
     source,
   };
 }
-function generateMonster(kind, turnsSurvived, starCap, day = 1) {
+function generateMonster(kind, turnsSurvived, starCap, day = 1, options = {}) {
   const base = getMonsterBaseData(kind);
-  const stars = rollAuthoritativeStar(day, starCap);
+  const stars = Number.isFinite(options.stars) ? clampMonsterStar(options.stars) : rollAuthoritativeStar(day, starCap);
   const { passiveKeys, passiveRanks } = buildMonsterPassiveLoadout(base, stars);
   let archetype = pick(MONSTER_ARCHETYPES);
   let affinity = null;
@@ -413,6 +413,9 @@ function initMonsterInventory(turnsSurvived, count = 4, starCap, day = 1) {
     const picked = pickWeightedMonsterDef(day);
     return generateMonster(picked?.key || MONSTER_KEYS[0], turnsSurvived, starCap, day);
   });
+}
+export function initStarterDefenders() {
+  return STARTER_DEFENDERS.map(({ key, stars }) => generateMonster(key, 0, 2, 1, { stars }));
 }
 function monsterRoomCap(tier) {
   return BASE_MONSTER_ROOM_CAP + Math.max(0, (tier || 1) - 1);

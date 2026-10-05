@@ -22,6 +22,10 @@ export default function GlossaryPanel(props) {
                             <div className="entityMeta">Build is for construction, staffing, markets, and choosing the next invasion. Begin Battle locks the invasion; Start Raid releases it; End Turn resolves movement and room combat.</div>
                           </div>
                           <div className="entityItem">
+                            <div className="entityName">Opening Defense</div>
+                            <div className="entityMeta">New runs begin with a two-star Ogre and Boar in the Training Den. They can still die: put traps ahead of them and support near their room. If no monsters remain after Day 1, check the Trader for a paid Day 2 recovery offer; purchased monsters must be staffed.</div>
+                          </div>
+                          <div className="entityItem">
                             <div className="entityName">Currencies</div>
                             <div className="entityMeta">Essence builds the dungeon. Soulshards grow the roster. Evolution advances monsters. Dominion powers tactical actions. Darkcrystals fund doctrines and the Flesh Market.</div>
                           </div>

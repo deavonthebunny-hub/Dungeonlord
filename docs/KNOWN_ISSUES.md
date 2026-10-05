@@ -12,9 +12,9 @@ Version: `0.1.0-alpha.2`
 
 ## October 3 Working-Tree Follow-Up
 
-B1 locally fixes duplicate/no-benefit Dominion purchases, the active Escalation heading, and doctrine-adjusted monster HP readouts. These changes are not yet published. Copy With Save and preserved Day 11/15/31 import/reload/backup workflows passed in isolated test contexts; the original empty diagnostic artifact remains unexplained and preserved.
+B1 fixes duplicate/no-benefit Dominion purchases, the active Escalation heading, and doctrine-adjusted monster HP readouts; it is committed and pushed as `98c753d`. Copy With Save and preserved Day 11/15/31 import/reload/backup workflows passed in isolated test contexts; the original empty diagnostic artifact remains unexplained and preserved.
 
-Opening roster wipes, later trap dominance, small Elites, transaction previews, and other clarity gaps remain under investigation. Construction-star reroll abuse was not demonstrated. See [PLAYTEST_FOLLOW_UP_PLAN.md](PLAYTEST_FOLLOW_UP_PLAN.md) and [B1_RESULTS.md](B1_RESULTS.md).
+B2's local authored starter pair and limited paid Day 2 recovery offer meet the fixed-seed normal-opening pilot targets. They do not guarantee wins; repeated losses in the severe stress suite and first-time human usability still need review. Later trap dominance, small Elites, transaction previews, and other clarity gaps remain under investigation. Construction-star reroll abuse was not demonstrated. See [PLAYTEST_FOLLOW_UP_PLAN.md](PLAYTEST_FOLLOW_UP_PLAN.md), [B1_RESULTS.md](B1_RESULTS.md), and [B2_RESULTS.md](B2_RESULTS.md).
 
 ## Release Gate
 

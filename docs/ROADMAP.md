@@ -52,7 +52,9 @@ Only address issues supported by repeated reports or a clear reproduction.
 
 The October 3 autonomous run completed Day 30 and exposed early roster wipes, later trap dominance, duplicate queued-Pulse spending, small Elite encounters, and decision-clarity gaps. The proposed next execution sequence is [PLAYTEST_FOLLOW_UP_PLAN.md](PLAYTEST_FOLLOW_UP_PLAN.md), using B1-B6 labels distinct from the completed engineering phases. It prioritizes tactical correctness and reproducible evidence, opening recovery, encounter pressure, sustainable progression, and verified player-facing clarity. No numerical balance changes have been implemented by drafting that plan.
 
-B1 is now completed locally: guarded tactical spending, active raid/HP display corrections, nonempty diagnostic capture, isolated checkpoint restoration, and a deterministic opening report. The alpha gate passed with 77 unit tests and 16 applicable browser tests. See [B1_RESULTS.md](B1_RESULTS.md). B2 opening recovery is the next implementation objective; no numerical tuning has started.
+B1 is committed and pushed as `98c753d`: guarded tactical spending, active raid/HP display corrections, nonempty diagnostic capture, isolated checkpoint restoration, and a deterministic opening report. See [B1_RESULTS.md](B1_RESULTS.md).
+
+B2 is implemented locally: an authored ordinary two-star Ogre/Boar starter pair, correct initial Training Den bonus, and one paid Day 2 empty-roster recovery offer. The fixed-seed normal pilot meets its 8-of-10 thresholds; human opening validation is still required. See [B2_RESULTS.md](B2_RESULTS.md). B3 coherent encounter pressure is the next implementation objective; late trap/economy balance remains B4 work.
 
 Likely work:
 

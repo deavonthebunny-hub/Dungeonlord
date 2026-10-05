@@ -1,10 +1,12 @@
 import { addCouncilQuestCounter } from "./council";
+import { OPENING_RECOVERY_OFFER } from "../gameContent";
 import { artifactCopyCap, calcArtifactMods, countOwnedArtifacts, hydrateArtifactDefinition } from "./economy";
-import { buildFusedMonsterEntity, buildUniqueMonsterEntity, fleshMarketEraIndex } from "./markets";
+import { buildFusedMonsterEntity, buildUniqueMonsterEntity, fleshMarketEraIndex, isOpeningRecoveryOffer } from "./markets";
 import { discountedFusionCost, monsterEvolutionStageValue } from "./monsters";
 import { MONSTERS, UNIQUE_ARTIFACT_MAP, UNIQUE_MONSTER_MAP, addLog, formatStars, monsterStarMultiplier, safeEntityStars, scaleByDay } from "./shared";
 
 function traderPrice(monster, dayOverride = 1) {
+  if (isOpeningRecoveryOffer(monster, dayOverride)) return OPENING_RECOVERY_OFFER.cost;
   const stars = safeEntityStars(monster);
   const uniqueCost = UNIQUE_MONSTER_MAP[monster.key]?.costByEra?.[Math.max(0, Math.min(fleshMarketEraIndex(dayOverride), 2))];
   const baseCost = UNIQUE_MONSTER_MAP[monster.key] ? uniqueCost || 20 : MONSTERS[monster.key]?.cost || 20;
@@ -198,7 +200,7 @@ function buyFromTraderTransition(state, index) {
     const price = traderPrice(target, s.day);
     if (s.currency.soulshards < price) return addLog(s, "Not enough Soulshards.");
     stock.splice(index, 1);
-    const invMonsters = [...s.invMonsters, target];
+    const invMonsters = [...s.invMonsters, { ...target, openingRecoveryOffer: false }];
     const currency = {
       ...s.currency,
       soulshards: s.currency.soulshards - price

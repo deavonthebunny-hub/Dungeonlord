@@ -1,4 +1,5 @@
 import { isCouncilDay } from "../gameRules";
+import { OPENING_RECOVERY_OFFER } from "../gameContent";
 import { randomFloat } from "../random";
 import {
   addCouncilQuestCounter,
@@ -1078,7 +1079,9 @@ if (advanceDay) {
   nextState.partyQueue = [];
   nextState.raidIntel = null;
   nextState.dailyEvent = rollDailyEvent();
-  nextState.traderStock = generateTraderStock(nextState.turnsSurvived, nextState.day);
+  const needsOpeningRecovery = nextState.day === OPENING_RECOVERY_OFFER.day && !nextState.invMonsters.some(m => m.hp > 0) && !grid.some(row => row.some(tile => tile.monsters.some(m => m.hp > 0)));
+  nextState.traderStock = generateTraderStock(nextState.turnsSurvived, nextState.day, { openingRecovery: needsOpeningRecovery });
+  if (needsOpeningRecovery) push(`Opening recovery: the Monster Trader has a one-time ${OPENING_RECOVERY_OFFER.stars}-star Ogre offer for ${OPENING_RECOVERY_OFFER.cost} Soulshards, available on Day ${OPENING_RECOVERY_OFFER.day} only. Staff it before the next raid.`);
   nextState.shadyStock = generateArtifactStock(nextState.day, nextState.artifacts);
   nextState.fleshMarketStock =
     nextState.fleshMarketUntilDay >= nextState.day && nextState.fleshMarketUntilDay > 0

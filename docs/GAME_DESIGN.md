@@ -39,6 +39,8 @@ Special days override the ordinary choice:
   - Entrance at `(1,1)`
   - Training Den at `(2,1)`
   - Core at `(3,1)`
+- New runs staff the Training Den with an ordinary two-star Ogre and Boar; their existing placement bonus applies once. These are mortal defenders, not a guaranteed raid win.
+- If Day 1 leaves no living owned monsters, Day 2 offers one paid two-star Ogre replacement for 20 Soulshards. It must be staffed and does not repair the Core or recur later.
 - The Entrance is fixed.
 - The Core and rooms can be moved during valid Build-phase move operations.
 - A valid dungeon requires every active entrance to reach the Core through traversable rooms.

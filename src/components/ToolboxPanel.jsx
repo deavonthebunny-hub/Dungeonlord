@@ -1,9 +1,10 @@
-import { COUNCIL_RAID_FACTIONS, DOCTRINE_RULES, MONSTER_ROOMS, STANDARD_ARTIFACTS, TRAP_TYPES, UTILITY_ROOMS } from "../gameContent";
+import { COUNCIL_RAID_FACTIONS, DOCTRINE_RULES, MONSTER_ROOMS, OPENING_RECOVERY_OFFER, STANDARD_ARTIFACTS, TRAP_TYPES, UTILITY_ROOMS } from "../gameContent";
 import { BUILD_VERSION } from "../playtestSupport";
 import { COUNCIL_FAVOR_RULES, councilFavorBadgeTone, formatCouncilFavorLabel, getCouncilFavorInfo } from "../systems/council";
 import { anyUtilityRoom, isAshBreachAt, isAshTrialActive } from "../systems/dungeon";
 import { artifactCopyCap, artifactTagsForDisplay, hydrateArtifactDefinition } from "../systems/economy";
 import { traderPrice } from "../systems/marketActions";
+import { isOpeningRecoveryOffer } from "../systems/markets";
 import { MONSTER_PASSIVE_MAP, doctrineUpgradeCost, effectiveMonsterRoomCapValue, effectiveMonsterMaxHp, entityStatusSummary, formatMonsterPassiveList, monsterEvolutionStageValue, monsterSpeedValue } from "../systems/monsters";
 import { objectiveTargetLabel } from "../systems/pathing";
 import { MONSTER_ROOM_ICONS, TRAP_ICONS, UTILITY_ICONS, invaderLabel, invaderPassiveSummary } from "../systems/presentation";
@@ -819,6 +820,7 @@ export default function ToolboxPanel(props) {
                             {state.traderStock.map((m, idx) => (
                               <div className="entityItem marketOfferItem" key={`trade-${m.key}-${idx}`}>
                                 <div className="entityName">{m.name}</div>
+                                {isOpeningRecoveryOffer(m, state.day) && <div className="muted">Opening recovery offer: one sturdy replacement for {OPENING_RECOVERY_OFFER.cost} Soulshards. Day {OPENING_RECOVERY_OFFER.day} only; must be staffed.</div>}
                                 <div className="entityMeta">
                                   {safeEntityLabel(m.race, "Monster")}
                                   <span className="badge class">{safeEntityLabel(m.class, "Brute")}</span> | {formatStars(safeEntityStars(m))}

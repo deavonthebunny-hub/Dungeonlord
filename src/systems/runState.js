@@ -16,7 +16,7 @@ import {
   normalizeArtifactStock,
   normalizeBoughtUniqueKeys,
 } from "./markets";
-import { initMonsterInventory, normalizeMonsterEntity } from "./monsters";
+import { applyMonsterRoomPlacementStatic, initStarterDefenders, normalizeMonsterEntity } from "./monsters";
 import {
   HERO_ORDER_MAP,
   buildDailyInvasionChoices,
@@ -46,10 +46,10 @@ export function createDefaultState(options = {}) {
   const shadyStock = generateArtifactStock(1, artifacts);
   const grid = initStartingGrid();
   const invasionChoices = buildDailyInvasionChoices(1);
-  let invMonsters = initMonsterInventory(0, 2, 2, 1);
+  let invMonsters = initStarterDefenders();
   const starterRoom = grid[0]?.[1];
   if (starterRoom && starterRoom.room === "monster") {
-    starterRoom.monsters = invMonsters.map((m) => ({ ...m }));
+    starterRoom.monsters = invMonsters.map(m => applyMonsterRoomPlacementStatic(m, starterRoom.roomType, starterRoom.roomTier));
     invMonsters = [];
   }
   return {

@@ -1,6 +1,6 @@
 # Dungeonlord Implemented Systems
 
-Last updated: 2026-08-03
+Last updated: 2026-10-03
 Current release: `0.1.0-alpha.2`
 
 This document describes systems present in the current checkout. Proposed features are listed in [ROADMAP.md](ROADMAP.md), not here.
@@ -16,7 +16,7 @@ This document describes systems present in the current checkout. Proposed featur
 - `GameView` receives `run`, `dungeon`, `raid`, `council`, `inventory`, `shell`, and `actions`; `src/components/` owns the major presentational panels.
 - Subsystem actions accept state and return state without calling React setters.
 - Gameplay randomness continues through the seeded run RNG.
-- The current unit suite contains 60 tests across 13 files, including focused coverage for save schema/migrations/storage, run reset, raids/Core, Council/Nihaza, monster management/fusion, artifacts, and doctrines.
+- The current unit suite contains 86 tests across 17 files, including focused coverage for saves, tactical correctness, opening/recovery pilots, run reset, raids/Core, Council/Nihaza, monster management/fusion, artifacts, and doctrines.
 
 ## Content Inventory
 
@@ -48,7 +48,7 @@ A fresh run creates:
 - fixed Entrance at `(1,1)`
 - starter Training Den at `(2,1)`
 - Core at `(3,1)`
-- two generated starter monsters deployed in the Training Den
+- an ordinary two-star Ogre and two-star Boar deployed in the Training Den, with seeded classes/passives and its permanent +1 ATK placement bonus applied once
 - 10 Essence
 - 30 Soulshards
 - zero Evolution, Dominion, and Darkcrystals
@@ -56,6 +56,10 @@ A fresh run creates:
 - two stable Day 1 invasion choices
 - a visible seed and RNG cursor
 - the 7-step first-run checklist
+
+Layout-preserving resets give the same starter pair in inventory and retain empty rooms for manual staffing. Valid saved rosters are not replaced by the new pair.
+
+After completing Day 1 with no living owned monsters in rooms or inventory, Day 2 trader stock includes one ordinary two-star Ogre for 20 Soulshards. The optional offer occupies one normal stock slot, lasts only on Day 2, survives save/reload, must be purchased and staffed, and loses its special-price marker when bought. No currency refund or Core healing is granted. Other stock/prices remain normal. See [B2_RESULTS.md](B2_RESULTS.md).
 
 ## Phases and Day Cadence
 

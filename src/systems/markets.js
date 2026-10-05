@@ -1,4 +1,4 @@
-import { FLESH_MARKET_UNIQUE_ARTIFACTS, FLESH_MARKET_UNIQUE_MONSTERS, STANDARD_ARTIFACTS } from "../gameContent";
+import { FLESH_MARKET_UNIQUE_ARTIFACTS, FLESH_MARKET_UNIQUE_MONSTERS, OPENING_RECOVERY_OFFER, STANDARD_ARTIFACTS } from "../gameContent";
 import { artifactCopyCap, calcArtifactMods, countOwnedArtifacts, hydrateArtifactDefinition } from "./economy";
 import { createPassiveRanks, entityStarsValue, formatMonsterPassiveList, fusionPassiveSelection, fusionRecipeForMonster, generateMonster, monsterEvolutionStageValue, pickWeightedMonsterDef, rebuildMonsterEntity } from "./monsters";
 import { MONSTER_KEYS, STANDARD_ARTIFACT_MAP, clampMonsterStar, councilEraIndex, monsterStarCapForDay, pick, pickUnique } from "./shared";
@@ -11,12 +11,19 @@ function normalizeArtifactStock(stock = [], day = 1, ownedArtifacts = []) {
   }
   return generateArtifactStock(day, ownedArtifacts);
 }
-function generateTraderStock(turnsSurvived, day = 1) {
+function generateTraderStock(turnsSurvived, day = 1, options = {}) {
   const count = 3;
-  return Array.from({ length: count }, () => {
+  const stock = Array.from({ length: count }, () => {
     const picked = pickWeightedMonsterDef(day);
     return generateMonster(picked?.key || MONSTER_KEYS[0], turnsSurvived, undefined, day);
   });
+  if (options.openingRecovery && day === OPENING_RECOVERY_OFFER.day) {
+    stock[0] = { ...generateMonster(OPENING_RECOVERY_OFFER.key, turnsSurvived, 2, day, { stars: OPENING_RECOVERY_OFFER.stars }), openingRecoveryOffer: true };
+  }
+  return stock;
+}
+export function isOpeningRecoveryOffer(monster, day) {
+  return day === OPENING_RECOVERY_OFFER.day && monster?.openingRecoveryOffer === true && monster.key === OPENING_RECOVERY_OFFER.key && monster.stars === OPENING_RECOVERY_OFFER.stars && !monster.isUnique && !monster.isFused;
 }
 function generateArtifactStock(day = 1, ownedArtifacts = []) {
   const ownedCounts = countOwnedArtifacts(ownedArtifacts);

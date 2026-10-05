@@ -61,30 +61,30 @@ The repository root contains a tracked empty file named `Selected`. It has no co
 ### B-004 — Dominion powers can spend without an additional effect
 
 **Severity:** Major
-**Status:** Fixed locally in B1; not yet published
+**Status:** Fixed, committed and pushed in B1 (`98c753d`)
 
 The playtest reproduced two Pulse purchases resolving as one. The action/UI now reject duplicate queued Pulse, already-active Speed/Strength, capped Shield, and powers with no possible present target, without spending. Costs, effect strength, and Shield cap are unchanged. Direct-action/combat and browser regressions cover the fix.
 
 ### B-005 — Active Escalation heading falls back to Normal
 
 **Severity:** Minor
-**Status:** Fixed locally in B1; not yet published
+**Status:** Fixed, committed and pushed in B1 (`98c753d`)
 
 The heading now uses active encounter identity after `nextRaidType` is cleared. A browser regression verifies Escalation identity and level before and after a combat turn.
 
 ### B-006 — Doctrine maximum HP missing from monster readouts
 
 **Severity:** Minor
-**Status:** Fixed locally in B1; not yet published
+**Status:** Fixed, committed and pushed in B1 (`98c753d`)
 
 Monster displays and combat share the effective-maximum helper. The preserved Day 31 fused defender displays 38/38. Base stats and save schema remain unchanged.
 
 ### B-007 — Opening roster losses followed by late trap dominance
 
 **Severity:** Balance observation
-**Status:** Open; next investigation is B2
+**Status:** Opening pilot improved locally in B2; overall balance remains open
 
-One autonomous seed lost five defenders across Days 1-2, then sustained no Core damage after Day 5 with a developed trap lane. Small late Elites, accumulated income, and low monster participation require controlled comparisons. No numerical tuning has been performed. Other clarity gaps and the untested construction-reroll hypothesis are tracked in [PLAYTEST_FOLLOW_UP_PLAN.md](PLAYTEST_FOLLOW_UP_PLAN.md).
+One autonomous seed lost five defenders across Days 1-2, then sustained no Core damage after Day 5 with a developed trap lane. B2 locally supplies an ordinary two-star Ogre/Boar pair, the missing initial Training Den bonus, and one paid Day 2 empty-roster recovery offer. The normal ten-seed pilot retains Day 1 defenders in 10/10 runs; 9/10 reach Council without repeated wipes. A deliberate casualty stress recovers Day 2 defenders in 8/8 actual wipe cases, but repeated later wipes remain possible. Human opening usability, small late Elites, accumulated income, and low monster participation still require controlled comparisons. See [B2_RESULTS.md](B2_RESULTS.md) and [PLAYTEST_FOLLOW_UP_PLAN.md](PLAYTEST_FOLLOW_UP_PLAN.md).
 
 Capture/restore evidence and limitations are in [B1_RESULTS.md](B1_RESULTS.md). The earlier empty bundle remains preserved; current copy passed, so an in-game clipboard defect was not established.
 

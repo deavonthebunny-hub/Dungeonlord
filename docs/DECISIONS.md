@@ -1,6 +1,6 @@
 # Dungeonlord Design and Engineering Decisions
 
-Last updated: 2026-08-03
+Last updated: 2026-10-03
 Status vocabulary: **Active**, **Proposed**, **Deferred**, **Superseded**
 
 ## Active Decisions
@@ -155,6 +155,16 @@ Subsystem actions receive state and return state. They do not call React setters
 `App.jsx` remains the authoritative state owner and application composition root. `useGameController` groups command dispatch by domain while calling the existing subsystem transitions; it does not recreate gameplay rules. `useGameViewModel` derives presentation data without owning or mutating gameplay state.
 
 `GameView` receives seven grouped contracts: `run`, `dungeon`, `raid`, `council`, `inventory`, `shell`, and `actions`. Additions should enter the smallest owning contract rather than rebuilding a single flat prop bundle or introducing a global state library.
+
+### D-024 — The opening supplies a durable ordinary pair and one bounded recovery opportunity
+
+**Status:** Active in the local B2 implementation
+
+New runs receive a two-star Ogre/Boar pair with seeded ordinary classes/passives, rather than unrestricted random starters. Initial staffing applies the normal Training Den bonus once. Valid existing saves retain their roster; layout resets receive the pair in inventory.
+
+If no living owned monsters remain after Day 1, Day 2 provides a single optional two-star Ogre trader offer for 20 Soulshards. It is bought normally, must be staffed, expires after Day 2, and provides no Core healing or cash refund. General prices and raid rules are unchanged.
+
+This decision follows ten-seed, one-category-at-a-time screening and separate casualty recovery stress tests. It establishes a pilot opening, not guaranteed survival or overall balance. See [B2_RESULTS.md](B2_RESULTS.md).
 
 ## Proposed Decisions
 

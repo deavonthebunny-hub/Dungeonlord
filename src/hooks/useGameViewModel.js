@@ -751,7 +751,7 @@ export function useGameViewModel({ state, ui }) {
             ? {
                 number: 3,
                 title: "Choose an invasion",
-                desc: "In Raid Forecast, choose Normal Hero Raid or Elite Expedition.",
+                desc: "Choose Normal Hero Raid while learning; Elite has stronger invaders. During Build, you can move the Core and add traps before your staffed monster room.",
               }
             : selectedTile.roomType === "training-den"
               ? {

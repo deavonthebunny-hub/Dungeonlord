@@ -4,7 +4,7 @@ Created: 2026-10-03
 
 Baseline release: `0.1.0-alpha.2`, commit `6a41c5b`
 
-Status: B1 implemented and verified locally on 2026-10-03; B2-B6 remain proposed. Numerical balance tuning has not started.
+Status: B1 committed and pushed as `98c753d`; B2 implemented locally with fixed-seed pilot validation. B3-B6 remain proposed. Human first-time opening validation remains outstanding.
 
 ## Direction
 
@@ -66,6 +66,8 @@ Done when:
 Primary owners: `raidActions.js`, `combat.js`, presentation selectors/components, `playtestSupport.js`, persistence/browser tests, and local test tooling.
 
 ## B2 — A recoverable Days 1-5 opening
+
+**Implementation:** Complete locally for the mechanical pilot. Authored ordinary starter pair, correct initial placement bonus, and a single paid Day 2 empty-roster recovery offer. The normal suite retains defenders in 10/10 runs and reaches Council without repeated full wipes in 9/10; the casualty stress recovers Day 2 defenders in 8/8 actual Day 1 wipe cases. See [B2_RESULTS.md](B2_RESULTS.md) for policy, source/evidence limits, Core bands, and remaining human validation. Encounter budgets and general economy were not changed.
 
 **Objective:** Give a new player a chance to learn and grow instead of repeatedly purchasing disposable defenders.
 
@@ -188,4 +190,4 @@ Preserve the one authoritative state, pure subsystem transitions, seeded randomn
 
 Do not incidentally change persistent Core damage, Council/Escalation cadence, Nihaza eligibility, the Level 10 room cap, or the finite artifact catalog. Room-cap resolution remains a separate explicit design decision if capacity becomes a measured late-run constraint. New content and the combat sprite pass remain deferred until this stabilization work is verified.
 
-Only B1 has been implemented following the user's execution request. B2-B6 remain objectives, not completed fixes. No commit, push, or deployment has been performed.
+B1 was committed and pushed on the user's subsequent request. B2 is implemented and verified locally; it has not been committed or pushed in this execution step. B3-B6 remain objectives, not completed fixes. Deployment status was not independently verified.

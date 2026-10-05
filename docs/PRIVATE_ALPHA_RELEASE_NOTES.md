@@ -21,7 +21,19 @@ Changes verified before the separate commit/push step:
 - Monster HP displays include the doctrine maximum without changing base combat stats.
 - New tactical/UI regressions, isolated diagnostic/save verification, and a local deterministic opening-report command.
 
-The verified gate is 77 unit tests and 16 applicable browser tests with 24 profile-specific skips when the optional local checkpoint test is enabled. Encounter sizes, damage values, rewards, starting resources, and progression prices remain unchanged. Opening recovery and encounter/economy tuning are next, not completed fixes. See [B1_RESULTS.md](B1_RESULTS.md).
+The B1 verified gate was 77 unit tests and 16 applicable browser tests with 24 profile-specific skips when the optional local checkpoint test was enabled. B1 did not tune encounter sizes, damage values, rewards, starting resources, or progression prices, and was subsequently pushed as `98c753d`. See [B1_RESULTS.md](B1_RESULTS.md).
+
+## B2 Local Opening Pilot — 2026-10-03
+
+- New runs start with an ordinary two-star Ogre and Boar, with seeded classes/passives and the existing Training Den bonus applied once.
+- Layout-preserving resets supply that pair in inventory for manual staffing; valid saved rosters are preserved.
+- If no living owned monsters remain after Day 1, Day 2 includes one optional two-star Ogre trader offer for 20 Soulshards. It must be purchased/staffed and does not heal the Core or recur later.
+- Checklist/glossary copy explains a mixed opening and the paid recovery opportunity.
+- A declared ten-seed mixed policy retains Day 1 defenders in 10/10 runs and reaches Council without repeated full wipes in 9/10. A deliberately fragile Day 1 stress recovers Day 2 defenders in 8/8 wipe cases. Human first-time testing and broader encounter/economy tuning remain outstanding.
+
+B2 is not yet committed or pushed. Encounter counts, hero scaling, general prices/rewards, later markets, and persistent Core damage are unchanged. See [B2_RESULTS.md](B2_RESULTS.md).
+
+The final B2 gate passes 86 unit tests and 18 applicable browser tests with 32 profile-specific skips when the optional preserved-checkpoint verification is enabled.
 
 ## Testing Priorities
 

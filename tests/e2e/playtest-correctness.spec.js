@@ -11,7 +11,11 @@ test.describe.configure({ mode: "serial" });
 async function openSupport(page) {
   await page.getByRole("button", { name: /Menu Dungeon/i }).click();
   await page.getByRole("button", { name: /Toolbox/i }).click();
-  await page.locator("summary").filter({ hasText: "Advanced Management" }).click();
+  const advanced = page.locator("details.toolboxAdvanced");
+  if (await advanced.getAttribute("open") === null) {
+    await advanced.locator("summary").click();
+  }
+  await expect(page.getByRole("button", { name: "Copy With Save" })).toBeVisible();
 }
 
 async function copyWithSave(page, context) {
@@ -95,6 +99,42 @@ test("Copy With Save creates a nonempty portable bundle that imports in another 
   } finally {
     await targetContext.close();
   }
+});
+
+test("authored starters retain ordinary stats and their placement bonus after reload", async ({ page, context }) => {
+  const save = (await copyWithSave(page, context)).bundle.save;
+  expect(save.grid[0][1].monsters.map(m => [m.key, m.stars, m.hp, m.atk])).toEqual([["ogre", 2, 32, 9], ["boar", 2, 22, 6]]);
+  await page.reload();
+  await openSupport(page);
+  const reloaded = (await copyWithSave(page, context)).bundle.save;
+  // Hydration adds default fusion metadata; all original fields must survive.
+  expect(reloaded.grid[0][1].monsters).toMatchObject(save.grid[0][1].monsters);
+  expect(reloaded.coreHp).toBe(250);
+  expect(reloaded.currency).toEqual(save.currency);
+});
+
+test("a Day 1 empty-roster clear exposes a paid, reload-safe Day 2 recovery offer", async ({ page, context }) => {
+  const save = (await copyWithSave(page, context)).bundle.save;
+  Object.assign(save, { phase: "battle", raidActive: true, raidType: "normal", raidRemaining: 0, coreHp: 185, raidStartCoreHp: 185, heroes: [], currentParty: [], partyQueue: [], scoutQueue: [], invMonsters: [] });
+  save.grid[0][1].monsters = [];
+  await importSave(page, save, "b2-empty-roster-raid.json");
+  await page.getByRole("button", { name: "End Turn" }).click();
+  await expect(page.getByText("Day: 2", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Opening recovery offer: one sturdy replacement/)).toBeVisible();
+  await page.reload();
+  await openSupport(page);
+  const offer = page.locator(".marketOfferItem").filter({ hasText: "Opening recovery offer:" });
+  await expect(offer).toHaveCount(1);
+  const prior = (await copyWithSave(page, context)).bundle.save;
+  expect(prior.coreHp).toBe(185);
+  await offer.getByRole("button", { name: "Buy (20 Soulshards)", exact: true }).click();
+  await expect(offer).toHaveCount(0);
+  const bought = (await copyWithSave(page, context)).bundle.save;
+  expect(bought.currency.soulshards).toBe(prior.currency.soulshards - 20);
+  expect(bought.coreHp).toBe(185);
+  expect(bought.invMonsters).toHaveLength(1);
+  expect(bought.invMonsters[0]).toMatchObject({ key: "ogre", stars: 2, openingRecoveryOffer: false });
+  expect(bought.grid.flat().every(tile => tile.monsters.length === 0)).toBe(true);
 });
 
 test("preserved Day 11, 15, and 31 checkpoints import and restore without modifying originals", async ({ page, context }, testInfo) => {
